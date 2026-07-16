@@ -34,9 +34,12 @@ namespace_id = "817364291"
 
 [[send_email]]
 name = "EMAIL"
+allowed_sender_addresses = ["noreply@scorecard.wg.gay"]
 
 [vars]
 AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
 
 [observability]
-enabled = true
+traces = {enabled: true}
+logs = {enabled: true}
+
