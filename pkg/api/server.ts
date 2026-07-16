@@ -186,6 +186,25 @@ const app = new Hono<Env>()
       return c.json({ error: "A valid email and 8-digit code are required" }, 400)
     }
   })
+  .post("/auth/register", async (c) => {
+    try {
+      const { email: rawEmail, name: rawName } = await c.req.json<{ email?: unknown; name?: unknown }>()
+      const email = typeof rawEmail === "string" ? normalizeEmail(rawEmail) : null
+      const name = typeof rawName === "string" ? rawName.trim() : null
+      if (!email || !isEmail(email) || !name) {
+        return c.json({ error: "A valid email and name are required" }, 400)
+      }
+
+      const db = getDb(c.env.DB)
+      const existingUser = await db.query.user.findFirst({ where: eq(user.email, email) })
+      if (existingUser) return c.json({ error: "An account already exists for this email" }, 409)
+
+      const [createdUser] = await db.insert(user).values({ email, name }).returning()
+      return c.json({ user: createdUser }, 201)
+    } catch {
+      return c.json({ error: "A valid email and name are required" }, 400)
+    }
+  })
   .get("/me", requireAuth, async (c) => {
     const db = getDb(c.env.DB)
     const existingUser = await db.query.user.findFirst({ where: eq(user.email, c.get("authEmail")) })

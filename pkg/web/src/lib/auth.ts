@@ -6,6 +6,15 @@ const RETURN_TO_KEY = "scorecard.auth.return-to"
 
 type AuthErrorBody = { error?: string }
 
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
 function safeReturnTo(value: string | null) {
   return value?.startsWith("/") && !value.startsWith("//") ? value : "/"
 }
@@ -44,16 +53,21 @@ class AuthService {
 
   async requestCode(email: string) {
     const response = await createApiClient().api.auth.code.$post({ json: { email } })
-    if (!response.ok) throw new Error(await requestError(response))
+    if (!response.ok) throw new ApiError(await requestError(response), response.status)
   }
 
   async useCode(email: string, code: string) {
     const response = await createApiClient().api.auth.token.$post({ json: { email, code } })
-    if (!response.ok) throw new Error(await requestError(response))
+    if (!response.ok) throw new ApiError(await requestError(response), response.status)
 
     const { token } = await response.json()
     this.setToken(token)
     return token
+  }
+
+  async register(email: string, name: string) {
+    const response = await createApiClient().api.auth.register.$post({ json: { email, name } })
+    if (!response.ok) throw new ApiError(await requestError(response), response.status)
   }
 }
 

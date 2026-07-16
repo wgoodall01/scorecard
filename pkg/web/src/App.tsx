@@ -11,7 +11,7 @@ import {
 } from "@tanstack/react-router"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
-import { authService, createApiClient } from "@/lib/auth"
+import { ApiError, authService, createApiClient } from "@/lib/auth"
 
 function safeReturnTo(value: unknown) {
   return typeof value === "string" && value.startsWith("/") && !value.startsWith("//") ? value : "/"
@@ -58,6 +58,7 @@ function LoginPage() {
   const [code, setCode] = useState("")
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notRegistered, setNotRegistered] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -65,12 +66,14 @@ function LoginPage() {
     setLoading(true)
     setError(null)
     setStatus(null)
+    setNotRegistered(false)
     try {
       authService.setReturnTo(returnTo)
       await requestCode(email)
       setStatus("Check your email for an 8-digit code or magic link.")
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to send a code.")
+      setNotRegistered(requestError instanceof ApiError && requestError.status === 404)
     } finally {
       setLoading(false)
     }
@@ -123,6 +126,51 @@ function LoginPage() {
           <Button type="submit" disabled={loading || code.length !== 8}>{loading ? "Signing in…" : "Sign in with code"}</Button>
         </form>
       )}
+      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+      {notRegistered && (
+        <Link className={`${buttonVariants({ variant: "outline" })} mt-3`} to="/register" search={{ email, returnTo }}>
+          Create an account
+        </Link>
+      )}
+    </Page>
+  )
+}
+
+function RegisterPage() {
+  const { email: registeredEmail, returnTo } = registerRoute.useSearch()
+  const { register, requestCode } = useAuth()
+  const [email, setEmail] = useState(registeredEmail)
+  const [name, setName] = useState("")
+  const [status, setStatus] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      authService.setReturnTo(returnTo)
+      await register(email, name)
+      await requestCode(email)
+      setStatus("Your account is ready. Check your email for a magic link or sign-in code.")
+    } catch (registerError) {
+      setError(registerError instanceof Error ? registerError.message : "Unable to create your account.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Page>
+      <h1 className="font-medium">Create your account</h1>
+      <p>We’ll create your account and email you a sign-in link.</p>
+      <form className="mt-4 flex flex-col gap-3" onSubmit={submit}>
+        <input className="rounded-md border bg-transparent px-3 py-2" type="text" autoComplete="name" placeholder="Your name" value={name} onChange={(event) => setName(event.target.value)} required />
+        <input className="rounded-md border bg-transparent px-3 py-2" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required />
+        <Button type="submit" disabled={loading}>{loading ? "Creating…" : "Create account"}</Button>
+      </form>
+      {status && <p className="mt-3 text-sm text-muted-foreground">{status}</p>}
       {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
     </Page>
   )
@@ -197,6 +245,15 @@ const loginRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => ({ returnTo: safeReturnTo(search.returnTo) }),
   component: LoginPage,
 })
+const registerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/register",
+  validateSearch: (search: Record<string, unknown>) => ({
+    email: typeof search.email === "string" ? search.email : "",
+    returnTo: safeReturnTo(search.returnTo),
+  }),
+  component: RegisterPage,
+})
 const magicRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login/magic",
@@ -207,7 +264,7 @@ const magicRoute = createRoute({
   component: MagicLinkPage,
 })
 const meRoute = createRoute({ getParentRoute: () => rootRoute, path: "/me", component: () => <RequireAuth><MePage /></RequireAuth> })
-const routeTree = rootRoute.addChildren([indexRoute, loginRoute, magicRoute, meRoute])
+const routeTree = rootRoute.addChildren([indexRoute, loginRoute, registerRoute, magicRoute, meRoute])
 const router = createRouter({ routeTree })
 
 declare module "@tanstack/react-router" {

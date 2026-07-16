@@ -5,6 +5,7 @@ type AuthContextValue = {
   token: string | null
   client: ApiClient | null
   requestCode: (email: string) => Promise<void>
+  register: (email: string, name: string) => Promise<void>
   useCode: (email: string, code: string) => Promise<void>
   signOut: () => void
 }
@@ -20,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       client,
       requestCode: (email) => authService.requestCode(email),
+      register: (email, name) => authService.register(email, name),
       useCode: async (email, code) => {
         setToken(await authService.useCode(email, code))
       },
