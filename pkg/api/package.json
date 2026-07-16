@@ -1,7 +1,7 @@
 {
   "name": "api",
-  "private": true,
   "version": "0.0.1",
+  "private": true,
   "type": "module",
   "types": "./server.ts",
   "exports": {
@@ -9,14 +9,14 @@
   },
   "scripts": {
     "dev": "wrangler dev --config ../../wrangler.toml",
-    "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply scorecard --local --config ../../wrangler.toml",
     "db:migrate:remote": "wrangler d1 migrations apply scorecard --remote --config ../../wrangler.toml"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.30"
+    "hono": "^4.12.30",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260716.1",

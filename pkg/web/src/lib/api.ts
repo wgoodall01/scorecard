@@ -1,1 +1,1 @@
-export { createApiClient } from "@/lib/auth"
+export { createApiClient } from "@/lib/auth";

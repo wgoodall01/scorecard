@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [
+    ".wrangler/**",
+    ".agents/**",
+    ".codex/**",
+    "pkg/web/dist/**",
+    "pkg/web/src/routeTree.gen.ts",
+    "worker-configuration.d.ts"
+  ]
+}

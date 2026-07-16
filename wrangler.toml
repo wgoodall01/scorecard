@@ -27,10 +27,10 @@ binding = "AUTH_CODES"
 name = "AUTH_RATE_LIMITER"
 namespace_id = "817364291"
 
-  [ratelimits.simple]
-  # The native binding's shortest window is 10 seconds; KV adds the exact 1-second throttle.
-  limit = 10
-  period = 10
+[ratelimits.simple]
+# Throttle authentication-code requests.
+limit = 10
+period = 10
 
 [[send_email]]
 name = "EMAIL"
@@ -40,6 +40,5 @@ allowed_sender_addresses = ["noreply@scorecard.wg.gay"]
 AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
 
 [observability]
-traces = {enabled = true}
-logs = {enabled = true}
-
+traces = { enabled = true }
+logs = { enabled = true }

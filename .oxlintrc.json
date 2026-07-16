@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "react"],
+  "env": {
+    "browser": true,
+    "node": true
+  },
+  "ignorePatterns": [
+    ".wrangler/**",
+    ".agents/**",
+    ".codex/**",
+    "pkg/web/dist/**",
+    "pkg/web/src/routeTree.gen.ts",
+    "worker-configuration.d.ts"
+  ]
+}
