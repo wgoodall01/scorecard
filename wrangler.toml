@@ -1,0 +1,24 @@
+name = "scorecard"
+main = "pkg/api/server.ts"
+compatibility_date = "2026-07-16"
+compatibility_flags = ["nodejs_compat"]
+account_id = "dfd083c9490364800d31a6e3a745ad6c"
+
+[assets]
+directory = "pkg/web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "scorecard"
+database_id = "d4bcf0fb-b79d-42bf-b7d7-4820fbe8ce30"
+migrations_dir = "pkg/api/migrations"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "scorecard"
+
+[observability]
+enabled = true

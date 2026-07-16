@@ -1,0 +1,31 @@
+{
+  "name": "scorecard",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "typecheck": "pnpm -r typecheck",
+    "predeploy": "pnpm --filter web build",
+    "deploy": "wrangler deploy",
+    "db:generate": "pnpm --filter api db:generate",
+    "db:migrate:local": "pnpm --filter api db:migrate:local",
+    "db:migrate:remote": "pnpm --filter api db:migrate:remote"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.13.1",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "devDependencies": {
+    "wrangler": "^4.111.0"
+  }
+}
