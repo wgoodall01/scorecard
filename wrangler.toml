@@ -37,7 +37,6 @@ name = "EMAIL"
 
 [vars]
 AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
-JWT_SECRET = "yRNhEc5aT-KJV0-FaVyC54KrCFq_3PQuIyApa3cEWu4"
 
 [observability]
 enabled = true

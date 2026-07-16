@@ -2,3 +2,4 @@ node_modules
 .wrangler
 pkg/web/dist
 .env.local
+.dev.vars

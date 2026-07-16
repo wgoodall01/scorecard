@@ -18,13 +18,6 @@
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@11.13.1",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.13.1",
-      "onFail": "download"
-    }
-  },
   "type": "module",
   "devDependencies": {
     "wrangler": "^4.111.0"
