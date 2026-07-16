@@ -1,4 +1,5 @@
 import { hc } from "hono/client";
+import { redirect } from "@tanstack/react-router";
 import type { AppType } from "api";
 
 const TOKEN_KEY = "scorecard.auth.token";
@@ -15,8 +16,21 @@ export class ApiError extends Error {
   }
 }
 
-function safeReturnTo(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+export function safeReturnTo(value: string | null) {
+  if (!value?.startsWith("/") || value.startsWith("//")) return "/";
+
+  const path = value.split(/[?#]/, 1)[0];
+  return path === "/login" || path.startsWith("/login/") || path === "/register" ? "/" : value;
+}
+
+export function beforeLoadCheckAuth({ location }: { location: { href: string } }) {
+  if (!authService.getToken()) {
+    throw redirect({
+      to: "/login",
+      search: { returnTo: safeReturnTo(location.href) },
+      replace: true,
+    });
+  }
 }
 
 async function requestError(response: { json: () => Promise<unknown> }) {

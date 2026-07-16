@@ -38,8 +38,9 @@ minimal Cloudflare deployment foundation with a typed ping endpoint.
 
 - Use Oxlint and Oxfmt for linting and formatting; do not add ESLint or Prettier configuration.
 - Compose shadcn layouts with `flex flex-col gap-*` containers for vertical rhythm instead of stacking arbitrary `mt-*` utilities. Reserve `mt-auto` for intentional responsive action-bar anchoring.
-- Keep API routes in `pkg/api/server.ts` and export `AppType` after adding a
-  route so the web RPC client remains type-safe.
+- Keep `pkg/api/server.ts` as the API composition root. Add route handlers under
+  `pkg/api/routes/` and export `AppType` from the server so the web RPC client
+  remains type-safe.
 - Use Drizzle's D1 adapter from `pkg/api/db.ts` for database access; do not use
   raw D1 queries unless there is a concrete reason.
 - Never commit Cloudflare credentials or generated `.wrangler` state.

@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MePage, RequireAuth } from "@/App";
+import { MePage } from "@/App";
+import { beforeLoadCheckAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/me")({
-  component: () => (
-    <RequireAuth>
-      <MePage />
-    </RequireAuth>
-  ),
+  beforeLoad: beforeLoadCheckAuth,
+  component: MePage,
 });

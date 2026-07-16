@@ -1,14 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { RegisterPage } from "@/App";
+import { safeReturnTo } from "@/lib/auth";
 
 export const RegisterSearch = z.object({
   email: z.string().catch(""),
-  returnTo: z
-    .string()
-    .startsWith("/")
-    .refine((value) => !value.startsWith("//"))
-    .catch("/"),
+  returnTo: z.string().catch("/").transform(safeReturnTo),
 });
 export type RegisterSearchSchema = z.infer<typeof RegisterSearch>;
 

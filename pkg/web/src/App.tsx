@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, Navigate, useLocation } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Camera,
   LandPlot,
@@ -7,6 +7,7 @@ import {
   LogOut,
   NotebookText,
   Settings,
+  Share,
   UserRound,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -159,6 +160,11 @@ export function LoginPage({ returnTo }: { returnTo: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notRegistered, setNotRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isStandalone] = useState(
+    () =>
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true,
+  );
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -202,6 +208,15 @@ export function LoginPage({ returnTo }: { returnTo: string }) {
       {status ? (
         <form className="flex flex-1 flex-col gap-6" onSubmit={verifyCode}>
           <p className="text-sm text-muted-foreground">{status}</p>
+          {!isStandalone && (
+            <aside className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm md:hidden">
+              <p className="font-medium">Install Scorecard</p>
+              <p className="mt-1 text-muted-foreground">
+                In Safari, tap <Share aria-hidden="true" className="mx-0.5 inline size-4" /> Share,
+                then choose <span className="font-medium text-foreground">Add to Home Screen</span>.
+              </p>
+            </aside>
+          )}
           <InputOTP
             containerClassName="w-full justify-center"
             maxLength={6}
@@ -375,10 +390,16 @@ export function MagicLinkPage({ email, code }: { email: string; code: string }) 
 
 export function MePage() {
   const { client, signOut } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<{ id: string; email: string; name: string | null } | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
+
+  function handleSignOut() {
+    signOut();
+    void navigate({ to: "/login", search: { returnTo: "/" }, replace: true });
+  }
 
   useEffect(() => {
     if (!client) return;
@@ -428,7 +449,7 @@ export function MePage() {
               </p>
             </div>
             <div className="p-5">
-              <Button variant="outline" onClick={signOut}>
+              <Button variant="outline" onClick={handleSignOut}>
                 <LogOut data-icon="inline-start" />
                 Log out
               </Button>
@@ -438,19 +459,6 @@ export function MePage() {
       )}
     </AppShell>
   );
-}
-
-export function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { token } = useAuth();
-  const location = useLocation();
-  if (!token)
-    return (
-      <Navigate
-        to="/login"
-        search={{ returnTo: `${location.pathname}${location.searchStr}${location.hash}` }}
-      />
-    );
-  return children;
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {

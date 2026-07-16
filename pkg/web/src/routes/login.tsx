@@ -1,13 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { LoginPage } from "@/App";
+import { safeReturnTo } from "@/lib/auth";
 
 export const LoginSearch = z.object({
-  returnTo: z
-    .string()
-    .startsWith("/")
-    .refine((value) => !value.startsWith("//"))
-    .catch("/"),
+  returnTo: z.string().catch("/").transform(safeReturnTo),
 });
 export type LoginSearchSchema = z.infer<typeof LoginSearch>;
 
