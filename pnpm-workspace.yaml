@@ -1,8 +1,0 @@
-packages:
-  - "pkg/*"
-allowBuilds:
-  esbuild: true
-  sharp: true
-  workerd: true
-minimumReleaseAgeExclude:
-  - '@cloudflare/workers-types@5.20260716.1'

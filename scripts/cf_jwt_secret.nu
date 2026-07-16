@@ -6,7 +6,7 @@ def main [] {
   cd $repo_root
 
   let secret = (^openssl rand -base64 48 | str trim)
-  $secret | ^pnpm exec wrangler secret put JWT_SECRET
+  $secret | ^bunx wrangler secret put JWT_SECRET
 
   print "Rotated JWT_SECRET for the production Worker."
 }

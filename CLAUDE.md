@@ -19,14 +19,14 @@ minimal Cloudflare deployment foundation with a typed ping endpoint.
 
 ## Commands
 
-- `pnpm dev`: run the Worker locally on port 8787.
-- `pnpm dev:web`: run Vite locally; its `/api` requests proxy to the Worker.
-- `pnpm typecheck`: typecheck all workspace packages.
-- `pnpm build`: build the Vite app.
-- `pnpm db:generate`: generate D1 SQL migrations from the Drizzle schema.
-- `pnpm db:migrate:local` / `pnpm db:migrate:remote`: apply migrations.
-- `pnpm deploy`: builds the front end through the package `predeploy` lifecycle,
-  then deploys the Worker and static assets with Wrangler.
+- `bun dev`: run the Worker locally on port 8787.
+- `bun dev:web`: run Vite locally; its `/api` requests proxy to the Worker.
+- `bun typecheck`: typecheck all workspace packages.
+- `bun build`: build the Vite app.
+- `bun db:generate`: generate D1 SQL migrations from the Drizzle schema.
+- `bun db:migrate:local` / `bun db:migrate:remote`: apply migrations.
+- `bun deploy`: builds the front end, then deploys the Worker and static assets
+  with Wrangler.
 
 ## Conventions
 
