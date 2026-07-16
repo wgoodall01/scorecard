@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation } from "@tanstack/react-router";
-import { Camera, LogOut, NotebookText, Settings, UserRound } from "lucide-react";
+import { Camera, LandPlot, LogOut, NotebookText, Settings, UserRound } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   InputOTP,
@@ -15,6 +15,7 @@ import { ApiError, authService } from "@/lib/auth";
 export function CapturePage() {
   return (
     <AppShell>
+      <PageTitle>Capture · Scorecard</PageTitle>
       <PageHeading title="Capture" description="Upload a scorecard to start a new round." />
       <section className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/30 p-6 text-center">
         <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -37,6 +38,7 @@ export function CapturePage() {
 export function OutingsPage() {
   return (
     <AppShell>
+      <PageTitle>Outings · Scorecard</PageTitle>
       <PageHeading title="Outings" description="Your scorecard history will appear here." />
       <section className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/30 p-6 text-center">
         <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -98,6 +100,7 @@ export function LoginPage({ returnTo }: { returnTo: string }) {
 
   return (
     <CenterCardLayout>
+      <PageTitle>Sign in · Scorecard</PageTitle>
       <div className="flex flex-col gap-1">
         <h1 className="font-medium">Sign in</h1>
         <p>We’ll email you a six-digit code.</p>
@@ -202,6 +205,7 @@ export function RegisterPage({
 
   return (
     <CenterCardLayout>
+      <PageTitle>Create account · Scorecard</PageTitle>
       <div className="flex flex-col gap-1">
         <h1 className="font-medium">Create your account</h1>
         <p>We’ll create your account and email you a sign-in link.</p>
@@ -266,6 +270,7 @@ export function MagicLinkPage({ email, code }: { email: string; code: string }) 
 
   return (
     <CenterCardLayout>
+      <PageTitle>Signing in · Scorecard</PageTitle>
       <div className="flex flex-1 flex-col">
         <h1 className="font-medium">Signing you in…</h1>
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
@@ -295,6 +300,7 @@ export function MePage() {
 
   return (
     <AppShell>
+      <PageTitle>Me · Scorecard</PageTitle>
       <PageHeading title="Me" description="Manage your profile and account." />
       {error && <p className="text-sm text-destructive">{error}</p>}
       {!profile && !error && <p className="text-sm text-muted-foreground">Loading your profile…</p>}
@@ -359,7 +365,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-64 shrink-0 border-r bg-sidebar text-sidebar-foreground md:flex md:flex-col">
         <div className="flex h-16 items-center gap-2 px-5 font-medium">
           <span className="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <Camera aria-hidden="true" />
+            <LandPlot aria-hidden="true" />
           </span>
           Scorecard
         </div>
@@ -399,6 +405,10 @@ function PageHeading({ title, description }: { title: string; description: strin
       <p className="mt-1 text-sm text-muted-foreground">{description}</p>
     </header>
   );
+}
+
+function PageTitle({ children }: { children: string }) {
+  return <title>{children}</title>;
 }
 
 function NavigationLink({
