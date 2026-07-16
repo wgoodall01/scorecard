@@ -6,7 +6,7 @@ const varchar = customType<{ data: string }>({
   },
 });
 
-function uuidv7() {
+export function uuidv7() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   const timestamp = BigInt(Date.now());
 

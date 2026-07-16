@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation } from "@tanstack/react-router";
-import { Camera, LandPlot, LogOut, NotebookText, Settings, UserRound } from "lucide-react";
+import {
+  Camera,
+  LandPlot,
+  LoaderCircle,
+  LogOut,
+  NotebookText,
+  Settings,
+  UserRound,
+} from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   InputOTP,
@@ -11,8 +19,65 @@ import {
 import { CenterCardLayout } from "@/components/center-card-layout";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, authService } from "@/lib/auth";
+import { resizeImageForCapture } from "@/lib/image_resize";
 
 export function CapturePage() {
+  const { token } = useAuth();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submitCapture(image: File) {
+    if (!token || isProcessing) return;
+
+    setIsProcessing(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const form = new FormData();
+      form.set("image", await resizeImageForCapture(image));
+      const submitResponse = await fetch("/api/capture/submit", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const submitBody = (await submitResponse.json()) as { id?: string; error?: string };
+      if (!submitResponse.ok || !submitBody.id)
+        throw new Error(submitBody.error ?? "Unable to upload your scorecard.");
+
+      for (let attempt = 0; attempt < 60; attempt++) {
+        const resultResponse = await fetch(
+          `/api/capture/result?id=${encodeURIComponent(submitBody.id)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (resultResponse.status === 202) {
+          await new Promise((resolve) => window.setTimeout(resolve, 750));
+          continue;
+        }
+
+        const resultBody = (await resultResponse.json()) as unknown;
+        if (!resultResponse.ok) {
+          const message =
+            typeof resultBody === "object" && resultBody && "error" in resultBody
+              ? String(resultBody.error)
+              : "Unable to extract your scorecard.";
+          throw new Error(message);
+        }
+        setResult(JSON.stringify(resultBody, null, 2));
+        return;
+      }
+
+      throw new Error("Extraction is taking longer than expected. Please try again.");
+    } catch (captureError) {
+      setError(
+        captureError instanceof Error ? captureError.message : "Unable to capture scorecard.",
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
   return (
     <AppShell>
       <PageTitle>Capture · Scorecard</PageTitle>
@@ -26,11 +91,40 @@ export function CapturePage() {
           Take a photo or choose an image from your library. We’ll extract the round details for
           you.
         </p>
-        <Button className="mt-5" disabled>
-          <Camera data-icon="inline-start" />
-          Open camera
-        </Button>
+        <label
+          className={buttonVariants({
+            className:
+              "mt-5 cursor-pointer has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50",
+          })}
+        >
+          {isProcessing ? (
+            <LoaderCircle data-icon="inline-start" className="animate-spin" />
+          ) : (
+            <Camera data-icon="inline-start" />
+          )}
+          {isProcessing ? "Extracting scorecard…" : "Choose scorecard image"}
+          <input
+            className="sr-only"
+            type="file"
+            accept="image/*"
+            disabled={isProcessing}
+            onChange={(event) => {
+              const [image] = event.target.files ?? [];
+              if (image) void submitCapture(image);
+              event.target.value = "";
+            }}
+          />
+        </label>
+        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
       </section>
+      {result && (
+        <section className="mt-6 rounded-xl border bg-card p-5">
+          <h2 className="font-medium">Extracted JSON</h2>
+          <pre className="mt-3 overflow-x-auto rounded-lg bg-muted p-4 text-left text-xs leading-relaxed">
+            {result}
+          </pre>
+        </section>
+      )}
     </AppShell>
   );
 }
