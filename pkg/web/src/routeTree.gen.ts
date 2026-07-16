@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as OutingsRouteImport } from './routes/outings'
 import { Route as MeRouteImport } from './routes/me'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
@@ -18,6 +19,11 @@ import { Route as LoginMagicRouteImport } from './routes/login_.magic'
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OutingsRoute = OutingsRouteImport.update({
+  id: '/outings',
+  path: '/outings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MeRoute = MeRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
+  '/outings': typeof OutingsRoute
   '/register': typeof RegisterRoute
   '/login/magic': typeof LoginMagicRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
+  '/outings': typeof OutingsRoute
   '/register': typeof RegisterRoute
   '/login/magic': typeof LoginMagicRoute
 }
@@ -60,21 +68,30 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
+  '/outings': typeof OutingsRoute
   '/register': typeof RegisterRoute
   '/login_/magic': typeof LoginMagicRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/me' | '/register' | '/login/magic'
+  fullPaths: '/' | '/login' | '/me' | '/outings' | '/register' | '/login/magic'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/me' | '/register' | '/login/magic'
-  id: '__root__' | '/' | '/login' | '/me' | '/register' | '/login_/magic'
+  to: '/' | '/login' | '/me' | '/outings' | '/register' | '/login/magic'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/me'
+    | '/outings'
+    | '/register'
+    | '/login_/magic'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
   MeRoute: typeof MeRoute
+  OutingsRoute: typeof OutingsRoute
   RegisterRoute: typeof RegisterRoute
   LoginMagicRoute: typeof LoginMagicRoute
 }
@@ -86,6 +103,13 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/outings': {
+      id: '/outings'
+      path: '/outings'
+      fullPath: '/outings'
+      preLoaderRoute: typeof OutingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/me': {
@@ -123,6 +147,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   MeRoute: MeRoute,
+  OutingsRoute: OutingsRoute,
   RegisterRoute: RegisterRoute,
   LoginMagicRoute: LoginMagicRoute,
 }

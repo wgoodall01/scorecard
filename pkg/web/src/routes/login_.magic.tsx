@@ -4,7 +4,12 @@ import { MagicLinkPage } from "@/App";
 
 export const MagicLinkSearch = z.object({
   email: z.string().catch(""),
-  code: z.string().catch(""),
+  // TanStack Router JSON-parses search values. A code such as `123456` therefore
+  // arrives here as a number; coerce it back before passing it to the auth API.
+  code: z.coerce
+    .string()
+    .regex(/^\d{6}$/)
+    .catch(""),
 });
 export type MagicLinkSearchSchema = z.infer<typeof MagicLinkSearch>;
 

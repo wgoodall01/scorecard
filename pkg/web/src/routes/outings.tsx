@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CapturePage, RequireAuth } from "@/App";
+import { OutingsPage, RequireAuth } from "@/App";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/outings")({
   component: () => (
     <RequireAuth>
-      <CapturePage />
+      <OutingsPage />
     </RequireAuth>
   ),
 });

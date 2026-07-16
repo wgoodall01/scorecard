@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation } from "@tanstack/react-router";
+import { Camera, LogOut, NotebookText, Settings, UserRound } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   InputOTP,
@@ -9,47 +10,48 @@ import {
 } from "@/components/ui/input-otp";
 import { CenterCardLayout } from "@/components/center-card-layout";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, authService, createApiClient } from "@/lib/auth";
+import { ApiError, authService } from "@/lib/auth";
 
-export function HomePage() {
-  const [pingResult, setPingResult] = useState<string | null>(null);
-  const { token, signOut } = useAuth();
-
-  async function handlePing() {
-    const res = await createApiClient().api.ping.$post();
-    const data = await res.json();
-    setPingResult(data.time);
-  }
-
+export function CapturePage() {
   return (
-    <Page>
-      <h1 className="font-medium">Scorecard</h1>
-      <p>Project ready!</p>
-      <Button className="mt-2" onClick={handlePing}>
-        POST /api/ping
-      </Button>
-      {pingResult && <p className="mt-2 font-mono text-xs text-muted-foreground">{pingResult}</p>}
-      <div className="mt-4 flex gap-2">
-        {token ? (
-          <>
-            <Link className={buttonVariants({ variant: "outline" })} to="/me">
-              My profile
-            </Link>
-            <Button variant="outline" onClick={signOut}>
-              Sign out
-            </Button>
-          </>
-        ) : (
-          <Link
-            className={buttonVariants({ variant: "outline" })}
-            to="/login"
-            search={{ returnTo: "/" }}
-          >
-            Sign in
-          </Link>
-        )}
-      </div>
-    </Page>
+    <AppShell>
+      <PageHeading title="Capture" description="Upload a scorecard to start a new round." />
+      <section className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/30 p-6 text-center">
+        <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Camera aria-hidden="true" />
+        </div>
+        <h2 className="mt-4 font-medium">Capture a scorecard</h2>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Take a photo or choose an image from your library. We’ll extract the round details for
+          you.
+        </p>
+        <Button className="mt-5" disabled>
+          <Camera data-icon="inline-start" />
+          Open camera
+        </Button>
+      </section>
+    </AppShell>
+  );
+}
+
+export function OutingsPage() {
+  return (
+    <AppShell>
+      <PageHeading title="Outings" description="Your scorecard history will appear here." />
+      <section className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/30 p-6 text-center">
+        <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <NotebookText aria-hidden="true" />
+        </div>
+        <h2 className="mt-4 font-medium">No outings yet</h2>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Capture your first scorecard to begin building your history.
+        </p>
+        <Link className={buttonVariants({ className: "mt-5" })} to="/">
+          <Camera data-icon="inline-start" />
+          Capture a scorecard
+        </Link>
+      </section>
+    </AppShell>
   );
 }
 
@@ -292,29 +294,49 @@ export function MePage() {
   }, [client]);
 
   return (
-    <Page>
-      <h1 className="font-medium">My profile</h1>
-      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-      {!profile && !error && <p className="mt-3 text-muted-foreground">Loading…</p>}
+    <AppShell>
+      <PageHeading title="Me" description="Manage your profile and account." />
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {!profile && !error && <p className="text-sm text-muted-foreground">Loading your profile…</p>}
       {profile && (
-        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-          <dt>ID</dt>
-          <dd>{profile.id}</dd>
-          <dt>Email</dt>
-          <dd>{profile.email}</dd>
-          <dt>Name</dt>
-          <dd>{profile.name ?? "—"}</dd>
-        </dl>
+        <div className="flex flex-col gap-5">
+          <section className="rounded-xl border bg-card">
+            <div className="flex items-center gap-3 border-b p-5">
+              <div className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <UserRound aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-medium">{profile.name ?? "Scorecard player"}</h2>
+                <p className="truncate text-sm text-muted-foreground">{profile.email}</p>
+              </div>
+            </div>
+            <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-3 p-5 text-sm">
+              <dt className="text-muted-foreground">Name</dt>
+              <dd>{profile.name ?? "Not set"}</dd>
+              <dt className="text-muted-foreground">Email</dt>
+              <dd className="break-all">{profile.email}</dd>
+            </dl>
+          </section>
+          <section className="rounded-xl border bg-card">
+            <div className="border-b p-5">
+              <h2 className="flex items-center gap-2 font-medium">
+                <Settings aria-hidden="true" className="size-4" />
+                Profile settings
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                More profile preferences are coming soon.
+              </p>
+            </div>
+            <div className="p-5">
+              <Button variant="outline" onClick={signOut}>
+                <LogOut data-icon="inline-start" />
+                Log out
+              </Button>
+            </div>
+          </section>
+        </div>
       )}
-      <div className="mt-4 flex gap-2">
-        <Link className={buttonVariants({ variant: "outline" })} to="/">
-          Home
-        </Link>
-        <Button variant="outline" onClick={signOut}>
-          Sign out
-        </Button>
-      </div>
-    </Page>
+    </AppShell>
   );
 }
 
@@ -331,11 +353,95 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   return children;
 }
 
-function Page({ children }: { children: React.ReactNode }) {
+function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-svh p-6">
-      <main className="flex max-w-md min-w-0 flex-col text-sm leading-loose">{children}</main>
+    <div className="min-h-svh bg-background md:flex">
+      <aside className="hidden w-64 shrink-0 border-r bg-sidebar text-sidebar-foreground md:flex md:flex-col">
+        <div className="flex h-16 items-center gap-2 px-5 font-medium">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+            <Camera aria-hidden="true" />
+          </span>
+          Scorecard
+        </div>
+        <nav className="flex flex-1 flex-col gap-1 px-3 py-3" aria-label="Main navigation">
+          <NavigationLink to="/" icon={<Camera aria-hidden="true" />} label="Capture" />
+          <NavigationLink
+            to="/outings"
+            icon={<NotebookText aria-hidden="true" />}
+            label="Outings"
+          />
+          <NavigationLink to="/me" icon={<UserRound aria-hidden="true" />} label="Me" />
+        </nav>
+      </aside>
+      <main className="mx-auto w-full max-w-3xl px-5 py-8 pb-24 md:mx-0 md:px-10 md:py-10">
+        {children}
+      </main>
+      <nav
+        className="fixed inset-x-0 bottom-0 flex border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden"
+        aria-label="Main navigation"
+      >
+        <MobileNavigationLink to="/" icon={<Camera aria-hidden="true" />} label="Capture" />
+        <MobileNavigationLink
+          to="/outings"
+          icon={<NotebookText aria-hidden="true" />}
+          label="Outings"
+        />
+        <MobileNavigationLink to="/me" icon={<UserRound aria-hidden="true" />} label="Me" />
+      </nav>
     </div>
+  );
+}
+
+function PageHeading({ title, description }: { title: string; description: string }) {
+  return (
+    <header className="mb-8">
+      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+    </header>
+  );
+}
+
+function NavigationLink({
+  to,
+  icon,
+  label,
+}: {
+  to: "/" | "/outings" | "/me";
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <Link
+      to={to}
+      activeOptions={{ exact: true }}
+      className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground" }}
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+}
+
+function MobileNavigationLink({
+  to,
+  icon,
+  label,
+}: {
+  to: "/" | "/outings" | "/me";
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <Link
+      to={to}
+      activeOptions={{ exact: true }}
+      className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg py-1 text-xs font-medium text-muted-foreground transition-colors"
+      activeProps={{ className: "text-primary" }}
+    >
+      {icon}
+      <span>{label}</span>
+    </Link>
   );
 }
 
