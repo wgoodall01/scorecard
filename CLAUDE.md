@@ -35,3 +35,4 @@ minimal Cloudflare deployment foundation with a typed ping endpoint.
 - Use Drizzle's D1 adapter from `pkg/api/db.ts` for database access; do not use
   raw D1 queries unless there is a concrete reason.
 - Never commit Cloudflare credentials or generated `.wrangler` state.
+- TanStack Router for the FE.
