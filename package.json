@@ -11,6 +11,7 @@
     "dev:web": "bun --filter web dev",
     "build": "bun --filter web build",
     "typecheck": "bun run --workspaces typecheck",
+    "predeploy": "bun run build && bun db:migrate:remote",
     "deploy": "bun run build && bunx wrangler deploy",
     "db:generate": "bun --filter api db:generate",
     "db:migrate:local": "bun --filter api db:migrate:local",

@@ -40,6 +40,6 @@ allowed_sender_addresses = ["noreply@scorecard.wg.gay"]
 AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
 
 [observability]
-traces = {enabled: true}
-logs = {enabled: true}
+traces = {enabled = true}
+logs = {enabled = true}
 
