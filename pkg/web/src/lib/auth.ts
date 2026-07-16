@@ -1,0 +1,60 @@
+import { hc } from "hono/client"
+import type { AppType } from "api"
+
+const TOKEN_KEY = "scorecard.auth.token"
+const RETURN_TO_KEY = "scorecard.auth.return-to"
+
+type AuthErrorBody = { error?: string }
+
+function safeReturnTo(value: string | null) {
+  return value?.startsWith("/") && !value.startsWith("//") ? value : "/"
+}
+
+async function requestError(response: { json: () => Promise<unknown> }) {
+  const body = (await response.json().catch(() => ({}))) as AuthErrorBody
+  return body.error ?? "Something went wrong. Please try again."
+}
+
+export function createApiClient(token?: string) {
+  return hc<AppType>(window.location.origin, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
+}
+
+export type ApiClient = ReturnType<typeof createApiClient>
+
+class AuthService {
+  getToken() {
+    return window.localStorage.getItem(TOKEN_KEY)
+  }
+
+  setToken(token: string) {
+    window.localStorage.setItem(TOKEN_KEY, token)
+  }
+
+  clearToken() {
+    window.localStorage.removeItem(TOKEN_KEY)
+  }
+
+  getReturnTo() {
+    return safeReturnTo(window.sessionStorage.getItem(RETURN_TO_KEY))
+  }
+
+  setReturnTo(returnTo: string) {
+    window.sessionStorage.setItem(RETURN_TO_KEY, safeReturnTo(returnTo))
+  }
+
+  async requestCode(email: string) {
+    const response = await createApiClient().api.auth.code.$post({ json: { email } })
+    if (!response.ok) throw new Error(await requestError(response))
+  }
+
+  async useCode(email: string, code: string) {
+    const response = await createApiClient().api.auth.token.$post({ json: { email, code } })
+    if (!response.ok) throw new Error(await requestError(response))
+
+    const { token } = await response.json()
+    this.setToken(token)
+    return token
+  }
+}
+
+export const authService = new AuthService()

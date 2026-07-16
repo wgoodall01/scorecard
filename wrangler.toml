@@ -20,5 +20,24 @@ migrations_dir = "pkg/api/migrations"
 binding = "BUCKET"
 bucket_name = "scorecard"
 
+[[kv_namespaces]]
+binding = "AUTH_CODES"
+
+[[ratelimits]]
+name = "AUTH_RATE_LIMITER"
+namespace_id = "817364291"
+
+  [ratelimits.simple]
+  # The native binding's shortest window is 10 seconds; KV adds the exact 1-second throttle.
+  limit = 10
+  period = 10
+
+[[send_email]]
+name = "EMAIL"
+
+[vars]
+AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
+JWT_SECRET = "yRNhEc5aT-KJV0-FaVyC54KrCFq_3PQuIyApa3cEWu4"
+
 [observability]
 enabled = true

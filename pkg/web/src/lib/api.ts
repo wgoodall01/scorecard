@@ -1,4 +1,1 @@
-import { hc } from "hono/client"
-import type { AppType } from "api"
-
-export const client = hc<AppType>(window.location.origin)
+export { createApiClient } from "@/lib/auth"
