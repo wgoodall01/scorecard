@@ -13,6 +13,10 @@ export default defineConfig({
     },
   },
   server: {
+    // Listen on all interfaces so phones on the LAN can reach the dev server.
+    host: true,
+    // Allow tunneling the dev server through ngrok (e.g. for HTTPS on a phone).
+    allowedHosts: [".ngrok-free.app"],
     proxy: {
       "/api": "http://localhost:8787",
     },

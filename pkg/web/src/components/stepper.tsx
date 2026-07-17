@@ -6,13 +6,12 @@ export type StepperStep<K extends string> = {
   key: K;
   label: string;
   icon: LucideIcon;
-  /** Rendered inside the step's section while the step is current. */
-  content?: React.ReactNode;
 };
 
 /**
- * Vertical stepper: a rail of numbered stages where the current stage expands
- * to show its content inline, indented under its label.
+ * Horizontal stepper: a row of stages joined by connector lines, with labels
+ * under each node. Completed stages show a check; the current stage shows its
+ * icon, or a spinner while `busy`.
  */
 export function Stepper<K extends string>({
   steps,
@@ -29,22 +28,29 @@ export function Stepper<K extends string>({
   const currentIndex = steps.findIndex((step) => step.key === current);
 
   return (
-    <ol className={cn("flex flex-col", className)} {...props}>
+    <ol className={cn("flex items-start", className)} {...props}>
       {steps.map((step, index) => {
         const state =
           index < currentIndex ? "complete" : index === currentIndex ? "current" : "upcoming";
-        const isLast = index === steps.length - 1;
 
         return (
-          <li
-            key={step.key}
-            className="grid grid-cols-[2.25rem_1fr] gap-x-4"
-            aria-current={state === "current" ? "step" : undefined}
-          >
-            <div className="flex flex-col items-center gap-1.5">
+          <li key={step.key} className={cn("flex items-start", index > 0 && "flex-1")}>
+            {index > 0 && (
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "mx-2 mt-[17px] h-0.5 flex-1 rounded-full transition-colors",
+                  state === "upcoming" ? "bg-border" : "bg-primary",
+                )}
+              />
+            )}
+            <div
+              className="flex flex-col items-center gap-1"
+              aria-current={state === "current" ? "step" : undefined}
+            >
               <div
                 className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-full border transition-colors",
+                  "flex size-9 items-center justify-center rounded-full border transition-colors",
                   state === "complete" && "border-primary bg-primary text-primary-foreground",
                   state === "current" && "border-primary bg-primary/10 text-primary",
                   state === "upcoming" && "border-border bg-background text-muted-foreground",
@@ -58,30 +64,14 @@ export function Stepper<K extends string>({
                   <step.icon className="size-4" />
                 )}
               </div>
-              {!isLast && (
-                <div
-                  aria-hidden="true"
-                  className={cn(
-                    "min-h-4 w-0.5 flex-1 rounded-full transition-colors",
-                    state === "complete" ? "bg-primary" : "bg-border",
-                  )}
-                />
-              )}
-            </div>
-            <div className={cn("flex min-w-0 flex-col", !isLast && "pb-6")}>
-              <div className="flex min-h-9 items-center">
-                <span
-                  className={cn(
-                    "text-sm font-medium",
-                    state === "upcoming" ? "text-muted-foreground" : "text-foreground",
-                  )}
-                >
-                  {step.label}
-                </span>
-              </div>
-              {state === "current" && step.content && (
-                <div className="mt-2 min-w-0">{step.content}</div>
-              )}
+              <span
+                className={cn(
+                  "text-xs font-medium",
+                  state === "upcoming" ? "text-muted-foreground" : "text-foreground",
+                )}
+              >
+                {step.label}
+              </span>
             </div>
           </li>
         );
