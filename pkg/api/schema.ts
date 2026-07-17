@@ -1,4 +1,4 @@
-import { customType, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { customType, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const varchar = customType<{ data: string }>({
   dataType() {
@@ -25,8 +25,13 @@ export function uuidv7() {
     .join("");
 }
 
-export const user = sqliteTable("user", {
-  id: text("id").primaryKey().$defaultFn(uuidv7),
-  email: varchar("email").notNull(),
-  name: varchar("name"),
-});
+export const user = sqliteTable(
+  "user",
+  {
+    id: text("id").primaryKey().$defaultFn(uuidv7),
+    email: varchar("email").notNull(),
+    name: varchar("name"),
+    admin: integer("admin", { mode: "boolean" }).notNull().default(false),
+  },
+  (table) => [uniqueIndex("user_email_unique").on(table.email)],
+);

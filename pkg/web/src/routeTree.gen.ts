@@ -9,18 +9,14 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as RegisterRouteImport } from './routes/register'
 import { Route as OutingsRouteImport } from './routes/outings'
 import { Route as MeRouteImport } from './routes/me'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginMagicRouteImport } from './routes/login_.magic'
+import { Route as AdminUsersIdRouteImport } from './routes/admin_.users.$id'
 
-const RegisterRoute = RegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const OutingsRoute = OutingsRouteImport.update({
   id: '/outings',
   path: '/outings',
@@ -36,6 +32,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -46,65 +47,82 @@ const LoginMagicRoute = LoginMagicRouteImport.update({
   path: '/login/magic',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminUsersIdRoute = AdminUsersIdRouteImport.update({
+  id: '/admin_/users/$id',
+  path: '/admin/users/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
-  '/register': typeof RegisterRoute
   '/login/magic': typeof LoginMagicRoute
+  '/admin/users/$id': typeof AdminUsersIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
-  '/register': typeof RegisterRoute
   '/login/magic': typeof LoginMagicRoute
+  '/admin/users/$id': typeof AdminUsersIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
-  '/register': typeof RegisterRoute
   '/login_/magic': typeof LoginMagicRoute
+  '/admin_/users/$id': typeof AdminUsersIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/me' | '/outings' | '/register' | '/login/magic'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/me' | '/outings' | '/register' | '/login/magic'
-  id:
-    | '__root__'
+  fullPaths:
     | '/'
+    | '/admin'
     | '/login'
     | '/me'
     | '/outings'
-    | '/register'
+    | '/login/magic'
+    | '/admin/users/$id'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/me'
+    | '/outings'
+    | '/login/magic'
+    | '/admin/users/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/me'
+    | '/outings'
     | '/login_/magic'
+    | '/admin_/users/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   LoginRoute: typeof LoginRoute
   MeRoute: typeof MeRoute
   OutingsRoute: typeof OutingsRoute
-  RegisterRoute: typeof RegisterRoute
   LoginMagicRoute: typeof LoginMagicRoute
+  AdminUsersIdRoute: typeof AdminUsersIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/register': {
-      id: '/register'
-      path: '/register'
-      fullPath: '/register'
-      preLoaderRoute: typeof RegisterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/outings': {
       id: '/outings'
       path: '/outings'
@@ -126,6 +144,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -140,16 +165,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginMagicRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin_/users/$id': {
+      id: '/admin_/users/$id'
+      path: '/admin/users/$id'
+      fullPath: '/admin/users/$id'
+      preLoaderRoute: typeof AdminUsersIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   LoginRoute: LoginRoute,
   MeRoute: MeRoute,
   OutingsRoute: OutingsRoute,
-  RegisterRoute: RegisterRoute,
   LoginMagicRoute: LoginMagicRoute,
+  AdminUsersIdRoute: AdminUsersIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

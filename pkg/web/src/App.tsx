@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Camera,
+  ChevronRight,
   LandPlot,
   LoaderCircle,
   LogOut,
+  Mail,
   NotebookText,
-  Settings,
+  Search,
   Share,
+  ShieldCheck,
   UserRound,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -17,13 +20,14 @@ import {
   InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { Switch } from "@/components/ui/switch";
 import { CenterCardLayout } from "@/components/center-card-layout";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, authService } from "@/lib/auth";
 import { resizeImageForCapture } from "@/lib/image_resize";
 
 export function CapturePage() {
-  const { token } = useAuth();
+  const { token, isAdmin } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +84,7 @@ export function CapturePage() {
   }
 
   return (
-    <AppShell>
+    <AppShell isAdmin={isAdmin}>
       <PageTitle>Capture · Scorecard</PageTitle>
       <PageHeading title="Capture" description="Upload a scorecard to start a new round." />
       <section className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/30 p-6 text-center">
@@ -131,8 +135,10 @@ export function CapturePage() {
 }
 
 export function OutingsPage() {
+  const { isAdmin } = useAuth();
+
   return (
-    <AppShell>
+    <AppShell isAdmin={isAdmin}>
       <PageTitle>Outings · Scorecard</PageTitle>
       <PageHeading title="Outings" description="Your scorecard history will appear here." />
       <section className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/30 p-6 text-center">
@@ -152,13 +158,12 @@ export function OutingsPage() {
   );
 }
 
-export function LoginPage({ returnTo }: { returnTo: string }) {
+export function LoginPage({ returnTo, initialEmail }: { returnTo: string; initialEmail?: string }) {
   const { requestCode, useCode } = useAuth();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notRegistered, setNotRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isStandalone] = useState(
     () =>
@@ -171,14 +176,18 @@ export function LoginPage({ returnTo }: { returnTo: string }) {
     setLoading(true);
     setError(null);
     setStatus(null);
-    setNotRegistered(false);
     try {
       authService.setReturnTo(returnTo);
       await requestCode(email);
       setStatus("Check your email for a six-digit code or magic link.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to send a code.");
-      setNotRegistered(requestError instanceof ApiError && requestError.status === 404);
+      setError(
+        requestError instanceof ApiError && requestError.status === 404
+          ? "No account found for this email. Ask an admin to invite you."
+          : requestError instanceof Error
+            ? requestError.message
+            : "Unable to send a code.",
+      );
     } finally {
       setLoading(false);
     }
@@ -206,7 +215,7 @@ export function LoginPage({ returnTo }: { returnTo: string }) {
         <p>We’ll email you a six-digit code.</p>
       </div>
       {status ? (
-        <form className="flex flex-1 flex-col gap-6" onSubmit={verifyCode}>
+        <form className="flex flex-col gap-6" onSubmit={verifyCode}>
           <p className="text-sm text-muted-foreground">{status}</p>
           {!isStandalone && (
             <aside className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm md:hidden">
@@ -240,14 +249,12 @@ export function LoginPage({ returnTo }: { returnTo: string }) {
             </InputOTPGroup>
           </InputOTP>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <AuthActionBar>
-            <Button className="w-full" type="submit" disabled={loading || code.length !== 6}>
-              {loading ? "Signing in…" : "Sign in with code"}
-            </Button>
-          </AuthActionBar>
+          <Button className="w-full" type="submit" disabled={loading || code.length !== 6}>
+            {loading ? "Signing in…" : "Sign in with code"}
+          </Button>
         </form>
       ) : (
-        <form className="flex flex-1 flex-col gap-6" onSubmit={submit}>
+        <form className="flex flex-col gap-6" onSubmit={submit}>
           <div className="flex flex-col gap-3">
             <input
               className="w-full rounded-md border bg-transparent px-3 py-2"
@@ -259,99 +266,12 @@ export function LoginPage({ returnTo }: { returnTo: string }) {
               required
             />
             {error && <p className="text-sm text-destructive">{error}</p>}
-            {notRegistered && (
-              <Link
-                className={buttonVariants({ variant: "outline" })}
-                to="/register"
-                search={{ email, returnTo }}
-              >
-                Create an account
-              </Link>
-            )}
           </div>
-          <AuthActionBar>
-            <Button className="w-full" type="submit" disabled={loading}>
-              {loading ? "Sending…" : "Email me a code"}
-            </Button>
-          </AuthActionBar>
+          <Button className="w-full" type="submit" disabled={loading}>
+            {loading ? "Sending…" : "Email me a code"}
+          </Button>
         </form>
       )}
-    </CenterCardLayout>
-  );
-}
-
-export function RegisterPage({
-  registeredEmail,
-  returnTo,
-}: {
-  registeredEmail: string;
-  returnTo: string;
-}) {
-  const { register, requestCode } = useAuth();
-  const [email, setEmail] = useState(registeredEmail);
-  const [name, setName] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      authService.setReturnTo(returnTo);
-      await register(email, name);
-      await requestCode(email);
-      setStatus("Your account is ready. Check your email for a magic link or sign-in code.");
-    } catch (registerError) {
-      setError(
-        registerError instanceof Error ? registerError.message : "Unable to create your account.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <CenterCardLayout>
-      <PageTitle>Create account · Scorecard</PageTitle>
-      <div className="flex flex-col gap-1">
-        <h1 className="font-medium">Create your account</h1>
-        <p>We’ll create your account and email you a sign-in link.</p>
-      </div>
-      <form className="flex flex-1 flex-col gap-6" onSubmit={submit}>
-        <div className="flex flex-col gap-3">
-          <input
-            className="w-full rounded-md border bg-transparent px-3 py-2"
-            type="text"
-            autoComplete="name"
-            placeholder="Your name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-          <input
-            className="w-full rounded-md border bg-transparent px-3 py-2"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </div>
-        {(status || error) && (
-          <div className="flex flex-col gap-3">
-            {status && <p className="text-sm text-muted-foreground">{status}</p>}
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-        )}
-        <AuthActionBar>
-          <Button className="w-full" type="submit" disabled={loading}>
-            {loading ? "Creating…" : "Create account"}
-          </Button>
-        </AuthActionBar>
-      </form>
     </CenterCardLayout>
   );
 }
@@ -389,38 +309,24 @@ export function MagicLinkPage({ email, code }: { email: string; code: string }) 
 }
 
 export function MePage() {
-  const { client, signOut } = useAuth();
+  const { profile, profileError, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<{ id: string; email: string; name: string | null } | null>(
-    null,
-  );
-  const [error, setError] = useState<string | null>(null);
 
   function handleSignOut() {
     signOut();
     void navigate({ to: "/login", search: { returnTo: "/" }, replace: true });
   }
 
-  useEffect(() => {
-    if (!client) return;
-    void client.api.me.$get().then(async (response) => {
-      if (!response.ok) {
-        setError("Unable to load your profile.");
-        return;
-      }
-      const { user } = await response.json();
-      setProfile(user);
-    });
-  }, [client]);
-
   return (
-    <AppShell>
+    <AppShell isAdmin={isAdmin}>
       <PageTitle>Me · Scorecard</PageTitle>
       <PageHeading title="Me" description="Manage your profile and account." />
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {!profile && !error && <p className="text-sm text-muted-foreground">Loading your profile…</p>}
-      {profile && (
-        <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-5">
+        {profileError && <p className="text-sm text-destructive">{profileError}</p>}
+        {!profile && !profileError && (
+          <p className="text-sm text-muted-foreground">Loading your profile…</p>
+        )}
+        {profile && (
           <section className="rounded-xl border bg-card">
             <div className="flex items-center gap-3 border-b p-5">
               <div className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -438,21 +344,331 @@ export function MePage() {
               <dd className="break-all">{profile.email}</dd>
             </dl>
           </section>
-          <section className="rounded-xl border bg-card">
-            <div className="border-b p-5">
-              <h2 className="flex items-center gap-2 font-medium">
-                <Settings aria-hidden="true" className="size-4" />
-                Profile settings
-              </h2>
+        )}
+        <Button variant="outline" className="self-start" onClick={handleSignOut}>
+          <LogOut data-icon="inline-start" />
+          Log out
+        </Button>
+      </div>
+    </AppShell>
+  );
+}
+
+export function AdminPage() {
+  const { client, isAdmin } = useAuth();
+  const [users, setUsers] = useState<
+    { id: string; email: string; name: string | null; admin: boolean }[] | null
+  >(null);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filteredUsers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query || !users) return users;
+    return users.filter(
+      (listedUser) =>
+        (listedUser.name ?? "").toLowerCase().includes(query) ||
+        listedUser.email.toLowerCase().includes(query),
+    );
+  }, [users, search]);
+
+  const loadUsers = useCallback(async () => {
+    if (!client) return;
+    const response = await client.api.admin.users.$get();
+    if (!response.ok) return;
+    const { users: loadedUsers } = await response.json();
+    setUsers(loadedUsers);
+  }, [client]);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!client) return;
+
+    setLoading(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const response = await client.api.admin.invite.$post({
+        json: { email, name: name.trim() || undefined },
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Unable to send the invite.");
+      }
+      setStatus(`Invited ${email}.`);
+      setEmail("");
+      setName("");
+      await loadUsers();
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : "Unable to send the invite.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <AppShell isAdmin={isAdmin}>
+      <PageTitle>Admin · Scorecard</PageTitle>
+      <PageHeading title="Admin" description="Invite new players and manage access." />
+      <div className="flex flex-col gap-5">
+        <section className="rounded-xl border bg-card">
+          <div className="border-b p-5">
+            <h2 className="flex items-center gap-2 font-medium">
+              <Mail aria-hidden="true" className="size-4" />
+              Invite a player
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              We'll create their account and email them a sign-in link.
+            </p>
+          </div>
+          <form className="flex flex-col gap-3 p-5" onSubmit={submit}>
+            <input
+              className="w-full rounded-md border bg-transparent px-3 py-2"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+            <input
+              className="w-full rounded-md border bg-transparent px-3 py-2"
+              type="text"
+              autoComplete="name"
+              placeholder="Name (optional)"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+            {status && <p className="text-sm text-muted-foreground">{status}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button className="self-start" type="submit" disabled={loading}>
+              {loading ? "Sending invite…" : "Send invite"}
+            </Button>
+          </form>
+        </section>
+        <section className="rounded-xl border bg-card">
+          <div className="flex flex-col gap-3 border-b p-5">
+            <div>
+              <h2 className="font-medium">Users</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                More profile preferences are coming soon.
+                Everyone with access to Scorecard.
               </p>
             </div>
-            <div className="p-5">
-              <Button variant="outline" onClick={handleSignOut}>
-                <LogOut data-icon="inline-start" />
-                Log out
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                className="w-full rounded-md border bg-transparent py-2 pr-3 pl-9"
+                type="search"
+                placeholder="Search by name or email"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+          </div>
+          {!users && <p className="p-5 text-sm text-muted-foreground">Loading users…</p>}
+          {users && filteredUsers && filteredUsers.length === 0 && (
+            <p className="p-5 text-sm text-muted-foreground">No users match your search.</p>
+          )}
+          {filteredUsers && filteredUsers.length > 0 && (
+            <ul>
+              {filteredUsers.map((listedUser) => (
+                <li key={listedUser.id} className="border-b last:border-b-0">
+                  <Link
+                    to="/admin/users/$id"
+                    params={{ id: listedUser.id }}
+                    className="flex items-center justify-between gap-3 p-5 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium">{listedUser.name ?? "Unnamed"}</p>
+                      <p className="truncate text-sm text-muted-foreground">{listedUser.email}</p>
+                    </div>
+                    {listedUser.admin && (
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                        Admin
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </AppShell>
+  );
+}
+
+export function AdminUserPage({ userId }: { userId: string }) {
+  const { client, isAdmin } = useAuth();
+  const [managedUser, setManagedUser] = useState<{
+    id: string;
+    email: string;
+    name: string | null;
+    admin: boolean;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [profileStatus, setProfileStatus] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const loadUser = useCallback(async () => {
+    if (!client) return;
+    const response = await client.api.admin.users[":id"].$get({ param: { id: userId } });
+    if (!response.ok) {
+      setError("This user could not be found.");
+      return;
+    }
+    const { user: loadedUser } = await response.json();
+    setManagedUser(loadedUser);
+  }, [client, userId]);
+
+  useEffect(() => {
+    void loadUser();
+  }, [loadUser]);
+
+  useEffect(() => {
+    if (managedUser) {
+      setName(managedUser.name ?? "");
+      setEmail(managedUser.email);
+    }
+    // Only re-sync when we load a (possibly different) user, so an in-progress
+    // edit here isn't clobbered by a refresh triggered from the admin switch below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [managedUser?.id]);
+
+  async function toggleAdmin(nextAdmin: boolean) {
+    if (!client || !managedUser) return;
+
+    setUpdating(true);
+    setError(null);
+    try {
+      const response = await client.api.admin.users[":id"].$patch({
+        param: { id: managedUser.id },
+        json: { admin: nextAdmin },
+      });
+      if (!response.ok) throw new Error("Unable to update this user.");
+      const { user: updatedUser } = await response.json();
+      setManagedUser(updatedUser);
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : "Unable to update this user.");
+    } finally {
+      setUpdating(false);
+    }
+  }
+
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!client || !managedUser) return;
+
+    setSavingProfile(true);
+    setProfileError(null);
+    setProfileStatus(null);
+    try {
+      const response = await client.api.admin.users[":id"].$patch({
+        param: { id: managedUser.id },
+        json: { name: name.trim() || null, email },
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Unable to update this user.");
+      }
+      const { user: updatedUser } = await response.json();
+      setManagedUser(updatedUser);
+      setProfileStatus("Saved.");
+    } catch (saveError) {
+      setProfileError(
+        saveError instanceof Error ? saveError.message : "Unable to update this user.",
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  return (
+    <AppShell isAdmin={isAdmin}>
+      <PageTitle>
+        {managedUser ? `${managedUser.name ?? managedUser.email} · Scorecard` : "User · Scorecard"}
+      </PageTitle>
+      <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-1.5 text-sm">
+        <Link to="/admin" className="text-muted-foreground transition-colors hover:text-foreground">
+          Admin
+        </Link>
+        <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground" />
+        <span className="truncate font-medium">
+          {managedUser?.name ?? managedUser?.email ?? "User"}
+        </span>
+      </nav>
+      <div className="mb-8 min-w-0">
+        <h1 className="truncate text-2xl font-semibold tracking-tight">
+          {managedUser?.name ?? managedUser?.email ?? "User"}
+        </h1>
+        {managedUser && (
+          <p className="mt-1 truncate text-sm text-muted-foreground">{managedUser.email}</p>
+        )}
+      </div>
+      {!managedUser && !error && <p className="text-sm text-muted-foreground">Loading user…</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {managedUser && (
+        <div className="flex flex-col gap-5">
+          <section className="rounded-xl border bg-card">
+            <div className="border-b p-5">
+              <h2 className="font-medium">Profile</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Update this player's name and email.
+              </p>
+            </div>
+            <form className="flex flex-col gap-3 p-5" onSubmit={saveProfile}>
+              <input
+                className="w-full rounded-md border bg-transparent px-3 py-2"
+                type="text"
+                autoComplete="name"
+                placeholder="Name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+              <input
+                className="w-full rounded-md border bg-transparent px-3 py-2"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
+              {profileStatus && <p className="text-sm text-muted-foreground">{profileStatus}</p>}
+              {profileError && <p className="text-sm text-destructive">{profileError}</p>}
+              <Button className="self-start" type="submit" disabled={savingProfile}>
+                {savingProfile ? "Saving…" : "Save changes"}
               </Button>
+            </form>
+          </section>
+          <section className="rounded-xl border bg-card">
+            <div className="flex items-center justify-between gap-3 p-5">
+              <div>
+                <h2 className="font-medium">Admin access</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Admins can invite new players and manage everyone's access.
+                </p>
+              </div>
+              <Switch
+                checked={managedUser.admin}
+                disabled={updating}
+                onCheckedChange={(checked) => void toggleAdmin(checked)}
+              />
             </div>
           </section>
         </div>
@@ -461,7 +677,7 @@ export function MePage() {
   );
 }
 
-function AppShell({ children }: { children: React.ReactNode }) {
+function AppShell({ children, isAdmin }: { children: React.ReactNode; isAdmin?: boolean }) {
   return (
     <div className="min-h-svh bg-background md:flex">
       <aside className="hidden w-64 shrink-0 border-r bg-sidebar text-sidebar-foreground md:flex md:flex-col">
@@ -479,13 +695,16 @@ function AppShell({ children }: { children: React.ReactNode }) {
             label="Outings"
           />
           <NavigationLink to="/me" icon={<UserRound aria-hidden="true" />} label="Me" />
+          {isAdmin && (
+            <NavigationLink to="/admin" icon={<ShieldCheck aria-hidden="true" />} label="Admin" />
+          )}
         </nav>
       </aside>
-      <main className="mx-auto w-full max-w-3xl px-5 py-8 pb-24 md:mx-0 md:px-10 md:py-10">
+      <main className="mx-auto w-full max-w-3xl px-5 pt-[calc(2rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-0 md:px-10 md:py-10">
         {children}
       </main>
       <nav
-        className="fixed inset-x-0 bottom-0 flex border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 flex border-t bg-background/95 pt-2 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] backdrop-blur md:hidden"
         aria-label="Main navigation"
       >
         <MobileNavigationLink to="/" icon={<Camera aria-hidden="true" />} label="Capture" />
@@ -495,6 +714,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
           label="Outings"
         />
         <MobileNavigationLink to="/me" icon={<UserRound aria-hidden="true" />} label="Me" />
+        {isAdmin && (
+          <MobileNavigationLink
+            to="/admin"
+            icon={<ShieldCheck aria-hidden="true" />}
+            label="Admin"
+          />
+        )}
       </nav>
     </div>
   );
@@ -518,7 +744,7 @@ function NavigationLink({
   icon,
   label,
 }: {
-  to: "/" | "/outings" | "/me";
+  to: "/" | "/outings" | "/me" | "/admin";
   icon: React.ReactNode;
   label: string;
 }) {
@@ -540,7 +766,7 @@ function MobileNavigationLink({
   icon,
   label,
 }: {
-  to: "/" | "/outings" | "/me";
+  to: "/" | "/outings" | "/me" | "/admin";
   icon: React.ReactNode;
   label: string;
 }) {
@@ -548,15 +774,11 @@ function MobileNavigationLink({
     <Link
       to={to}
       activeOptions={{ exact: true }}
-      className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg py-1 text-xs font-medium text-muted-foreground transition-colors"
+      className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg py-1.5 text-xs font-medium text-muted-foreground transition-colors"
       activeProps={{ className: "text-primary" }}
     >
       {icon}
       <span>{label}</span>
     </Link>
   );
-}
-
-function AuthActionBar({ children }: { children: React.ReactNode }) {
-  return <div className="mt-auto sm:mt-0">{children}</div>;
 }

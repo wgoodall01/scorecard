@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "error": null,
+  "courseName": null,
+  "date": null,
+  "nines": [
+    {
+      "nineName": "Blue Spruce",
+      "players": ["AJM", "JJM", "AJG"],
+      "holes": [
+        {
+          "hole": 10,
+          "par": 4,
+          "scores": [4, 4, 4]
+        },
+        {
+          "hole": 11,
+          "par": 4,
+          "scores": [5, 5, 4]
+        },
+        {
+          "hole": 12,
+          "par": 5,
+          "scores": [4, 7, 8]
+        },
+        {
+          "hole": 13,
+          "par": 5,
+          "scores": [8, 8, 5]
+        },
+        {
+          "hole": 14,
+          "par": 3,
+          "scores": [4, 5, 5]
+        },
+        {
+          "hole": 15,
+          "par": 4,
+          "scores": [6, 5, 4]
+        },
+        {
+          "hole": 16,
+          "par": 3,
+          "scores": [3, 5, 5]
+        },
+        {
+          "hole": 17,
+          "par": 4,
+          "scores": [5, 4, 6]
+        },
+        {
+          "hole": 18,
+          "par": 4,
+          "scores": [6, 6, 6]
+        }
+      ],
+      "writtenTotals": [null, null, null]
+    },
+    {
+      "nineName": "Red Maple",
+      "players": ["AJM", "JJM", "AJG"],
+      "holes": [
+        {
+          "hole": 1,
+          "par": 3,
+          "scores": [3, 4, 4]
+        },
+        {
+          "hole": 2,
+          "par": 4,
+          "scores": [7, 6, 6]
+        },
+        {
+          "hole": 3,
+          "par": 3,
+          "scores": [3, 4, 4]
+        },
+        {
+          "hole": 4,
+          "par": 4,
+          "scores": [5, 5, 4]
+        },
+        {
+          "hole": 5,
+          "par": 4,
+          "scores": [5, 6, 6]
+        },
+        {
+          "hole": 6,
+          "par": 5,
+          "scores": [6, 6, 5]
+        },
+        {
+          "hole": 7,
+          "par": 4,
+          "scores": [5, 6, 6]
+        },
+        {
+          "hole": 8,
+          "par": 4,
+          "scores": [5, 6, 6]
+        },
+        {
+          "hole": 9,
+          "par": 3,
+          "scores": [5, 4, 5]
+        }
+      ],
+      "writtenTotals": [null, null, null]
+    }
+  ],
+  "writtenTotals": [null, null, null]
+}

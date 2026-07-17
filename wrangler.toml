@@ -1,5 +1,5 @@
 name = "scorecard"
-main = "pkg/api/server.ts"
+main = "pkg/api/index.ts"
 compatibility_date = "2026-07-16"
 compatibility_flags = ["nodejs_compat"]
 account_id = "dfd083c9490364800d31a6e3a745ad6c"
@@ -36,8 +36,34 @@ period = 10
 name = "EMAIL"
 allowed_sender_addresses = ["noreply@scorecard.wg.gay"]
 
+[[queues.producers]]
+binding = "CAPTURE_QUEUE"
+queue = "scorecard-capture"
+
+[[queues.consumers]]
+queue = "scorecard-capture"
+# One capture at a time, no batching: dispatch each message as soon as it arrives.
+max_batch_size = 1
+max_batch_timeout = 0
+# Allows retrying rate-limited vision-model calls (see scorecard_parse_agent.ts).
+max_retries = 3
+retry_delay = 30
+
+[ai]
+binding = "AI"
+remote = true
+
 [vars]
 AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
+AI_GATEWAY_ID = "scorecard"
+
+# Secrets the Worker requires. Local values come from the repo-root
+# `.env.local` (the only env file in this repo — wrangler dev reads it since
+# no .dev.vars exists); production values via `wrangler secret put`.
+# AI_GATEWAY_TOKEN also lives in .env.local but is eval-only (see
+# pkg/api/src/model_provider.ts's evalModel), not a Worker secret.
+[secrets]
+required = ["JWT_SECRET"]
 
 [observability]
 traces = { enabled = true }

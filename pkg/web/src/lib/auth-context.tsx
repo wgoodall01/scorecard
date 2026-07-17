@@ -1,11 +1,15 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { authService, createApiClient, type ApiClient } from "@/lib/auth";
+
+export type Profile = { id: string; email: string; name: string | null; admin: boolean };
 
 type AuthContextValue = {
   token: string | null;
   client: ApiClient | null;
+  profile: Profile | null;
+  profileError: string | null;
+  isAdmin: boolean;
   requestCode: (email: string) => Promise<void>;
-  register: (email: string, name: string) => Promise<void>;
   useCode: (email: string, code: string) => Promise<void>;
   signOut: () => void;
 };
@@ -14,14 +18,54 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState(() => authService.getToken());
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const client = useMemo(() => (token ? createApiClient(token) : null), [token]);
+
+  useEffect(() => {
+    if (!client) {
+      setProfile(null);
+      setProfileError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setProfileError(null);
+    void client.api.me.$get().then(
+      async (response) => {
+        if (cancelled) return;
+        if (response.status === 401 || response.status === 404) {
+          // The stored token no longer maps to a user — drop it so the app
+          // returns to the signed-out state instead of loading forever.
+          authService.clearToken();
+          setToken(null);
+          return;
+        }
+        if (!response.ok) {
+          setProfileError("Unable to load your profile.");
+          return;
+        }
+        const { user } = await response.json();
+        if (!cancelled) setProfile(user);
+      },
+      () => {
+        if (!cancelled) setProfileError("Unable to load your profile.");
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       token,
       client,
+      profile,
+      profileError,
+      isAdmin: profile?.admin ?? false,
       requestCode: (email) => authService.requestCode(email),
-      register: (email, name) => authService.register(email, name),
       useCode: async (email, code) => {
         setToken(await authService.useCode(email, code));
       },
@@ -30,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(null);
       },
     }),
-    [client, token],
+    [client, profile, profileError, token],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

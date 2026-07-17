@@ -1,7 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
-import { MODEL_MATRIX, type ModelSpec } from "../src/model_settings";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
 
@@ -9,7 +8,9 @@ export type ScorecardFixture = {
   label: string;
   contentType: string;
   bytes: ArrayBuffer;
-  expected: unknown;
+  // Parsed extracted.json when the fixture has a reviewed label; null for
+  // fixtures that haven't been labeled yet.
+  expected: unknown | null;
 };
 
 // Mirrors pkg/web/src/lib/image_resize.ts's resizeImageForCapture exactly, so
@@ -43,7 +44,7 @@ export async function loadFixtures(scorecardDir: string): Promise<ScorecardFixtu
   }
 
   const fixtures = await Promise.all(
-    labels.map(async (label): Promise<ScorecardFixture | null> => {
+    labels.sort().map(async (label): Promise<ScorecardFixture | null> => {
       const dir = join(scorecardDir, label);
       const imageFile = readdirSync(dir).find((name) => name.startsWith("image."));
       const extension = imageFile?.split(".").pop();
@@ -52,12 +53,11 @@ export async function loadFixtures(scorecardDir: string): Promise<ScorecardFixtu
         return null;
       }
 
-      let expected: unknown;
+      let expected: unknown | null = null;
       try {
         expected = JSON.parse(readFileSync(join(dir, "extracted.json"), "utf-8"));
       } catch {
-        console.warn(`Skipping eval fixture "${label}": no valid extracted.json found`);
-        return null;
+        // unlabeled fixture — still runnable, just not comparable
       }
 
       const original = readFileSync(join(dir, imageFile));
@@ -71,30 +71,4 @@ export async function loadFixtures(scorecardDir: string): Promise<ScorecardFixtu
   );
 
   return fixtures.filter((fixture) => fixture !== null);
-}
-
-function splitEnvList(value: string | undefined) {
-  return value
-    ?.split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-// `EVAL_MODELS` entries are `provider/model` or `provider/model@effort`.
-function parseModelSpec(entry: string): ModelSpec {
-  const at = entry.lastIndexOf("@");
-  if (at === -1) return { model: entry };
-  return { model: entry.slice(0, at), effort: entry.slice(at + 1) as ModelSpec["effort"] };
-}
-
-// `EVAL_MODELS=a,b@low bun eval` sweeps a matrix without touching the default
-// single-model cost of a plain `bun eval`; `EVAL_MODELS=all` expands to the
-// full validated matrix (MODEL_MATRIX in model_settings.ts).
-export function evalModelSpecs(): ModelSpec[] {
-  if (process.env.EVAL_MODELS === "all") return MODEL_MATRIX;
-  return (
-    splitEnvList(process.env.EVAL_MODELS)?.map(parseModelSpec) ?? [
-      { model: "openai/gpt-5.4" } satisfies ModelSpec,
-    ]
-  );
 }

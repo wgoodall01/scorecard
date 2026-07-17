@@ -5,6 +5,7 @@ import { safeReturnTo } from "@/lib/auth";
 
 export const LoginSearch = z.object({
   returnTo: z.string().catch("/").transform(safeReturnTo),
+  email: z.string().optional(),
 });
 export type LoginSearchSchema = z.infer<typeof LoginSearch>;
 
@@ -14,5 +15,6 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginRoute() {
-  return <LoginPage {...Route.useSearch()} />;
+  const { returnTo, email } = Route.useSearch();
+  return <LoginPage returnTo={returnTo} initialEmail={email} />;
 }

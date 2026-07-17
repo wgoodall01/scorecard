@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
-    "@fontsource-variable/figtree": "^5.2.10",
-    "@fontsource-variable/noto-serif": "^5.2.9",
+    "@fontsource-variable/ibm-plex-sans": "^5.2.8",
+    "@fontsource-variable/merriweather": "^5.2.6",
     "@tailwindcss/vite": "^4",
     "@tanstack/react-router": "^1.170.18",
     "api": "workspace:*",
