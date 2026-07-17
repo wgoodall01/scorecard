@@ -18,8 +18,8 @@
     "fmt": "oxfmt --write",
     "test": "bun --filter api test",
     "eval": "bun --filter api eval",
-    "predeploy": "bun run build && bun db:migrate:remote",
-    "deploy": "bun run build && bunx wrangler deploy",
+    "deploy": "bun run build && bun run deploy:ci",
+    "deploy:ci": "bun db:migrate:remote && bunx wrangler deploy",
     "db:generate": "bun --filter api db:generate",
     "db:migrate:local": "bun --filter api db:migrate:local",
     "db:migrate:remote": "bun --filter api db:migrate:remote"

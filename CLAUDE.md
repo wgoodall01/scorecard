@@ -81,8 +81,13 @@ minimal Cloudflare deployment foundation with a typed ping endpoint.
   workerd test file runs in parallel with it.
 - `bun db:generate`: generate D1 SQL migrations from the Drizzle schema.
 - `bun db:migrate:local` / `bun db:migrate:remote`: apply migrations.
-- `bun deploy`: builds the front end, then deploys the Worker and static assets
-  with Wrangler.
+- `bun deploy`: builds the front end, then runs `deploy:ci` (remote D1
+  migrations + `wrangler deploy`). Workers Builds uses the same scripts —
+  build command `bun run build`, deploy command `bun run deploy:ci`,
+  non-production (version) command `bunx wrangler versions upload` — so
+  migrations only run on production deploys, never on preview builds. These
+  three command strings live in the Workers Builds dashboard UI; Cloudflare
+  does not read them from wrangler.toml.
 - `bun eval run` (or `./eval.ts run` from
   `pkg/api/src/agent/card_extract/eval/`): the extraction eval CLI (cmd-ts) —
   real vision-model calls against the reviewed fixtures in
