@@ -14,7 +14,8 @@ minimal Cloudflare deployment foundation with a typed ping endpoint.
   `POST /api/ping` responds with `{ time: Date }`.
 - `wrangler.toml`: deployment configuration at the repository root. It serves
   `pkg/web/dist` as SPA assets, runs the Worker first for `/api/*`, and binds
-  `DB` to the `scorecard` D1 database and `BUCKET` to the `scorecard` R2 bucket.
+  `DB` to the `scorecard` D1 database, `BUCKET` to the `scorecard` R2 bucket,
+  and `IMAGES` to Cloudflare Images transforms.
 - `pkg/api/schema.ts`: Drizzle schema. Generated SQL migrations belong in
   `pkg/api/migrations` and are applied by Wrangler.
 - `pkg/api/routes/capture.ts`: routes only — `/capture/submit` uploads the
@@ -24,8 +25,10 @@ minimal Cloudflare deployment foundation with a typed ping endpoint.
 - `pkg/api/src/agent/card_extract/`: the extraction agent. `agent.ts` exports
   `extractScorecard({image, resolver, model})` — one `generateObject` call
   with vision input — plus `handleCaptureQueue` (wired into `index.ts`'s
-  `queue` handler), which reads the uploaded image from R2, extracts, and
-  writes `extracted.json`. `schema.ts` defines ONE schema, `ExtractData` —
+  `queue` handler), which reads the uploaded image from R2, normalizes it via
+  the `IMAGES` binding (scale-down to 2048px-long-edge JPEG q80, passing
+  already-conforming JPEGs through without re-encoding — the route stores raw
+  uploaded bytes, size-limited only), extracts, and writes `extracted.json`. `schema.ts` defines ONE schema, `ExtractData` —
   what the model emits, what the agent returns, what's stored in R2, and what
   the eval fixtures assert; there is no wire/public split. Per-player data is
   index-aligned arrays (`players: string[]`, `scores`/`writtenTotals`:

@@ -13,6 +13,7 @@ export type Env = {
     EMAIL: SendEmail;
     CAPTURE_QUEUE: Queue<CaptureQueueMessage>;
     AI: Ai;
+    IMAGES: ImagesBinding;
     AI_GATEWAY_ID: string;
     AUTH_EMAIL_FROM: string;
     JWT_SECRET: string;

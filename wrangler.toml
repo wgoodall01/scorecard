@@ -53,6 +53,9 @@ retry_delay = 30
 binding = "AI"
 remote = true
 
+[images]
+binding = "IMAGES"
+
 [vars]
 AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
 AI_GATEWAY_ID = "scorecard"
