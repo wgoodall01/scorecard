@@ -10,7 +10,6 @@ import { formatOutingDate, playerLabel } from "@/pages/outings";
 export type ScorecardSummary = {
   id: string;
   createdAt: string;
-  status: ScorecardStatus;
 };
 
 export type ScorecardDetail = {
@@ -94,7 +93,6 @@ export function ScorecardList({ scorecards }: { scorecards: ScorecardSummary[] }
                 {formatCapturedAt(card.createdAt)}
               </span>
             </span>
-            <StatusBadge status={card.status} />
             <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           </Link>
         </li>

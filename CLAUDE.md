@@ -68,7 +68,9 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
 - `wrangler.toml`: deployment configuration at the repository root. It serves
   `pkg/web/dist` as SPA assets, runs the Worker first for `/api/*`, and binds
   `DB` to the `scorecard` D1 database, `BUCKET` to the `scorecard` R2 bucket,
-  and `IMAGES` to Cloudflare Images transforms.
+  `IMAGES` to Cloudflare Images transforms, and `JOB_QUEUE` to the
+  `scorecard-jobs` queue (consumer: `max_batch_size = 1`,
+  `max_batch_timeout = 0`, `max_retries = 0` — see the jobs framework).
 - `pkg/api/schema.ts`: Drizzle schema (with `relations` for the relational
   query API). Tables: `user` (+ `handicap`, `preferred_tee` — the `TEES`
   const is the app-level tee CATEGORY list, matched against
@@ -90,12 +92,14 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   the set — par can differ by tee; number unique per tee), `outing` (naive
   `date` "YYYY-MM-DD" + course_id), `score_set` (the root of scores: one row
   per (outing, player, course_set_tee), so a day can mix tees nine-by-nine
-  and every score commits to a tee), `scorecard` (one row per captured card,
-  created at upload and tagged `user_id`; its id IS the capture id — the
-  photo lives in R2 at cards/<id>/image, but the scores-extraction result
-  lives on the row in `scores_extract`, an unindexed `json` column holding
-  `{extracted, matched}`, with `scores_error` for failures — status derives
-  from those two columns), and `score` (score_set/hole unique, with a
+  and every score commits to a tee), `job` (the generic job queue's rows — see
+  the jobs framework below; `scorecard.extract_score_job_id` points at the
+  extract_score job whose `result` holds `{extracted, matched}`),
+  `scorecard` (one row per captured card, created at upload and tagged
+  `user_id`; its id IS the capture id — the photo lives in R2 at
+  cards/<id>/image, and `extract_score_job_id` links the extraction job whose
+  row carries the status/result, so the scorecard row itself holds no
+  extraction data), and `score` (score_set/hole unique, with a
   nullable `scorecard_id` recording which captured card each score was read
   from). EVERY table carries `created_at`/`updated_at` ISO-8601 audit
   columns, maintained by drizzle `$defaultFn`/`$onUpdateFn` — app-level, so
@@ -189,45 +193,72 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   cards get per-honor custom stat/story UI, unclaimed ones a dimmed
   placeholder.
 - `pkg/api/routes/scorecard.ts`: routes only — POST `/scorecard` uploads the
-  image to R2, inserts the user-tagged scorecard row, and enqueues a
-  `CAPTURE_QUEUE` message per requested extraction (the multipart `extract`
-  field is JSON like `{"scores": true}`; a course-metadata pars/yardages
-  extraction will join it); GET `/scorecard/:id/scores` is the owner-only
-  status/result poll (202 pending / `{extracted, matched}` / 500 with the
-  error); GET `/scorecard` lists the signed-in user's cards newest-first
-  (`?limit=`); GET `/scorecard/:id` is the league-visible detail (status,
-  uploader, and the outings whose scores were read from the card); GET
-  `/scorecard/:id/image` streams the photo. Exports `scorecardImageKey` and
-  `scorecardStatus` for the agent module below.
-- `pkg/api/src/agent/card_extract/`: the extraction agent. `agent.ts` exports
+  image to R2, `submit`s an `extract_score` job per requested extraction (the
+  multipart `extract` field is JSON like `{"scores": true}`; a course-metadata
+  pars/yardages extraction will join it), and inserts the user-tagged
+  scorecard row stamped with that job's id (`extract_score_job_id`); GET
+  `/scorecard/:id/scores` is the owner-only status/result poll reading the job
+  row (202 pending while the job runs / `{extracted, matched}` on ok / 500
+  with the error on failure); GET `/scorecard` lists the signed-in user's
+  cards newest-first (`?limit=`) as a plain thumbnail gallery — NO extraction
+  status, so the list stays one D1 query with no per-row job lookups; GET
+  `/scorecard/:id` is the league-visible detail (status + error derived from
+  the extract_score job row, uploader, and the outings whose scores were read
+  from the card); GET `/scorecard/:id/image` streams the photo. Exports
+  `scorecardImageKey` for the agent module below.
+- `pkg/api/src/jobs/`: the generic job queue framework. A Job is a
+  discriminated union keyed by `_job`; each job type is declared with
+  `createJobType({ name, args, result, execute })` (from `jobs/common.ts`) in
+  its OWN module (e.g. `jobs/extract_score/index.ts`), where `args`/`result`
+  are zod schemas for its arguments and return value. `jobs/index.ts` collects
+  them into the `JOB_TYPES` object (keyed by name) and infers the `Job` union,
+  `submit` overloads, and dispatch off it — individual jobs import ONLY from
+  `jobs/common.ts`, never `jobs/index.ts` (which imports them), to avoid a
+  cycle; `common.ts` is the always-leaf module holding `createJobType`,
+  `jobSpec`, and the shared `JobError`/`JobReport`/`JobOutcomeOf` schemas. The
+  source of truth for a job's lifecycle is the `job` D1 row (NOT R2): `spec`
+  (json, the full `{ _job, id, ...args }`), `state` (`running`/`ok`/`error`),
+  `result`/`error`/`status` (json), with a `job_state_consistent` CHECK tying
+  state to result/error (running→both null, ok→result set, error→error set)
+  and a `job_json_not_null_literal` CHECK forbidding the TEXT `'null'` in any
+  json column (the driver serializes a top-level JS null to `'null'`, which
+  isn't SQL NULL and would slip past the IS NULL arms — so writers must use a
+  real SQL NULL for absence, which drizzle `.set({ x: null })` does). Large
+  artifacts a handler makes go to R2 under `jobs/<id>/…`; everything small
+  stays on the row so reads are cheap D1. `client.ts`'s `submit(env, input)`
+  mints the id, writes the `running` row, enqueues just `{ id }`, and returns
+  a `JobHandle` whose `.status()`/`.result({timeoutMs})` (poll the row every
+  1s) are INTERNAL-only — the web never calls them, it polls its own HTTP
+  endpoints. `queue_handler.ts`'s `handleJobQueue` (wired into `index.ts`'s
+  `queue`) loads the row by id, skips it unless `state==='running'` (so a
+  duplicate delivery never re-runs), dispatches on `job_type`, runs `execute`
+  with a `report()` that overwrites the `status` column, then writes the
+  terminal state — and ALWAYS acks (the queue has `max_retries = 0`; per-job
+  retry like rate-limit backoff lives inside the handler, not the framework).
+- `pkg/api/src/agent/card_extract/`: the extraction agent, driven by the
+  `extract_score` job (`jobs/extract_score/`). `agent.ts` exports
   `extractScorecard({image, resolver, model})` — one `generateObject` call
-  with vision input — plus `handleCaptureQueue` (wired into `index.ts`'s
-  `queue` handler), which reads the uploaded image from R2, normalizes it via
-  the `IMAGES` binding (scale-down to 2048px-long-edge JPEG q80, passing
-  already-conforming JPEGs through without re-encoding — the route stores raw
-  uploaded bytes, size-limited only) and extracts. `schema.ts` defines ONE
-  schema, `ExtractData` — what the model emits, what the agent returns,
-  what's stored in `scores_extract`, and what the eval fixtures assert;
-  there is no wire/public split (it also hosts the `MatchedData` /
-  `ScoresExtractData` types so the db schema can reference them without a
-  module cycle). Per-player data is
+  with vision input — plus `normalizeImage` (scale-down to 2048px-long-edge
+  JPEG q80 via the `IMAGES` binding, passing already-conforming JPEGs through
+  without re-encoding — the route stores raw uploaded bytes, size-limited
+  only) and `matchCapture` (runs both matching agents against `env.DB`). The
+  `extract_score` job's `execute` reads the uploaded image from R2,
+  normalizes, extracts (retrying a 429 `RateLimitError` in-process, since the
+  queue never redelivers), matches, and returns `{ extracted, matched }`,
+  which the framework stores on the job row's `result`. `schema.ts` defines
+  `ExtractData` — what the model emits, what the agent returns, and what the
+  eval fixtures assert; there is no wire/public split (it also hosts the
+  `MatchedData` / `ScoresExtractData` zod schemas + types, the latter being
+  the `extract_score` job's `result` schema). Per-player data is
   index-aligned arrays (`players: string[]`, `scores`/`writtenTotals`:
   `(number|null)[]`), every field required, `null` = "not written/legible".
   That array shape is also the only one all three providers' structured-output
   compilers accept (Anthropic caps union-typed AND optional parameters and
   requires `additionalProperties: false`; Google rejects `const`/`z.literal`).
   The default production model is `google/gemini-3.5-flash@low`, chosen by
-  the eval sweep. The queue consumer runs with
-  `max_batch_size = 1` / `max_batch_timeout = 0` (no batching), processes
-  batch messages with `Promise.all`, and retries a 429 (`APICallError` with
-  `statusCode === 429`) up to `MAX_RATE_LIMIT_ATTEMPTS` times via
-  `message.retry()`. After extraction it runs both matching agents (below)
-  against `env.DB`, then stores `{extracted, matched}` on the scorecard
-  row's `scores_extract` column (failures set `scores_error`) — nothing but
-  the image lives in R2; matching is best-effort — any failure, including
-  429s, degrades to nulls rather than failing or retrying the capture,
-  since retrying would re-spend the far more expensive vision call and the
-  review UI lets the user pick manually.
+  the eval sweep. Matching is best-effort — any failure, including 429s,
+  degrades to nulls rather than failing the job, since the review UI lets the
+  user pick manually.
 - `pkg/api/src/agent/player_match/` and `pkg/api/src/agent/course_match/`:
   the matching agents. Both are agentic-search loops (no embeddings) built on
   `src/agent/answer_tool.ts`'s `runAnswerAgent`: `generateText` with
@@ -307,6 +338,16 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   binding); test D1 storage persists across tests, so DB-touching test files
   wipe their tables in a `beforeEach`.
 - `bun db:generate`: generate D1 SQL migrations from the Drizzle schema.
+  drizzle-kit has NO non-interactive/CI flag for its rename-vs-create column
+  conflict prompt (nor its destructive push/drop prompts) — confirmed open
+  upstream requests, no `--force`/`--yes`/`--non-interactive`. It hard-requires
+  a TTY (piped stdin throws "Interactive prompts require a TTY terminal"). To
+  run it non-interactively, drive the pty with `expect`: for a genuinely new
+  column the "create column" option is the default-highlighted first choice, so
+  sending Enter (`\r`) at each `Is <col> ... created or renamed?` prompt selects
+  it — only pick a "rename" arm when the column really is a rename. Then
+  hand-fix the generated SQL (pragmas → `defer_foreign_keys`; multi-arg index
+  expressions).
 - `bun db:migrate:local` / `bun db:migrate:remote`: apply migrations.
 - `nu script/update_seed.nu --local --remote`: upsert the seed data in
   `seed/*.yaml` (golfers + nicknames, courses + sets + tees + holes) into

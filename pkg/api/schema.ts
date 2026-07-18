@@ -1,6 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { customType, index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
-import type { ScoresExtractData } from "./src/agent/card_extract/schema";
+import { check, customType, index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const varchar = customType<{ data: string }>({
   dataType() {
@@ -218,20 +217,71 @@ export const scoreSet = sqliteTable(
   ],
 );
 
+// A background job — one row per submitted job, the source of truth for its
+// whole lifecycle. The queue carries only the id; the consumer loads this
+// row, dispatches on job_type, and updates state/result/error/status as it
+// runs. Everything small (spec, progress reports, result, error) lives here
+// so reads are cheap indexed D1, never R2; large artifacts a handler produces
+// go to R2 under jobs/<id>/…. Each job type declares zod schemas for its spec
+// and result (see src/jobs).
+export const job = sqliteTable(
+  "job",
+  {
+    id: text("id").primaryKey().$defaultFn(uuidv7),
+    jobType: varchar("job_type").notNull(),
+    // The full submitted spec ({ _job, id, ...args }), validated against the
+    // job type's args schema at submit.
+    spec: json("spec").notNull(),
+    // Lifecycle state. The check constraint below ties it to result/error.
+    state: varchar("state").$type<"running" | "ok" | "error">().notNull(),
+    // The handler's return value on success (the job type's result schema);
+    // null while running or on error.
+    result: json("result"),
+    // { message, stack, ... } when state='error'; null otherwise.
+    error: json("error"),
+    // The latest report({ message, ... }) the handler emitted — progress UX
+    // only, not part of the state machine; null until the handler reports.
+    status: json("status"),
+    ...timestamps,
+  },
+  (table) => [
+    index("job_type_idx").on(table.jobType),
+    // Exactly one lifecycle shape is representable:
+    //   running → result null,    error null
+    //   ok      → result present, error null
+    //   error   → result null,    error present
+    check(
+      "job_state_consistent",
+      sql`(${table.state} = 'running' AND ${table.result} IS NULL AND ${table.error} IS NULL)
+        OR (${table.state} = 'ok' AND ${table.result} IS NOT NULL AND ${table.error} IS NULL)
+        OR (${table.state} = 'error' AND ${table.result} IS NULL AND ${table.error} IS NOT NULL)`,
+    ),
+    // The json customType serializes a top-level JS null to the TEXT 'null',
+    // which is NOT SQL NULL and would sail past the IS NULL / IS NOT NULL
+    // arms above. Forbid that literal outright so "absent" is always SQL NULL
+    // and a present json value is never the null document.
+    check(
+      "job_json_not_null_literal",
+      sql`${table.spec} <> 'null'
+        AND (${table.result} IS NULL OR ${table.result} <> 'null')
+        AND (${table.error} IS NULL OR ${table.error} <> 'null')
+        AND (${table.status} IS NULL OR ${table.status} <> 'null')`,
+    ),
+  ],
+);
+
 // A captured scorecard image, created at upload and tagged with the
 // uploading user. The id IS the capture id: the original photo lives in R2
-// at cards/<id>/image, but extraction results live HERE, not in R2.
+// at cards/<id>/image. Extraction is a job — the row points at the
+// extract_score job (if one was requested); its state/result carry the
+// status and the { extracted, matched } data, so the scorecard row itself
+// holds no extraction result.
 export const scorecard = sqliteTable("scorecard", {
   id: text("id").primaryKey().$defaultFn(uuidv7),
   userId: text("user_id")
     .notNull()
     .references(() => user.id),
-  // The completed scores extraction ({ extracted, matched }) as one
-  // unindexed JSON blob; null while the queue consumer is still working (or
-  // extraction was never requested). A failed extraction records
-  // scoresError instead — status derives from these two columns.
-  scoresExtract: json("scores_extract").$type<ScoresExtractData>(),
-  scoresError: varchar("scores_error"),
+  extractScoreJobId: text("extract_score_job_id").references(() => job.id),
   ...timestamps,
 });
 
@@ -390,6 +440,10 @@ export const scoreSetRelations = relations(scoreSet, ({ one, many }) => ({
 
 export const scorecardRelations = relations(scorecard, ({ one, many }) => ({
   user: one(user, { fields: [scorecard.userId], references: [user.id] }),
+  extractScoreJob: one(job, {
+    fields: [scorecard.extractScoreJobId],
+    references: [job.id],
+  }),
   scores: many(score),
 }));
 

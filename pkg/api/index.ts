@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { CaptureQueueMessage, Env } from "./env";
+import type { Env, JobQueueMessage } from "./env";
 import { authRoutes } from "./routes/auth";
 import { scorecardRoutes } from "./routes/scorecard";
 import { golferRoutes } from "./routes/golfers";
@@ -7,7 +7,7 @@ import { healthRoutes } from "./routes/health";
 import { honorRoutes } from "./routes/honors";
 import { outingRoutes } from "./routes/outings";
 import { userRoutes } from "./routes/users";
-import { handleCaptureQueue } from "./src/agent/card_extract/agent";
+import { handleJobQueue } from "./src/jobs/queue_handler";
 
 export type { Env } from "./env";
 export {
@@ -49,5 +49,5 @@ export type AppType = typeof app;
 
 export default {
   fetch: app.fetch,
-  queue: handleCaptureQueue,
-} satisfies ExportedHandler<Env["Bindings"], CaptureQueueMessage>;
+  queue: handleJobQueue,
+} satisfies ExportedHandler<Env["Bindings"], JobQueueMessage>;

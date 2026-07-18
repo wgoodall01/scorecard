@@ -38,17 +38,18 @@ name = "EMAIL"
 allowed_sender_addresses = ["noreply@scorecard.wg.gay"]
 
 [[queues.producers]]
-binding = "CAPTURE_QUEUE"
-queue = "scorecard-capture"
+binding = "JOB_QUEUE"
+queue = "scorecard-jobs"
 
 [[queues.consumers]]
-queue = "scorecard-capture"
-# One capture at a time, no batching: dispatch each message as soon as it arrives.
+queue = "scorecard-jobs"
+# One job at a time, no batching: dispatch each message as soon as it arrives.
 max_batch_size = 1
 max_batch_timeout = 0
-# Allows retrying rate-limited vision-model calls (see scorecard_parse_agent.ts).
-max_retries = 3
-retry_delay = 30
+# Retries disabled for now: the framework always acks once a job reaches a
+# terminal state (ok/error), and per-job concerns like rate-limit backoff are
+# handled inside the handler, not by redelivery (see src/jobs).
+max_retries = 0
 
 [ai]
 binding = "AI"

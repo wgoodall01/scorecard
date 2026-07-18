@@ -3,13 +3,16 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
-import { score, scorecard, user, uuidv7 } from "../schema";
+import { job, score, scorecard, user, uuidv7 } from "../schema";
+import type { ScoresExtractData } from "../src/agent/card_extract/schema";
+import type { JobErrorSchema } from "../src/jobs/common";
+import { submit } from "../src/jobs/client";
 import { requireAuth, zodQuery } from "./shared";
 
 const MAX_CAPTURE_BYTES = 10 * 1024 * 1024;
 
-// R2 holds ONLY the original photo; extraction results live on the scorecard
-// row (scores_extract / scores_error).
+// R2 holds ONLY the original photo; the extraction result lives on the
+// extract_score job row (job.result), reached via scorecard.extractScoreJobId.
 export function scorecardImageKey(scorecardId: string) {
   return `cards/${scorecardId}/image`;
 }
@@ -24,12 +27,19 @@ export type ScorecardExtractRequestSchema = z.infer<typeof ScorecardExtractReque
 
 export type ScorecardStatus = "pending" | "complete" | "failed";
 
-export function scorecardStatus(row: {
-  scoresExtract: unknown;
-  scoresError: string | null;
-}): ScorecardStatus {
-  if (row.scoresError !== null) return "failed";
-  return row.scoresExtract != null ? "complete" : "pending";
+// The extract_score job's lifecycle projected onto the scorecard's status:
+// running (or no job yet) → pending, ok → complete, error → failed.
+function statusFromJobState(state: "running" | "ok" | "error" | undefined): ScorecardStatus {
+  if (state === "ok") return "complete";
+  if (state === "error") return "failed";
+  return "pending";
+}
+
+// The user-facing message for a failed extraction, preserving the old
+// scoresError phrasing (extraction_errors sets the error names).
+function scorecardErrorMessage(error: JobErrorSchema | null): string {
+  if (error?.name === "ScorecardReadError") return `Couldn't read the scorecard: ${error.message}`;
+  return "Service Error";
 }
 
 async function getAuthUser(db: ReturnType<typeof getDb>, authEmail: string) {
@@ -39,7 +49,8 @@ async function getAuthUser(db: ReturnType<typeof getDb>, authEmail: string) {
 export const scorecardRoutes = new Hono<Env>()
   // Upload a scorecard photo. The image goes to R2, the row (tagged with the
   // uploading user) goes to the database, and each requested extraction is
-  // enqueued. Poll GET /scorecard/:id/scores for the scores result.
+  // submitted as a job (its id recorded on the row). Poll
+  // GET /scorecard/:id/scores for the scores result.
   .post("/scorecard", requireAuth, async (c) => {
     const contentLength = Number(c.req.header("content-length"));
     if (Number.isFinite(contentLength) && contentLength > MAX_CAPTURE_BYTES)
@@ -70,14 +81,21 @@ export const scorecardRoutes = new Hono<Env>()
     await c.env.BUCKET.put(scorecardImageKey(scorecardId), image.stream(), {
       httpMetadata: { contentType: image.type },
     });
-    await db.insert(scorecard).values({ id: scorecardId, userId: authUser.id });
+
+    // Submit the extraction job first so its row exists before the scorecard's
+    // foreign key points at it.
+    let extractScoreJobId: string | null = null;
     if (extract.scores) {
-      await c.env.CAPTURE_QUEUE.send({ scorecardId });
+      const handle = await submit(c.env, { _job: "extract_score", scorecardId });
+      extractScoreJobId = handle.id;
     }
+    await db.insert(scorecard).values({ id: scorecardId, userId: authUser.id, extractScoreJobId });
 
     return c.json({ id: scorecardId }, 202);
   })
-  // The signed-in user's scorecards, newest first.
+  // The signed-in user's scorecards, newest first. A plain thumbnail gallery —
+  // no extraction status here (that's a detail-page concern, read from the
+  // job row) so the list stays one D1 query with no per-row job lookups.
   .get(
     "/scorecard",
     requireAuth,
@@ -96,21 +114,21 @@ export const scorecardRoutes = new Hono<Env>()
         limit: c.req.valid("query").limit,
       });
       return c.json({
-        scorecards: rows.map((row) => ({
-          id: row.id,
-          createdAt: row.createdAt,
-          status: scorecardStatus(row),
-        })),
+        scorecards: rows.map((row) => ({ id: row.id, createdAt: row.createdAt })),
       });
     },
   )
   // One scorecard with the outings its scores landed in. League-visible,
-  // like the photo itself (outing pages show other members' cards).
+  // like the photo itself (outing pages show other members' cards). Status
+  // and any error come from the extract_score job row.
   .get("/scorecard/:id", requireAuth, async (c) => {
     const db = getDb(c.env.DB);
     const row = await db.query.scorecard.findFirst({
       where: eq(scorecard.id, c.req.param("id")),
-      with: { user: { columns: { id: true, name: true, email: true } } },
+      with: {
+        user: { columns: { id: true, name: true, email: true } },
+        extractScoreJob: true,
+      },
     });
     if (!row) return c.json({ error: "Scorecard not found" }, 404);
 
@@ -124,12 +142,16 @@ export const scorecardRoutes = new Hono<Env>()
       outings.set(found.id, { id: found.id, date: found.date, courseName: found.course.name });
     }
 
+    const jobRow = row.extractScoreJob;
     return c.json({
       scorecard: {
         id: row.id,
         createdAt: row.createdAt,
-        status: scorecardStatus(row),
-        error: row.scoresError,
+        status: statusFromJobState(jobRow?.state),
+        error:
+          jobRow?.state === "error"
+            ? scorecardErrorMessage((jobRow.error as JobErrorSchema | null) ?? null)
+            : null,
         uploader: row.user,
         outings: [...outings.values()].sort(
           (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id),
@@ -138,8 +160,8 @@ export const scorecardRoutes = new Hono<Env>()
     });
   })
   // Status/result of the scores extraction. Owner-only, mirroring the old
-  // /capture/result contract: 202 while pending, the result when complete,
-  // 500 with the message when the extraction failed.
+  // contract: 202 while pending, the result when complete, 500 with the
+  // message when the extraction failed.
   .get("/scorecard/:id/scores", requireAuth, async (c) => {
     const db = getDb(c.env.DB);
     const authUser = await getAuthUser(db, c.get("authEmail"));
@@ -149,10 +171,14 @@ export const scorecardRoutes = new Hono<Env>()
     if (!row || !authUser || row.userId !== authUser.id) {
       return c.json({ error: "Scorecard not found" }, 404);
     }
+    if (!row.extractScoreJobId) return c.json({ status: "pending" as const }, 202);
 
-    if (row.scoresError !== null) return c.json({ error: row.scoresError }, 500);
-    if (row.scoresExtract == null) return c.json({ status: "pending" as const }, 202);
-    return c.json(row.scoresExtract);
+    const jobRow = await db.query.job.findFirst({ where: eq(job.id, row.extractScoreJobId) });
+    if (!jobRow || jobRow.state === "running") return c.json({ status: "pending" as const }, 202);
+    if (jobRow.state === "error") {
+      return c.json({ error: scorecardErrorMessage((jobRow.error as JobErrorSchema | null) ?? null) }, 500);
+    }
+    return c.json(jobRow.result as ScoresExtractData);
   })
   // The original photo, for the outing page's gallery and the scorecard
   // pages. Any signed-in league member can view it (fetched with the bearer

@@ -1,9 +1,6 @@
 import { APICallError, generateObject } from "ai";
-import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import type { CaptureQueueMessage, Env } from "../../../env";
-import { scorecard } from "../../../schema";
-import { scorecardImageKey } from "../../../routes/scorecard";
+import type { Env } from "../../../env";
 import { RateLimitError, ScorecardReadError } from "../../extraction_errors";
 import {
   imageProviderOptionsFor,
@@ -17,12 +14,7 @@ import { matchCourseSets } from "../course_match/agent";
 import { courseSearchFromDb, courseSetParsFromDb } from "../course_match/search";
 import { matchPlayers } from "../player_match/agent";
 import { playerSearchFromDb } from "../player_match/search";
-import {
-  ExtractData,
-  type ExtractDataSchema,
-  type MatchedData,
-  type ScoresExtractData,
-} from "./schema";
+import { ExtractData, type ExtractDataSchema, type MatchedData } from "./schema";
 
 const EXTRACTION_PROMPT = `You are extracting structured data from a photo of a golf scorecard.
 
@@ -92,9 +84,6 @@ export async function extractScorecard({
   }
 }
 
-const MAX_RATE_LIMIT_ATTEMPTS = 3;
-const RATE_LIMIT_RETRY_DELAY_SECONDS = 30;
-
 // Mirrors pkg/web/src/lib/image_resize.ts's resizeImageForCapture (2048px long
 // edge, JPEG q80), applied server-side so extraction quality never depends on
 // the client having resized. info() short-circuits images that already conform
@@ -104,7 +93,7 @@ const RATE_LIMIT_RETRY_DELAY_SECONDS = 30;
 const MAX_IMAGE_DIMENSION = 2048;
 const IMAGE_JPEG_QUALITY = 80;
 
-async function normalizeImage(
+export async function normalizeImage(
   env: Env["Bindings"],
   buf: ArrayBuffer,
 ): Promise<{ buf: ArrayBuffer; contentType: string }> {
@@ -138,7 +127,10 @@ export type { MatchedData, ScoresExtractData } from "./schema";
 // rate limits — retrying the queue message would re-spend the much more
 // expensive vision extraction) degrades to nulls rather than failing the
 // capture, since the review UI lets the user pick manually either way.
-async function matchCapture(env: Env["Bindings"], data: ExtractDataSchema): Promise<MatchedData> {
+export async function matchCapture(
+  env: Env["Bindings"],
+  data: ExtractDataSchema,
+): Promise<MatchedData> {
   const db = getDb(env.DB);
   const resolver: ModelResolver = (spec) => resolveModel(env, spec);
   const names = [...new Set(data.nines.flatMap((nine) => nine.players))];
@@ -168,57 +160,4 @@ async function matchCapture(env: Env["Bindings"], data: ExtractDataSchema): Prom
   ]);
 
   return { players, course };
-}
-
-// Runs the scores extraction for an uploaded scorecard: read the photo from
-// R2, extract, match, and store the result on the scorecard row
-// (scores_extract) — nothing but the image lives in R2.
-async function extractCapture(env: Env["Bindings"], scorecardId: string) {
-  const imageObject = await env.BUCKET.get(scorecardImageKey(scorecardId));
-  if (!imageObject) throw new Error("Scorecard image not found");
-
-  const extracted = await extractScorecard({
-    image: await normalizeImage(env, await imageObject.arrayBuffer()),
-    resolver: (spec) => resolveModel(env, spec),
-  });
-  const matched = await matchCapture(env, extracted);
-
-  const result: ScoresExtractData = { extracted, matched };
-  await getDb(env.DB)
-    .update(scorecard)
-    .set({ scoresExtract: result, scoresError: null })
-    .where(eq(scorecard.id, scorecardId));
-}
-
-export async function handleCaptureQueue(
-  batch: MessageBatch<CaptureQueueMessage>,
-  env: Env["Bindings"],
-) {
-  await Promise.all(
-    batch.messages.map(async (message) => {
-      const { scorecardId } = message.body;
-      try {
-        await extractCapture(env, scorecardId);
-        message.ack();
-      } catch (error) {
-        console.error("Capture extraction failed", { scorecardId, error });
-
-        if (error instanceof RateLimitError && message.attempts < MAX_RATE_LIMIT_ATTEMPTS) {
-          message.retry({ delaySeconds: RATE_LIMIT_RETRY_DELAY_SECONDS });
-          return;
-        }
-
-        await getDb(env.DB)
-          .update(scorecard)
-          .set({
-            scoresError:
-              error instanceof ScorecardReadError
-                ? `Couldn't read the scorecard: ${error.message}`
-                : "Service Error",
-          })
-          .where(eq(scorecard.id, scorecardId));
-        message.ack();
-      }
-    }),
-  );
 }
