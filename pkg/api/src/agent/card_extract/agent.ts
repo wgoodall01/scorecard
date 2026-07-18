@@ -1,8 +1,9 @@
 import { APICallError, generateObject } from "ai";
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import type { CaptureQueueMessage, Env } from "../../../env";
 import { scorecard } from "../../../schema";
-import { captureKey, putCaptureRecord } from "../../../routes/capture";
+import { scorecardImageKey } from "../../../routes/scorecard";
 import { RateLimitError, ScorecardReadError } from "../../extraction_errors";
 import {
   imageProviderOptionsFor,
@@ -16,7 +17,12 @@ import { matchCourseSets } from "../course_match/agent";
 import { courseSearchFromDb, courseSetParsFromDb } from "../course_match/search";
 import { matchPlayers } from "../player_match/agent";
 import { playerSearchFromDb } from "../player_match/search";
-import { ExtractData, type ExtractDataSchema } from "./schema";
+import {
+  ExtractData,
+  type ExtractDataSchema,
+  type MatchedData,
+  type ScoresExtractData,
+} from "./schema";
 
 const EXTRACTION_PROMPT = `You are extracting structured data from a photo of a golf scorecard.
 
@@ -121,16 +127,11 @@ async function normalizeImage(
   };
 }
 
-// What the matching agents produced for one capture — stored in R2 as
-// matched.json and returned by /capture/result alongside the extraction.
-// null everywhere = "no confident match; the review UI asks the user".
-export type MatchedData = {
-  players: { name: string; userId: string | null }[];
-  course: {
-    courseId: string | null;
-    sets: { nineName: string | null; courseSetId: string | null }[];
-  };
-};
+// What the matching agents produced for one capture — stored (with the
+// extraction) in scorecard.scores_extract and returned by
+// GET /scorecard/:id/scores. The type lives in schema.ts (pure zod module)
+// so the db schema can reference it without a module cycle.
+export type { MatchedData, ScoresExtractData } from "./schema";
 
 // Runs the player-match and course-set-match agents over an extraction,
 // against the live database. Matching is best-effort: any failure (including
@@ -169,33 +170,24 @@ async function matchCapture(env: Env["Bindings"], data: ExtractDataSchema): Prom
   return { players, course };
 }
 
-async function extractCapture(env: Env["Bindings"], captureId: string, email: string) {
-  const imageObject = await env.BUCKET.get(captureKey(captureId, "image"));
-  if (!imageObject) throw new Error("Capture image not found");
+// Runs the scores extraction for an uploaded scorecard: read the photo from
+// R2, extract, match, and store the result on the scorecard row
+// (scores_extract) — nothing but the image lives in R2.
+async function extractCapture(env: Env["Bindings"], scorecardId: string) {
+  const imageObject = await env.BUCKET.get(scorecardImageKey(scorecardId));
+  if (!imageObject) throw new Error("Scorecard image not found");
 
-  const data = await extractScorecard({
+  const extracted = await extractScorecard({
     image: await normalizeImage(env, await imageObject.arrayBuffer()),
     resolver: (spec) => resolveModel(env, spec),
   });
+  const matched = await matchCapture(env, extracted);
 
-  await env.BUCKET.put(captureKey(captureId, "extracted.json"), JSON.stringify(data), {
-    httpMetadata: { contentType: "application/json" },
-  });
-
-  // The scorecard row is the capture's database identity: scores submitted
-  // from this card reference it, and the R2 objects live under its id.
-  // onConflictDoNothing keeps queue retries idempotent.
+  const result: ScoresExtractData = { extracted, matched };
   await getDb(env.DB)
-    .insert(scorecard)
-    .values({ id: captureId, createdAt: new Date().toISOString(), uploaderEmail: email })
-    .onConflictDoNothing();
-
-  const matched = await matchCapture(env, data);
-  await env.BUCKET.put(captureKey(captureId, "matched.json"), JSON.stringify(matched), {
-    httpMetadata: { contentType: "application/json" },
-  });
-
-  await putCaptureRecord(env, captureId, { email, status: "complete" });
+    .update(scorecard)
+    .set({ scoresExtract: result, scoresError: null })
+    .where(eq(scorecard.id, scorecardId));
 }
 
 export async function handleCaptureQueue(
@@ -204,25 +196,27 @@ export async function handleCaptureQueue(
 ) {
   await Promise.all(
     batch.messages.map(async (message) => {
+      const { scorecardId } = message.body;
       try {
-        await extractCapture(env, message.body.captureId, message.body.email);
+        await extractCapture(env, scorecardId);
         message.ack();
       } catch (error) {
-        console.error("Capture extraction failed", { captureId: message.body.captureId, error });
+        console.error("Capture extraction failed", { scorecardId, error });
 
         if (error instanceof RateLimitError && message.attempts < MAX_RATE_LIMIT_ATTEMPTS) {
           message.retry({ delaySeconds: RATE_LIMIT_RETRY_DELAY_SECONDS });
           return;
         }
 
-        await putCaptureRecord(env, message.body.captureId, {
-          email: message.body.email,
-          status: "failed",
-          error:
-            error instanceof ScorecardReadError
-              ? `Couldn't read the scorecard: ${error.message}`
-              : "Service Error",
-        });
+        await getDb(env.DB)
+          .update(scorecard)
+          .set({
+            scoresError:
+              error instanceof ScorecardReadError
+                ? `Couldn't read the scorecard: ${error.message}`
+                : "Service Error",
+          })
+          .where(eq(scorecard.id, scorecardId));
         message.ack();
       }
     }),

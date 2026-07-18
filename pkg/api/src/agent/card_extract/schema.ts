@@ -70,3 +70,22 @@ export const ExtractData = z.object({
   ),
 });
 export type ExtractDataSchema = z.infer<typeof ExtractData>;
+
+// What the matching agents produced for one capture. null everywhere = "no
+// confident match; the review UI asks the user". Lives here (a pure zod
+// module with no local imports) so the db schema can type the
+// scorecard.scores_extract column without a module cycle.
+export type MatchedData = {
+  players: { name: string; userId: string | null }[];
+  course: {
+    courseId: string | null;
+    sets: { nineName: string | null; courseSetId: string | null }[];
+  };
+};
+
+// The completed scores extraction as stored in scorecard.scores_extract and
+// returned by GET /scorecard/:id/scores.
+export type ScoresExtractData = {
+  extracted: ExtractDataSchema;
+  matched: MatchedData | null;
+};

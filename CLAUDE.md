@@ -10,7 +10,10 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   shadcn/ui. `src/lib/api.ts` creates Hono's typed RPC client from the API's
   exported `AppType`. `src/App.tsx` is the app shell ONLY (AppShell, nav,
   PageHeading/PageTitle); every page component lives in `src/pages/`
-  (capture, login, me, golfers, outings, courses, honors); routes under
+  (capture, login, me, golfers, outings, courses, honors, scorecards — the
+  scorecards list/detail pages are deliberately NOT nav tabs; the Me page
+  shows the 5 most recent with a "Show more" link, and the detail page
+  links to the outings whose scores came from the card); routes under
   `src/routes` are thin `createFileRoute` wrappers (capture lives at
   `/capture`; the root `/` is only a redirect to it). Router rules: navigate
   with typed `Link`/`useNavigate` (`LinkProps["to"]` for nav helpers), use
@@ -22,8 +25,8 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   Worker module graph into the web bundle (`src/lib/tees.ts` mirrors the
   `TEES` list for this reason). The capture review step
   (`src/components/review-round.tsx`) is the mobile-first editor over the
-  extraction: score grid, golfer + tee pickers seeded from `matched` and
-  each golfer's `preferredTee`, an async-loading course combobox
+  extraction: score grid, golfer pickers seeded from `matched`, an
+  async-loading course combobox
   (`src/components/async-combobox.tsx`, re-fetched on every open) over
   existing courses, a date input defaulting to the handwritten date else
   today (future dates are flagged and a "Today" button resolves them; the
@@ -35,9 +38,15 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   golfers' FULL names, not the written scrawl; two written names MAY map to
   one golfer — cards sometimes alias a person per nine — but not within a
   single nine) — each nine is assigned to an
-  EXISTING course set only (no new-nine creation from capture; the Courses
-  tab is the registry, and "import nines via scorecard" comes later), pars
-  display from the db set, and before submit every handwritten total (per
+  EXISTING course set only (there is NO course create/edit surface anywhere,
+  API or UI; course data is imported directly into the database — seed
+  script, ratings scraper — and the Courses tab is a read-only registry)
+  with a
+  per-golfer TEE picker over the set's `course_set_tee` rows (auto-defaulted
+  from a merge candidate's recorded tee, else the golfer's `preferredTee`
+  TYPE, else the standard-type tee), pars display from the db tee (score
+  notation judges each cell against the tee its player hit from), and
+  before submit every handwritten total (per
   nine and the 18-hole totals) is checked: totals that matched the summed
   scores at extraction auto-confirm and render checkmarks only, while
   mismatches require an explicit ruling — written totals are wrong / I
@@ -61,43 +70,68 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   `DB` to the `scorecard` D1 database, `BUCKET` to the `scorecard` R2 bucket,
   and `IMAGES` to Cloudflare Images transforms.
 - `pkg/api/schema.ts`: Drizzle schema (with `relations` for the relational
-  query API). Tables: `user` (+ `handicap`, `preferred_tee` — the `TEES` const
-  is the app-level tee list; `email` is NULLABLE-but-unique: a golfer can
-  exist purely as a player with no account email, and can't sign in until one
-  is set), `nickname` (user_id, nickname, nickname_type; a case-insensitive
+  query API). Tables: `user` (+ `handicap`, `preferred_tee` — the `TEES`
+  const is the app-level tee CATEGORY list, matched against
+  `course_set_tee.type`; `email` is NULLABLE-but-unique: a golfer can exist
+  purely as a player with no account email, and can't sign in until one is
+  set), `nickname` (user_id, nickname, nickname_type; a case-insensitive
   expression index makes nicknames unique per user, and the golfers routes
   reject duplicate lists at the request edge),
-  `course`, `course_set` (a "nine"; `disposition` front/back/null; name unique
-  per course), `hole` (number unique per set), `outing` (naive `date`
-  "YYYY-MM-DD" + course_id), `outing_player` (per-outing tee per player),
-  `scorecard` (one row per captured card; its id IS the capture id, so the
-  image/extracted.json/matched.json live in R2 under it), and `score`
-  (outing/player/hole unique, with a nullable `scorecard_id` recording which
-  captured card each score was read from). Generated SQL migrations belong in
-  `pkg/api/migrations` and are applied by Wrangler.
+  `course`, `course_set` (a "nine"; name unique per course; NO stored
+  front/back disposition — derive it from hole numbers where the UI needs
+  it, which keeps sets nonoverlapping; USGA provenance is
+  `usga_course_id` + `usga_course_nine` front/back/null, i.e. "this nine is
+  the front/back half of THIS rated 18-hole course"), `course_set_tee` (a
+  real tee position on a nine: printed
+  `name` like "Blue", `gender` m/f/null, nullable `type` from `TEES` for
+  matching profile preferences — untyped tees are still playable — and
+  nullable 9-hole `course_rating`/`slope_rating`, null = unrated; unique per
+  (set, lower(name), coalesce(gender, ''))), `hole` (belongs to a TEE, not
+  the set — par can differ by tee; number unique per tee), `outing` (naive
+  `date` "YYYY-MM-DD" + course_id), `score_set` (the root of scores: one row
+  per (outing, player, course_set_tee), so a day can mix tees nine-by-nine
+  and every score commits to a tee), `scorecard` (one row per captured card,
+  created at upload and tagged `user_id`; its id IS the capture id — the
+  photo lives in R2 at cards/<id>/image, but the scores-extraction result
+  lives on the row in `scores_extract`, an unindexed `json` column holding
+  `{extracted, matched}`, with `scores_error` for failures — status derives
+  from those two columns), and `score` (score_set/hole unique, with a
+  nullable `scorecard_id` recording which captured card each score was read
+  from). EVERY table carries `created_at`/`updated_at` ISO-8601 audit
+  columns, maintained by drizzle `$defaultFn`/`$onUpdateFn` — app-level, so
+  raw-SQL writers (the seed script, tests that care) must set them
+  themselves. Generated SQL migrations belong in `pkg/api/migrations` and
+  are applied by Wrangler.
 - `pkg/api/routes/golfers.ts`: the player registry (subsumes the old admin
   routes/page). List/get golfers with nicknames (any signed-in user); PATCH is
   self-or-admin (nicknames use replace-all semantics; the `admin` flag needs an
   admin and never on yourself); `/golfers/invite` is admin-only and sends the
   invite email. The web's Golfers tab drives all of this — there is no
   separate admin UI; controls are shown by permission checks.
-- `pkg/api/routes/outings.ts`: `/courses` (with sets AND holes — the review
-  UI shows database pars and auto-picks sets by par sequence);
+- `pkg/api/routes/outings.ts`: `/courses` (with sets, their TEES, and each
+  tee's holes — the review UI shows database pars and auto-picks sets by par
+  sequence against any tee's layout);
   `/outings` list (reverse-chrono summaries; course/set/player filters);
   `/outings/check` (merge-candidate lookup: an outing on the same date with
   scores on any of the given course sets — the one-foursome-two-scorecards
-  case); `/outings/:id` detail (sets derived from scores, holes, per-player
-  tees, score cell maps, plus the distinct `scorecards` behind those scores);
-  POST `/outings` submits a reviewed capture — it rejects future dates
-  ("today" judged at UTC+14 so no honest local today loses; merges exempt),
-  records `scorecardId` on every score row, can create the course and/or
-  course sets (with holes) inline (API capability only: the review UI no
-  longer offers it; it's reserved for the future "import nines via
-  scorecard" flow), merge into an existing outing via `outingId`, upserts
-  `outing_player` tees, and writes all rows through one `db.batch`;
+  case); `/outings/:id` detail (sets derived from score_sets, a display hole
+  layout, per-player tees and per-player pars, score cell maps keyed by hole
+  NUMBER — two players on one nine may have played different tees whose
+  holes are distinct rows — plus the distinct `scorecards` behind those
+  scores); POST `/outings` submits a reviewed capture — every player entry
+  names the `courseSetTeeId` they played each nine from (score rows resolve
+  hole ids through that tee), it rejects future dates ("today" judged at
+  UTC+14 so no honest local today loses; merges exempt), records
+  `scorecardId` on every score row, references EXISTING courses, sets, and
+  tees only (there is no API to create or edit course data — it's imported
+  directly into the database), merges into an existing outing via `outingId`
+  (existing score_sets are preloaded so scores upsert into them), and writes
+  all rows through one `db.batch`;
   POST `/outings/:id/merge` merges an already-recorded same-date-same-course
-  outing into `:id` (rows move to the target, the target wins player+hole
-  and player conflicts, the source outing is deleted).
+  outing into `:id` (score sets move to the target; the target wins when
+  both have a score for the same player, course set, and hole number even
+  across different tees; source sets duplicating a target (player, tee) pour
+  into it; emptied sets and the source outing are deleted).
 - `pkg/api/src/handicap.ts`: the WHS (2024 Rules of Handicapping) Handicap
   Index. One raw-D1 query pulls every scored hole with its nine's ratings;
   `handicapFromRounds` (pure, unit-tested) replays the record
@@ -116,22 +150,28 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   outing is two points), each with its nines, gross strokes, differential,
   the index after it, and `counted` (whether the current index averages
   it). The golfer page charts the timeseries (recharts + `ui/chart.tsx`;
-  UI says "Handicap", never "Handicap Index") and its outing list shows
-  per-round scores with a star on counted rounds. Ratings are PER TEE in
-  `course_set_rating` (9-hole `course_rating`/`slope_rating` keyed by
-  (course_set, tee) — the app's `TEES` enum — unique-indexed; no row =
-  unrated from that tee); the engine resolves each player's tee as outing
-  tee → profile `preferredTee` → "standard", falling back to the standard
-  rating when the resolved tee is unrated. NB: SQLite forbids outer-table
-  references in a correlated subquery's ORDER BY (fine in WHERE) — the
-  rating pick ranks `(r.tee = 'standard') ASC` instead. USGA NCRDB
+  UI calls the computed feature "Casual Handicap" — it's an estimate —
+  never "Handicap Index"; the profile's manually entered `handicap` field
+  stays plain "Handicap") and its outing list shows
+  per-round scores with a star on counted rounds. Ratings live ON the
+  `course_set_tee` row (nullable 9-hole `course_rating`/`slope_rating`;
+  null = unrated, the nine can't post) — no tee resolution: every score
+  hangs off a score_set that names its tee, and nines group by (outing,
+  tee), so a mixed-tee 18 combines each tee's own ratings. USGA NCRDB
   provenance ids live on `course.ncrdb_facility_id` and
-  `course_set.ncrdb_course_id` (the rated 18-hole combo the nine fronts;
-  linked from the course page, which shows each nine's per-tee ratings
-  table). Buck Hill Falls is seeded in `seed/courses.yaml` from NCRDB
-  CourseIDs 21162/21163/21164 (facility 20114), men's markers mapped as
-  back → Blue, standard → White, senior → Gold, front → Red,
-  junior → Green (BHF has no tips).
+  `course_set.usga_course_id` + `usga_course_nine` (which rated 18-hole
+  combo the nine is half of, and which half — every seeded nine fronts its
+  combo, so `front`; linked from the course page, which shows each nine's
+  Par row from the men's-standard baseline tee and its tees table with
+  per-tee ratings plus a rightmost par-exceptions column — "Hole 4 is Par
+  4"-style deviations from that baseline). Buck Hill
+  Falls is seeded in
+  `seed/courses.yaml` from NCRDB CourseIDs 21162/21163/21164 (facility
+  20114): men's marker tees Blue/White/Gold/Red/Green typed as
+  back/standard/senior/front/junior (BHF has no tips). Every seed tee
+  carries its own `holes` list with hardcoded uuidv7 ids (pars differ by
+  tee on some holes — exact per-tee pars/ratings will be re-upserted by a
+  planned USGA scraper).
 - `pkg/api/routes/honors.ts` + `pkg/api/src/honors.ts`: the honors board.
   `computeHonors(db, since)` runs ONE SQLite query (CTEs + window functions;
   raw D1, deliberately not Drizzle) over the recent window
@@ -148,20 +188,29 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   Honors tab (`pkg/web/src/pages/honors.tsx`) renders every slug — claimed
   cards get per-honor custom stat/story UI, unclaimed ones a dimmed
   placeholder.
-- `pkg/api/routes/capture.ts`: routes only — `/capture/submit` uploads the
-  image to R2 and enqueues a `CAPTURE_QUEUE` message; `/capture/result` polls
-  the capture record and, when complete, returns `{ extracted, matched }`
-  (extracted.json + matched.json from R2). It exports the shared
-  `captureKey`/`putCaptureRecord` helpers for the agent module below.
+- `pkg/api/routes/scorecard.ts`: routes only — POST `/scorecard` uploads the
+  image to R2, inserts the user-tagged scorecard row, and enqueues a
+  `CAPTURE_QUEUE` message per requested extraction (the multipart `extract`
+  field is JSON like `{"scores": true}`; a course-metadata pars/yardages
+  extraction will join it); GET `/scorecard/:id/scores` is the owner-only
+  status/result poll (202 pending / `{extracted, matched}` / 500 with the
+  error); GET `/scorecard` lists the signed-in user's cards newest-first
+  (`?limit=`); GET `/scorecard/:id` is the league-visible detail (status,
+  uploader, and the outings whose scores were read from the card); GET
+  `/scorecard/:id/image` streams the photo. Exports `scorecardImageKey` and
+  `scorecardStatus` for the agent module below.
 - `pkg/api/src/agent/card_extract/`: the extraction agent. `agent.ts` exports
   `extractScorecard({image, resolver, model})` — one `generateObject` call
   with vision input — plus `handleCaptureQueue` (wired into `index.ts`'s
   `queue` handler), which reads the uploaded image from R2, normalizes it via
   the `IMAGES` binding (scale-down to 2048px-long-edge JPEG q80, passing
   already-conforming JPEGs through without re-encoding — the route stores raw
-  uploaded bytes, size-limited only), extracts, and writes `extracted.json`. `schema.ts` defines ONE schema, `ExtractData` —
-  what the model emits, what the agent returns, what's stored in R2, and what
-  the eval fixtures assert; there is no wire/public split. Per-player data is
+  uploaded bytes, size-limited only) and extracts. `schema.ts` defines ONE
+  schema, `ExtractData` — what the model emits, what the agent returns,
+  what's stored in `scores_extract`, and what the eval fixtures assert;
+  there is no wire/public split (it also hosts the `MatchedData` /
+  `ScoresExtractData` types so the db schema can reference them without a
+  module cycle). Per-player data is
   index-aligned arrays (`players: string[]`, `scores`/`writtenTotals`:
   `(number|null)[]`), every field required, `null` = "not written/legible".
   That array shape is also the only one all three providers' structured-output
@@ -173,10 +222,12 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   batch messages with `Promise.all`, and retries a 429 (`APICallError` with
   `statusCode === 429`) up to `MAX_RATE_LIMIT_ATTEMPTS` times via
   `message.retry()`. After extraction it runs both matching agents (below)
-  against `env.DB` and writes `matched.json` (`MatchedData`); matching is
-  best-effort — any failure, including 429s, degrades to nulls rather than
-  failing or retrying the capture, since retrying would re-spend the far more
-  expensive vision call and the review UI lets the user pick manually.
+  against `env.DB`, then stores `{extracted, matched}` on the scorecard
+  row's `scores_extract` column (failures set `scores_error`) — nothing but
+  the image lives in R2; matching is best-effort — any failure, including
+  429s, degrades to nulls rather than failing or retrying the capture,
+  since retrying would re-spend the far more expensive vision call and the
+  review UI lets the user pick manually.
 - `pkg/api/src/agent/player_match/` and `pkg/api/src/agent/course_match/`:
   the matching agents. Both are agentic-search loops (no embeddings) built on
   `src/agent/answer_tool.ts`'s `runAnswerAgent`: `generateText` with
@@ -258,11 +309,12 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
 - `bun db:generate`: generate D1 SQL migrations from the Drizzle schema.
 - `bun db:migrate:local` / `bun db:migrate:remote`: apply migrations.
 - `nu script/update_seed.nu --local --remote`: upsert the seed data in
-  `seed/*.yaml` (golfers + nicknames, courses + sets + holes) into D1. The
-  baked-in uuidv7s are CANONICAL for users, nicknames, and courses (upserted
-  by id — a pre-existing row with the same unique email under a different id
-  fails loudly; align ids first); course sets and holes upsert by natural key
-  (course+name, set+number). Re-running is idempotent. Notes: invoke long
+  `seed/*.yaml` (golfers + nicknames, courses + sets + tees + holes) into
+  D1. The baked-in uuidv7s are CANONICAL for users, nicknames, and courses
+  (upserted by id — a pre-existing row with the same unique email under a
+  different id fails loudly; align ids first); course sets, tees, and holes
+  upsert by natural key (course+name, set+lower(name)+gender, tee+number).
+  EVERY row's id is hardcoded in the YAML and only sticks on first insert. Re-running is idempotent. Notes: invoke long
   `--command` strings through `./node_modules/.bin/wrangler`, not
   `bunx wrangler` — bunx word-splits quoted arguments; and D1 ignores
   `PRAGMA foreign_keys=OFF`, so drizzle-generated table-recreate migrations

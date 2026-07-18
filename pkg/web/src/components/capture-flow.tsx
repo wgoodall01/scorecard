@@ -86,7 +86,8 @@ export function CaptureFlow() {
       setAnalyzeStatus("Uploading your photo…");
       const form = new FormData();
       form.set("image", await resizeImageForCapture(imageToAnalyze));
-      const submitResponse = await fetch("/api/capture/submit", {
+      form.set("extract", JSON.stringify({ scores: true }));
+      const submitResponse = await fetch("/api/scorecard", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form,
@@ -99,7 +100,7 @@ export function CaptureFlow() {
       setAnalyzeStatus("Reading the round details…");
       for (let attempt = 0; attempt < 60; attempt++) {
         const resultResponse = await fetch(
-          `/api/capture/result?id=${encodeURIComponent(submitBody.id)}`,
+          `/api/scorecard/${encodeURIComponent(submitBody.id)}/scores`,
           { headers: { Authorization: `Bearer ${token}` } },
         );
         if (resultResponse.status === 202) {

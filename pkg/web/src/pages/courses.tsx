@@ -6,7 +6,17 @@ import { AppShell, PageHeading, PageTitle } from "@/App";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { TEE_LABELS, TEES } from "@/lib/tees";
-import { dispositionLabel } from "@/pages/outings";
+import { nineLabel } from "@/pages/outings";
+
+export type CourseTee = {
+  id: string;
+  name: string;
+  gender: "m" | "f" | null;
+  type: Tee | null;
+  courseRating: number | null;
+  slopeRating: number | null;
+  holes: { id: string; number: number; par: number }[];
+};
 
 export type CourseWithNines = {
   id: string;
@@ -16,12 +26,22 @@ export type CourseWithNines = {
   sets: {
     id: string;
     name: string;
-    disposition: "front" | "back" | null;
-    ncrdbCourseId: number | null;
-    holes: { id: string; number: number; name: string | null; par: number }[];
-    ratings: { id: string; tee: Tee; courseRating: number; slopeRating: number }[];
+    // "This nine is the front/back half of THIS USGA-rated 18-hole course."
+    usgaCourseId: number | null;
+    usgaCourseNine: "front" | "back" | null;
+    tees: CourseTee[];
   }[];
 };
+
+// Longest tees first: the app-level type order, untyped tees last, then name.
+export function sortTees<TTee extends { name: string; type: Tee | null }>(tees: TTee[]): TTee[] {
+  const rank = (tee: TTee) => (tee.type === null ? TEES.length : TEES.indexOf(tee.type));
+  return [...tees].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+}
+
+export function teeLabel(tee: { name: string; gender: "m" | "f" | null }) {
+  return tee.gender === null ? tee.name : `${tee.name} (${tee.gender.toUpperCase()})`;
+}
 
 function useCourses() {
   const { client } = useAuth();
@@ -158,65 +178,96 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
             </section>
           )}
           {course.sets.map((set) => {
-            const holes = [...set.holes].sort((a, b) => a.number - b.number);
-            // Present tees longest-first, in the app's canonical order.
-            const ratings = [...set.ratings].sort(
-              (a, b) => TEES.indexOf(a.tee) - TEES.indexOf(b.tee),
+            const tees = sortTees(set.tees);
+            // Hole numbers across every tee (they should agree; union so a
+            // partly seeded tee can't hide columns).
+            const holeNumbers = [
+              ...new Set(set.tees.flatMap((tee) => tee.holes.map((hole) => hole.number))),
+            ].sort((a, b) => a - b);
+            // Pars can differ by tee. The Par row shows one baseline layout
+            // — the men's standard tee where one exists — and each other
+            // tee's deviations from it are spelled out in the tees table.
+            const baseline =
+              tees.find((tee) => tee.type === "standard" && tee.gender === "m") ??
+              tees.find((tee) => tee.type === "standard") ??
+              tees[0];
+            const baselinePars = new Map(
+              baseline?.holes.map((hole) => [hole.number, hole.par]) ?? [],
             );
+            const parExceptions = (tee: CourseTee) =>
+              [...tee.holes]
+                .filter((hole) => baselinePars.get(hole.number) !== hole.par)
+                .sort((a, b) => a.number - b.number)
+                .map((hole) => `Hole ${hole.number} is Par ${hole.par}`)
+                .join(", ");
             return (
               <section key={set.id} className="rounded-xl border bg-card">
                 <div className="flex items-start justify-between gap-3 border-b p-5">
                   <div className="min-w-0">
                     <h2 className="font-medium">{set.name}</h2>
-                    {set.ncrdbCourseId !== null && (
+                    {set.usgaCourseId !== null && (
                       <p className="mt-0.5 text-sm text-muted-foreground">
                         <a
-                          href={`https://ncrdb.usga.org/courseTeeInfo?CourseID=${set.ncrdbCourseId}`}
+                          href={`https://ncrdb.usga.org/courseTeeInfo?CourseID=${set.usgaCourseId}`}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
                         >
-                          USGA {set.ncrdbCourseId}
+                          USGA {set.usgaCourseId}
+                          {set.usgaCourseNine !== null && ` · ${set.usgaCourseNine} 9`}
                           <ExternalLink aria-hidden="true" className="size-3.5" />
                         </a>
                       </p>
                     )}
                   </div>
-                  <Badge variant="secondary">{dispositionLabel(set.disposition)}</Badge>
+                  <Badge variant="secondary">{nineLabel(holeNumbers)}</Badge>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="p-3 pl-5 font-medium">Hole</th>
-                        {holes.map((hole) => (
-                          <th key={hole.id} className="p-3 text-center font-medium">
-                            {hole.number}
+                        {holeNumbers.map((number) => (
+                          <th key={number} className="p-3 text-center font-medium">
+                            {number}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       <tr className="border-t">
-                        <td className="p-3 pl-5 font-medium">Par</td>
-                        {holes.map((hole) => (
-                          <td key={hole.id} className="p-3 text-center tabular-nums">
-                            {hole.par}
+                        <td className="p-3 pl-5 font-medium whitespace-nowrap">Par</td>
+                        {holeNumbers.map((number) => (
+                          <td key={number} className="p-3 text-center tabular-nums">
+                            {baselinePars.get(number) ?? "–"}
                           </td>
                         ))}
                       </tr>
                     </tbody>
                   </table>
                 </div>
-                {ratings.length > 0 && (
-                  <dl className="grid grid-cols-[7rem_1fr] items-baseline gap-x-4 gap-y-1.5 border-t p-5 text-sm">
+                {tees.length > 0 && (
+                  // Four columns: tee, its app-level type (unlabeled, so the
+                  // types line up in their own column), rating/slope, and
+                  // any par deviations from the baseline layout above.
+                  <dl className="grid grid-cols-[auto_auto_auto_1fr] items-baseline gap-x-6 gap-y-1.5 border-t p-5 text-sm">
                     <dt className="text-xs font-medium text-muted-foreground">Tee</dt>
+                    <dd aria-hidden="true" />
                     <dd className="text-xs font-medium text-muted-foreground">Rating / Slope</dd>
-                    {ratings.map((rating) => (
-                      <Fragment key={rating.id}>
-                        <dt className="text-muted-foreground">{TEE_LABELS[rating.tee]}</dt>
+                    <dd aria-hidden="true" />
+                    {tees.map((tee) => (
+                      <Fragment key={tee.id}>
+                        <dt className="whitespace-nowrap text-muted-foreground">{teeLabel(tee)}</dt>
+                        <dd className="whitespace-nowrap text-xs text-muted-foreground">
+                          {tee.type !== null && TEE_LABELS[tee.type]}
+                        </dd>
                         <dd className="tabular-nums">
-                          {rating.courseRating.toFixed(1)} / {rating.slopeRating}
+                          {tee.courseRating !== null && tee.slopeRating !== null
+                            ? `${tee.courseRating.toFixed(1)} / ${tee.slopeRating}`
+                            : "Unrated"}
+                        </dd>
+                        <dd className="min-w-0 text-xs text-muted-foreground">
+                          {parExceptions(tee)}
                         </dd>
                       </Fragment>
                     ))}

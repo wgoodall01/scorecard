@@ -6,26 +6,39 @@ import { computeHonors, type Honor, type HonorSlug } from "./honors";
 // from empty tables (delete order respects foreign keys).
 beforeEach(async () => {
   await env.DB.batch(
-    ["score", "outing_player", "outing", "hole", "course_set", "course", "nickname", "user"].map(
-      (table) => env.DB.prepare(`DELETE FROM "${table}"`),
-    ),
+    [
+      "score",
+      "score_set",
+      "outing",
+      "hole",
+      "course_set_tee",
+      "course_set",
+      "course",
+      "nickname",
+      "user",
+    ].map((table) => env.DB.prepare(`DELETE FROM "${table}"`)),
   );
 });
 
-// Fixture course: 18 par-4 holes; 1–9 on set "front" (White), 10–18 on set
-// "back" (Blue). Rounds are seeded as per-hole deltas from par, front first.
+// Fixture course: 18 par-4 holes; 1–9 on set "front" (White, one standard
+// tee), 10–18 on set "back" (Blue, likewise). Rounds are seeded as per-hole
+// deltas from par, front first.
 async function seedBase() {
   const holeValues = Array.from({ length: 18 }, (_, index) => {
     const number = index + 1;
-    return `('h${number}', '${number <= 9 ? "front" : "back"}', ${number}, 4)`;
+    return `('h${number}', '${number <= 9 ? "front-t" : "back-t"}', ${number}, 4)`;
   }).join(", ");
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO course (id, name) VALUES ('course', 'Buck Hill Falls')`),
     env.DB.prepare(
-      `INSERT INTO course_set (id, course_id, name, disposition)
-       VALUES ('front', 'course', 'White', 'front'), ('back', 'course', 'Blue', 'back')`,
+      `INSERT INTO course_set (id, course_id, name)
+       VALUES ('front', 'course', 'White'), ('back', 'course', 'Blue')`,
     ),
-    env.DB.prepare(`INSERT INTO hole (id, course_set_id, number, par) VALUES ${holeValues}`),
+    env.DB.prepare(
+      `INSERT INTO course_set_tee (id, course_set_id, name, type)
+       VALUES ('front-t', 'front', 'White', 'standard'), ('back-t', 'back', 'White', 'standard')`,
+    ),
+    env.DB.prepare(`INSERT INTO hole (id, course_set_tee_id, number, par) VALUES ${holeValues}`),
     env.DB.prepare(
       `INSERT INTO user (id, name) VALUES ('alice', 'Alice'), ('bob', 'Bob'), ('carol', 'Carol')`,
     ),
@@ -33,17 +46,22 @@ async function seedBase() {
 }
 
 async function seedRound(outingId: string, date: string, playerId: string, deltas: number[]) {
+  const tees = [...new Set(deltas.map((_, index) => (index < 9 ? "front-t" : "back-t")))];
   const statements = [
     env.DB.prepare(
       `INSERT OR IGNORE INTO outing (id, date, course_id) VALUES (?, ?, 'course')`,
     ).bind(outingId, date),
+    ...tees.map((teeId) =>
+      env.DB.prepare(
+        `INSERT INTO score_set (id, outing_id, player_id, course_set_tee_id) VALUES (?, ?, ?, ?)`,
+      ).bind(`${outingId}:${playerId}:${teeId}`, outingId, playerId, teeId),
+    ),
     ...deltas.map((delta, index) =>
       env.DB.prepare(
-        `INSERT INTO score (id, outing_id, player_id, hole_id, score) VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO score (id, score_set_id, hole_id, score) VALUES (?, ?, ?, ?)`,
       ).bind(
         `${outingId}:${playerId}:${index + 1}`,
-        outingId,
-        playerId,
+        `${outingId}:${playerId}:${index < 9 ? "front-t" : "back-t"}`,
         `h${index + 1}`,
         4 + delta,
       ),

@@ -506,7 +506,7 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
                 />
                 {handicapRecord?.timeseries.some((point) => point.counted) && (
                   <p className="text-xs text-muted-foreground">
-                    * counts toward the current handicap
+                    <sub>H</sub> counts toward the current casual handicap
                   </p>
                 )}
               </>

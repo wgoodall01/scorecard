@@ -30,7 +30,12 @@ export function courseSearchFromDb(db: ReturnType<typeof getDb>): CourseSearch {
 
     const rows = await db.query.course.findMany({
       where: inArray(course.id, ids),
-      with: { sets: { orderBy: [asc(courseSet.name)] } },
+      with: {
+        sets: {
+          orderBy: [asc(courseSet.name)],
+          with: { tees: { with: { holes: { columns: { number: true } } } } },
+        },
+      },
     });
     return rows.map((row) => ({
       id: row.id,
@@ -39,22 +44,39 @@ export function courseSearchFromDb(db: ReturnType<typeof getDb>): CourseSearch {
       sets: row.sets.map((set) => ({
         id: set.id,
         name: set.name,
-        disposition: set.disposition ?? null,
+        holes: holeRange(set.tees.flatMap((tee) => tee.holes.map((teeHole) => teeHole.number))),
       })),
     }));
   };
 }
 
+// "1-9"-style label of a set's hole numbers, for the search results.
+export function holeRange(numbers: number[]): string | null {
+  if (numbers.length === 0) return null;
+  return `${Math.min(...numbers)}-${Math.max(...numbers)}`;
+}
+
 // Production CourseSetParsList for the exact par-sequence phase: every set's
-// hole layout. One query over the whole table — the course catalog is small.
+// hole layouts. Holes are per-TEE rows and pars can differ between tees, so
+// a set contributes one entry per distinct layout among its tees (usually
+// one — deduped by fingerprint so identical layouts don't read as ambiguous
+// candidates). One query over the whole table — the course catalog is small.
 export function courseSetParsFromDb(db: ReturnType<typeof getDb>): CourseSetParsList {
   return async () => {
-    const sets = await db.query.courseSet.findMany({ with: { holes: true } });
-    return sets.map((set) => ({
-      courseId: set.courseId,
-      courseSetId: set.id,
-      holes: set.holes.map((hole) => ({ number: hole.number, par: hole.par })),
-    }));
+    const sets = await db.query.courseSet.findMany({ with: { tees: { with: { holes: true } } } });
+    return sets.flatMap((set) => {
+      const layouts = new Map<string, CourseSetPars>();
+      for (const tee of set.tees) {
+        const holes = [...tee.holes]
+          .sort((a, b) => a.number - b.number)
+          .map((hole) => ({ number: hole.number, par: hole.par }));
+        const fingerprint = holes.map((hole) => `${hole.number}:${hole.par}`).join(",");
+        if (!layouts.has(fingerprint)) {
+          layouts.set(fingerprint, { courseId: set.courseId, courseSetId: set.id, holes });
+        }
+      }
+      return [...layouts.values()];
+    });
   };
 }
 

@@ -6,10 +6,10 @@ import { computeHandicap, handicapFromRounds } from "./handicap";
 // math transparent — an 18-hole differential is exactly AGS − 72 and a
 // 9-hole one AGS − 36, so every expectation below is hand-checkable.
 
-function nine(setId: string, firstHole: number, strokes: number[]) {
+function nine(teeId: string, firstHole: number, strokes: number[]) {
   return {
-    setId,
-    name: setId,
+    teeId,
+    name: teeId,
     par: strokes.length * 4,
     courseRating: strokes.length * 4,
     slopeRating: 113,
@@ -192,10 +192,10 @@ beforeEach(async () => {
   await env.DB.batch(
     [
       "score",
-      "outing_player",
+      "score_set",
       "outing",
       "hole",
-      "course_set_rating",
+      "course_set_tee",
       "course_set",
       "course",
       "nickname",
@@ -204,47 +204,66 @@ beforeEach(async () => {
   );
 });
 
+// Fixture tees: the White set's standard tee holds holes h1–h9 (36.0/113)
+// and a harder back-type tee holds b1–b9 (34.0/120, same hole numbers); the
+// Blue set's standard tee holds h10–h18 (36.0/113); the Red set's only tee
+// is unrated (NULL ratings), holes u1–u9. The hole-id prefix picks the tee
+// in seedScores below.
+function teeFor(holeId: string): string {
+  if (holeId.startsWith("b")) return "front-back";
+  if (holeId.startsWith("u")) return "unrated-std";
+  return Number(holeId.slice(1)) <= 9 ? "front-std" : "back-std";
+}
+
 async function seedBase() {
   const holeValues = Array.from({ length: 18 }, (_, index) => {
     const number = index + 1;
-    return `('h${number}', '${number <= 9 ? "front" : "back"}', ${number}, 4)`;
+    return `('h${number}', '${number <= 9 ? "front-std" : "back-std"}', ${number}, 4)`;
   }).join(", ");
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO course (id, name, ncrdb_facility_id) VALUES ('course', 'Buck Hill Falls', 20114)`,
     ),
     env.DB.prepare(
-      `INSERT INTO course_set (id, course_id, name, disposition)
-       VALUES ('front', 'course', 'White', 'front'),
-              ('back', 'course', 'Blue', 'back'),
-              ('unrated', 'course', 'Red', 'front')`,
+      `INSERT INTO course_set (id, course_id, name)
+       VALUES ('front', 'course', 'White'), ('back', 'course', 'Blue'),
+              ('unrated', 'course', 'Red')`,
     ),
-    // Standard-tee ratings on both nines, plus a harder back-tee rating on
-    // the front nine for the tee-resolution test. The Red set stays unrated.
     env.DB.prepare(
-      `INSERT INTO course_set_rating (id, course_set_id, tee, course_rating, slope_rating)
-       VALUES ('r1', 'front', 'standard', 36.0, 113),
-              ('r2', 'back', 'standard', 36.0, 113),
-              ('r3', 'front', 'back', 34.0, 120)`,
+      `INSERT INTO course_set_tee (id, course_set_id, name, gender, type, course_rating, slope_rating)
+       VALUES ('front-std', 'front', 'White', 'm', 'standard', 36.0, 113),
+              ('front-back', 'front', 'Blue', 'm', 'back', 34.0, 120),
+              ('back-std', 'back', 'White', 'm', 'standard', 36.0, 113),
+              ('unrated-std', 'unrated', 'White', 'm', 'standard', NULL, NULL)`,
     ),
-    env.DB.prepare(`INSERT INTO hole (id, course_set_id, number, par) VALUES ${holeValues}`),
+    env.DB.prepare(`INSERT INTO hole (id, course_set_tee_id, number, par) VALUES ${holeValues}`),
     env.DB.prepare(
-      `INSERT INTO hole (id, course_set_id, number, par)
-       VALUES ${Array.from({ length: 9 }, (_, index) => `('u${index + 1}', 'unrated', ${index + 1}, 4)`).join(", ")}`,
+      `INSERT INTO hole (id, course_set_tee_id, number, par)
+       VALUES ${Array.from({ length: 9 }, (_, index) => `('b${index + 1}', 'front-back', ${index + 1}, 4)`).join(", ")}`,
+    ),
+    env.DB.prepare(
+      `INSERT INTO hole (id, course_set_tee_id, number, par)
+       VALUES ${Array.from({ length: 9 }, (_, index) => `('u${index + 1}', 'unrated-std', ${index + 1}, 4)`).join(", ")}`,
     ),
     env.DB.prepare(`INSERT INTO user (id, name) VALUES ('alice', 'Alice')`),
   ]);
 }
 
 async function seedScores(outingId: string, date: string, cells: [string, number][]) {
+  const tees = [...new Set(cells.map(([holeId]) => teeFor(holeId)))];
   await env.DB.batch([
     env.DB.prepare(
       `INSERT OR IGNORE INTO outing (id, date, course_id) VALUES (?, ?, 'course')`,
     ).bind(outingId, date),
+    ...tees.map((teeId) =>
+      env.DB.prepare(
+        `INSERT INTO score_set (id, outing_id, player_id, course_set_tee_id) VALUES (?, ?, 'alice', ?)`,
+      ).bind(`${outingId}:${teeId}`, outingId, teeId),
+    ),
     ...cells.map(([holeId, strokes]) =>
       env.DB.prepare(
-        `INSERT INTO score (id, outing_id, player_id, hole_id, score) VALUES (?, ?, 'alice', ?, ?)`,
-      ).bind(`${outingId}:${holeId}`, outingId, holeId, strokes),
+        `INSERT INTO score (id, score_set_id, hole_id, score) VALUES (?, ?, ?, ?)`,
+      ).bind(`${outingId}:${holeId}`, `${outingId}:${teeFor(holeId)}`, holeId, strokes),
     ),
   ]);
 }
@@ -309,37 +328,38 @@ describe("computeHandicap", () => {
     expect(result.timeseries).toEqual([]);
   });
 
-  it("rates each round on the tee the player played, falling back to standard", async () => {
+  it("rates each round on the ratings of the tee the scores were recorded on", async () => {
+    // o1 from the front set's back tee (34.0 / 120): 45 gives a 9-hole
+    // differential of (113/120) x 11 = 10.358, doubled (first-ever score)
+    // -> 20.7.
     await seedBase();
-    const nineFives: [string, number][] = Array.from({ length: 9 }, (_, index) => [
-      `h${index + 1}`,
-      5,
-    ]);
-    // o1 from the back tees (34.0 / 120): 45 gives a 9-hole differential of
-    // (113/120) x 11 = 10.358, doubled (first-ever score) -> 20.7.
-    await seedScores("o1", "2026-07-01", nineFives);
-    await env.DB.prepare(
-      `INSERT INTO outing_player (id, outing_id, player_id, tee) VALUES ('op1', 'o1', 'alice', 'back')`,
-    ).run();
-    // o2 from the (unrated) junior tees: falls back to standard (36.0/113),
-    // 9-hole differential 9.0 + expected (0.52 x 18.7 + 1.2) = 19.924 -> 19.9.
-    await seedScores("o2", "2026-07-08", nineFives);
-    await env.DB.prepare(
-      `INSERT INTO outing_player (id, outing_id, player_id, tee) VALUES ('op2', 'o2', 'alice', 'junior')`,
-    ).run();
+    await seedScores(
+      "o1",
+      "2026-07-01",
+      Array.from({ length: 9 }, (_, index): [string, number] => [`b${index + 1}`, 5]),
+    );
+    // o2 from the standard tee (36.0/113): 9-hole differential 9.0 +
+    // expected (0.52 x 18.7 + 1.2) = 19.924 -> 19.9.
+    await seedScores(
+      "o2",
+      "2026-07-08",
+      Array.from({ length: 9 }, (_, index): [string, number] => [`h${index + 1}`, 5]),
+    );
     const result = await computeHandicap(env.DB, "alice");
     expect(result.timeseries.map((point) => point.differential)).toEqual([20.7, 19.9]);
   });
 
-  it("uses the profile's preferred tee when the outing doesn't record one", async () => {
+  it("combines a mixed-tee outing's nines with each tee's own ratings", async () => {
+    // Front nine from the back tee (34.0/120) + back nine from the standard
+    // tee (36.0/113): CR 70.0, slope 116.5, AGS 90 ->
+    // (113 / 116.5) x 20 = 19.399 -> 19.4.
     await seedBase();
-    await env.DB.prepare(`UPDATE user SET preferred_tee = 'back' WHERE id = 'alice'`).run();
-    await seedScores(
-      "o1",
-      "2026-07-01",
-      Array.from({ length: 9 }, (_, index): [string, number] => [`h${index + 1}`, 5]),
-    );
+    await seedScores("o1", "2026-07-01", [
+      ...Array.from({ length: 9 }, (_, index): [string, number] => [`b${index + 1}`, 5]),
+      ...Array.from({ length: 9 }, (_, index): [string, number] => [`h${index + 10}`, 5]),
+    ]);
     const result = await computeHandicap(env.DB, "alice");
-    expect(result.timeseries[0].differential).toBe(20.7);
+    expect(result.timeseries).toHaveLength(1);
+    expect(result.timeseries[0]).toMatchObject({ holes: 18, differential: 19.4 });
   });
 });

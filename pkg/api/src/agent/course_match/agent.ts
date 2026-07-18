@@ -6,12 +6,14 @@ import { CourseMatchAnswer, type CourseMatchAnswerSchema } from "./schema";
 
 // What the search tool returns to the model for each candidate course —
 // always the whole course with ALL of its sets, so the model can match a
-// course from its set names alone and pick the right set by disposition.
+// course from its set names alone and pick the right set by its hole range
+// (`holes` is a "1-9"-style label derived from the set's hole numbers;
+// null when the set has no holes recorded yet).
 export type CourseSearchResult = {
   id: string;
   name: string;
   location: string | null;
-  sets: { id: string; name: string; disposition: "front" | "back" | null }[];
+  sets: { id: string; name: string; holes: string | null }[];
 };
 
 // Injected search: production wires an SQL ILIKE search over course AND set
@@ -41,11 +43,13 @@ You get the course name as written on the card (often missing or partial) and ea
 
 Use the searchCourses tool as many times as you need. It does a case-insensitive substring search over course names AND set names, and returns whole courses with all of their sets — so a distinctive nine name alone (e.g. "White Oak") can find the course even when the card has no course name. Search with SHORT fragments — a full written name like "BLUE SPRUCE" matches nothing if the database calls the set just "Blue", so always also search each individual word ("blue", "spruce"): cards routinely embellish nine names beyond what the database stores.
 
+The searches are independent of each other, so batch them: issue ALL the searches you currently want as parallel searchCourses calls in a single turn (e.g. the course-name fragments and every nine-name word at once), rather than one search per turn.
+
 Matching rules:
 - Only return a courseId or courseSetId you saw in a searchCourses result.
 - The matched sets must belong to the matched course.
-- Use hole numbers to disambiguate: a nine with holes 1–9 is a front nine, 10–18 a back nine. A nine with no printed name can still be matched by its disposition once the course is identified.
-- The pars come from photo OCR and may contain a misread digit — do not reject an otherwise-good name/disposition match because a par or two disagrees.
+- Use hole numbers to disambiguate: each returned set carries its hole range (e.g. "1-9" or "10-18"), so a nine with no printed name can still be matched by its hole numbers once the course is identified.
+- The pars come from photo OCR and may contain a misread digit — do not reject an otherwise-good name/hole-range match because a par or two disagrees.
 - Match only when clearly the best fit. Generic nine names alone (e.g. just "Front Nine") match many courses — if the course itself can't be pinned down, return null rather than guessing.
 - Decide within your step budget: once the searches point to one clear candidate (or clearly nothing), stop searching and call answer.
 

@@ -8,14 +8,12 @@
         {
           "id": "s-oakmont-east",
           "name": "East",
-          "disposition": "front",
           "firstHole": 1,
           "pars": [4, 4, 3, 5, 4, 4, 3, 5, 4]
         },
         {
           "id": "s-oakmont-west",
           "name": "West",
-          "disposition": "back",
           "firstHole": 10,
           "pars": [5, 3, 4, 4, 5, 3, 4, 4, 4]
         }
@@ -29,14 +27,12 @@
         {
           "id": "s-oakland-east",
           "name": "East",
-          "disposition": "front",
           "firstHole": 1,
           "pars": [4, 4, 3, 5, 4, 4, 3, 5, 4]
         },
         {
           "id": "s-oakland-west",
           "name": "West",
-          "disposition": "back",
           "firstHole": 10,
           "pars": [5, 3, 4, 4, 5, 3, 4, 4, 4]
         }

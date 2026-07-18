@@ -8,14 +8,12 @@
         {
           "id": "s-pebble-front",
           "name": "Front Nine",
-          "disposition": "front",
           "firstHole": 1,
           "pars": [4, 5, 4, 4, 3, 5, 3, 4, 4]
         },
         {
           "id": "s-pebble-back",
           "name": "Back Nine",
-          "disposition": "back",
           "firstHole": 10,
           "pars": [4, 4, 4, 3, 5, 4, 3, 5, 5]
         }
@@ -29,21 +27,18 @@
         {
           "id": "s-bhf-white",
           "name": "White",
-          "disposition": "front",
           "firstHole": 1,
           "pars": [4, 5, 4, 5, 4, 4, 3, 4, 3]
         },
         {
           "id": "s-bhf-blue",
           "name": "Blue",
-          "disposition": "back",
           "firstHole": 10,
           "pars": [4, 4, 5, 5, 3, 4, 3, 4, 4]
         },
         {
           "id": "s-bhf-red",
           "name": "Red",
-          "disposition": "front",
           "firstHole": 1,
           "pars": [3, 4, 3, 4, 4, 5, 4, 4, 3]
         }
@@ -57,14 +52,12 @@
         {
           "id": "s-river-front",
           "name": "Front Nine",
-          "disposition": "front",
           "firstHole": 1,
           "pars": [4, 5, 4, 4, 3, 5, 3, 4, 4]
         },
         {
           "id": "s-river-back",
           "name": "Back Nine",
-          "disposition": "back",
           "firstHole": 10,
           "pars": [4, 4, 4, 3, 5, 4, 3, 5, 5]
         }
@@ -78,14 +71,12 @@
         {
           "id": "s-quarry-lake",
           "name": "Lake Nine",
-          "disposition": "front",
           "firstHole": 1,
           "pars": [5, 4, 3, 4, 4, 5, 3, 4, 4]
         },
         {
           "id": "s-quarry-cliff",
           "name": "Cliff Nine",
-          "disposition": "back",
           "firstHole": 10,
           "pars": [4, 3, 5, 4, 4, 3, 5, 4, 4]
         }

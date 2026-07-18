@@ -152,13 +152,13 @@
 //   provisional index is just the second data point.
 //
 // Data flow: one SQL query (bottom of file) pulls every scored hole with
-// its nine's 9-hole ratings for the tee the player actually played
-// (course_set_rating, keyed by the app's tee enum; the tee resolves as
-// outing tee -> profile's preferred tee -> "standard", and an unrated tee
-// falls back to the standard rating); computeHandicap groups rows into
-// outings and complete nines; and handicapFromRounds (pure, unit-tested in
-// handicap.test.ts against hand-worked examples) does everything described
-// above.
+// the 9-hole ratings of the tee the player actually played — no tee
+// resolution is needed anymore: every score hangs off a score_set that
+// names its course_set_tee, and that tee row carries the ratings (null =
+// unrated, so the nine can't post a differential). computeHandicap groups
+// rows into outings and complete nines; and handicapFromRounds (pure,
+// unit-tested in handicap.test.ts against hand-worked examples) does
+// everything described above.
 
 // One USGA-standard "round" posted to the record: an outing yields one
 // 18-hole score per pair of complete rated nines plus one 9-hole score for a
@@ -255,7 +255,9 @@ function expectedNineDifferential(index: number) {
 type RatedHole = { number: number; par: number; strokes: number };
 
 type RatedNine = {
-  setId: string;
+  // The course_set_tee the nine was played from — one player's nine on one
+  // tee (the score_set grain), so its ratings are coherent per row group.
+  teeId: string;
   name: string;
   par: number;
   courseRating: number;
@@ -499,48 +501,37 @@ export function handicapFromRounds(rounds: Round[]): PlayerHandicap {
   };
 }
 
-// Every scored hole for the player with the nine's ratings FOR THE TEE THEY
-// PLAYED, oldest outing first. Raw D1 in the honors style — the service
-// consumes flat rows. The tee resolves as: the tee recorded for this player
-// on this outing, else their profile's preferred tee, else "standard"; the
-// rating pick is a correlated subquery over that tee's row and the standard
-// row, preferring the non-standard one — i.e. the resolved tee when it's
-// rated, else the standard fallback. (The ORDER BY can't reference op/u:
-// SQLite allows outer references in a subquery's WHERE but not its ORDER
-// BY.) Both scalar subqueries rank identically, so they read the same row.
+// Every scored hole for the player with the ratings of the tee they played,
+// oldest outing first. Raw D1 in the honors style — the service consumes
+// flat rows. No tee resolution: the score's hole belongs to a
+// course_set_tee, and that row IS the rating (null course/slope = unrated).
+// Nines group by tee, not set — a player's nine on one tee is exactly the
+// score_set grain, so each group's ratings are coherent.
 const ROUNDS_SQL = /* sql */ `
 SELECT
   o.id     AS outing_id,
   o.date   AS date,
-  cs.id    AS set_id,
+  t.id     AS tee_id,
   cs.name  AS set_name,
   h.number AS hole_number,
   h.par    AS par,
   s.score  AS strokes,
-  (SELECT r.course_rating FROM course_set_rating r
-    WHERE r.course_set_id = cs.id
-      AND r.tee IN (COALESCE(op.tee, u.preferred_tee, 'standard'), 'standard')
-    ORDER BY (r.tee = 'standard') ASC
-    LIMIT 1) AS course_rating,
-  (SELECT r.slope_rating FROM course_set_rating r
-    WHERE r.course_set_id = cs.id
-      AND r.tee IN (COALESCE(op.tee, u.preferred_tee, 'standard'), 'standard')
-    ORDER BY (r.tee = 'standard') ASC
-    LIMIT 1) AS slope_rating
+  t.course_rating AS course_rating,
+  t.slope_rating  AS slope_rating
 FROM score s
-JOIN outing o      ON o.id = s.outing_id
-JOIN "user" u      ON u.id = s.player_id
-JOIN hole h        ON h.id = s.hole_id
-JOIN course_set cs ON cs.id = h.course_set_id
-LEFT JOIN outing_player op ON op.outing_id = o.id AND op.player_id = s.player_id
-WHERE s.player_id = ?1
-ORDER BY o.date ASC, o.id ASC, cs.id ASC, h.number ASC
+JOIN score_set ss      ON ss.id = s.score_set_id
+JOIN outing o          ON o.id = ss.outing_id
+JOIN hole h            ON h.id = s.hole_id
+JOIN course_set_tee t  ON t.id = h.course_set_tee_id
+JOIN course_set cs     ON cs.id = t.course_set_id
+WHERE ss.player_id = ?1
+ORDER BY o.date ASC, o.id ASC, t.id ASC, h.number ASC
 `;
 
 type RoundRow = {
   outing_id: string;
   date: string;
-  set_id: string;
+  tee_id: string;
   set_name: string;
   hole_number: number;
   par: number;
@@ -554,7 +545,7 @@ export async function computeHandicap(db: D1Database, playerId: string): Promise
 
   const rounds: Round[] = [];
   const roundsByOuting = new Map<string, Round>();
-  const ninesBySet = new Map<string, RatedNine>();
+  const ninesByTee = new Map<string, RatedNine>();
   const unrated = new Set<string>();
   for (const row of results) {
     let round = roundsByOuting.get(row.outing_id);
@@ -563,19 +554,19 @@ export async function computeHandicap(db: D1Database, playerId: string): Promise
       roundsByOuting.set(row.outing_id, round);
       rounds.push(round);
     }
-    const nineKey = `${row.outing_id}/${row.set_id}`;
+    const nineKey = `${row.outing_id}/${row.tee_id}`;
     if (row.course_rating === null || row.slope_rating === null) unrated.add(nineKey);
-    let nine = ninesBySet.get(nineKey);
+    let nine = ninesByTee.get(nineKey);
     if (!nine) {
       nine = {
-        setId: row.set_id,
+        teeId: row.tee_id,
         name: row.set_name,
         par: 0,
         courseRating: row.course_rating ?? 0,
         slopeRating: row.slope_rating ?? 0,
         holes: [],
       };
-      ninesBySet.set(nineKey, nine);
+      ninesByTee.set(nineKey, nine);
       round.nines.push(nine);
     }
     nine.par += row.par;
@@ -585,7 +576,7 @@ export async function computeHandicap(db: D1Database, playerId: string): Promise
   // Only complete (all 9 holes scored), rated nines can post differentials.
   for (const round of rounds) {
     round.nines = round.nines.filter(
-      (nine) => !unrated.has(`${round.outingId}/${nine.setId}`) && nine.holes.length === 9,
+      (nine) => !unrated.has(`${round.outingId}/${nine.teeId}`) && nine.holes.length === 9,
     );
   }
 

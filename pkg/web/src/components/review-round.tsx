@@ -10,9 +10,10 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import type { ExtractDataSchema, MatchedData, SubmitOutingRequestSchema, Tee } from "api";
+import type { ExtractDataSchema, MatchedData, SubmitOutingRequestSchema } from "api";
 import { AsyncCombobox } from "@/components/async-combobox";
 import { GolfScore } from "@/components/golf-score";
+import { Score } from "@/components/score";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,8 +27,8 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import type { Golfer } from "@/pages/golfers";
+import { sortTees, teeLabel, type CourseTee } from "@/pages/courses";
 import { formatOutingDate, playerLabel, type OutingDetail } from "@/pages/outings";
-import { TEE_LABELS, TEES } from "@/lib/tees";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -38,13 +39,14 @@ type CourseWithSets = {
   sets: {
     id: string;
     name: string;
-    disposition: "front" | "back" | null;
     courseId: string;
-    holes: { id: string; number: number; name: string | null; par: number }[];
+    tees: CourseTee[];
   }[];
 };
 
-type PlayerReview = { name: string; playerId: string | null; tee: Tee | null };
+type CourseSetOption = CourseWithSets["sets"][number];
+
+type PlayerReview = { name: string; playerId: string | null };
 
 // The user's verdict on a written-vs-computed totals comparison. Every
 // section with a handwritten total must have one before submitting.
@@ -57,8 +59,31 @@ type NineReview = {
   scores: (number | null)[][]; // [holeIndex][playerIndex]
   writtenTotals: (number | null)[]; // per playerIndex, as handwritten
   courseSetId: string | null;
+  // The course_set_tee each player hit this nine from, per playerIndex.
+  // Auto-defaulted (preferred-tee type, else standard, else the first tee;
+  // a merge candidate's recorded tee wins) whenever the set changes.
+  teeIds: (string | null)[];
   totalsChoice: TotalsChoice | null;
 };
+
+// The default tee for a golfer on a set: the tee already recorded for them
+// on the merge candidate's same nine, else the one matching their profile's
+// preferred type, else the standard-type tee, else the longest listed.
+function defaultTeeFor(
+  set: CourseSetOption,
+  golfer: Golfer | undefined,
+  mergeSet?: OutingDetail["sets"][number],
+): CourseTee | null {
+  const merged = golfer ? mergeSet?.tees[golfer.id] : undefined;
+  const fromMerge = merged ? set.tees.find((tee) => tee.id === merged.id) : undefined;
+  if (fromMerge) return fromMerge;
+  const preferred = golfer?.preferredTee
+    ? set.tees.find((tee) => tee.type === golfer.preferredTee)
+    : undefined;
+  return (
+    preferred ?? set.tees.find((tee) => tee.type === "standard") ?? sortTees(set.tees)[0] ?? null
+  );
+}
 
 function localIsoDate(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -288,7 +313,6 @@ export function ReviewRound({
     return names.map((name) => ({
       name,
       playerId: matched?.players.find((player) => player.name === name)?.userId ?? null,
-      tee: null,
     }));
   });
   const [nines, setNines] = useState<NineReview[]>(() =>
@@ -304,6 +328,7 @@ export function ReviewRound({
         scores: nine.holes.map((hole) => nine.players.map((_, pi) => hole.scores[pi] ?? null)),
         writtenTotals,
         courseSetId: matched?.course.sets[index]?.courseSetId ?? null,
+        teeIds: nine.players.map(() => null),
         totalsChoice: writtenTotalsMatch(writtenTotals, computed) ? ("agree" as const) : null,
       };
     }),
@@ -353,18 +378,6 @@ export function ReviewRound({
     });
   }, [client]);
 
-  // Once golfers load, default each matched player's tee to their preference.
-  useEffect(() => {
-    if (golfers.length === 0) return;
-    setPlayers((current) =>
-      current.map((player) => {
-        if (player.tee !== null || player.playerId === null) return player;
-        const golfer = golfers.find((entry) => entry.id === player.playerId);
-        return golfer?.preferredTee ? { ...player, tee: golfer.preferredTee } : player;
-      }),
-    );
-  }, [golfers]);
-
   // Scores already in the merge candidate that this capture would replace
   // (submit upserts on outing+player+hole), summarized per golfer as
   // "Blue 1–9"-style ranges so the user knows what "add to outing" costs.
@@ -374,21 +387,17 @@ export function ReviewRound({
     for (const nine of nines) {
       const targetSet = mergeCandidate.sets.find((set) => set.id === nine.courseSetId);
       if (!targetSet) continue;
-      const holeIdByNumber = new Map(targetSet.holes.map((hole) => [hole.number, hole.id]));
       nine.playerNames.forEach((writtenName, playerIndex) => {
         const review = players.find((entry) => entry.name === writtenName);
         if (!review?.playerId) return;
         const existing = targetSet.scores[review.playerId];
         if (!existing) return;
         const numbers = nine.holes
-          .filter((hole, holeIndex) => {
-            const holeId = holeIdByNumber.get(hole.number);
-            return (
+          .filter(
+            (hole, holeIndex) =>
               (nine.scores[holeIndex]?.[playerIndex] ?? null) !== null &&
-              holeId !== undefined &&
-              existing[holeId] !== undefined
-            );
-          })
+              existing[hole.number] !== undefined,
+          )
           .map((hole) => hole.number)
           .sort((a, b) => a - b);
         if (numbers.length === 0) return;
@@ -417,6 +426,39 @@ export function ReviewRound({
   const merging = mergeTarget !== null;
   const effectiveCourseId = mergeTarget ? mergeTarget.course.id : courseId;
   const selectedCourse = courses.find((course) => course.id === effectiveCourseId) ?? null;
+
+  // Fill in default tees wherever a nine has a set but a player has no tee
+  // yet (or holds one from a previously selected set). Runs whenever the
+  // inputs to the default change; manual picks that are still valid for the
+  // set are never overwritten, and the no-op case returns the same state
+  // object so this can't loop.
+  useEffect(() => {
+    if (!selectedCourse) return;
+    setNines((current) => {
+      let anyChanged = false;
+      const next = current.map((nine) => {
+        const set = selectedCourse.sets.find((entry) => entry.id === nine.courseSetId);
+        if (!set) return nine;
+        const mergeSet = mergeTarget?.sets.find((entry) => entry.id === nine.courseSetId);
+        let nineChanged = false;
+        const teeIds = nine.playerNames.map((name, playerIndex) => {
+          const currentTee = nine.teeIds[playerIndex] ?? null;
+          if (currentTee !== null && set.tees.some((tee) => tee.id === currentTee)) {
+            return currentTee;
+          }
+          const review = players.find((entry) => entry.name === name);
+          const golfer = golfers.find((entry) => entry.id === review?.playerId);
+          const fallback = defaultTeeFor(set, golfer, mergeSet)?.id ?? null;
+          if (fallback !== currentTee) nineChanged = true;
+          return fallback;
+        });
+        if (!nineChanged) return nine;
+        anyChanged = true;
+        return { ...nine, teeIds };
+      });
+      return anyChanged ? next : current;
+    });
+  }, [selectedCourse, golfers, players, mergeTarget, nines]);
 
   // Ask the API whether an outing already exists on this date with any of the
   // selected course sets — the two-scorecards-one-foursome case.
@@ -454,8 +496,18 @@ export function ReviewRound({
   }
 
   function assignGolfer(index: number, golferId: string | null) {
-    const golfer = golfers.find((entry) => entry.id === golferId);
-    updatePlayer(index, { playerId: golferId, tee: golfer?.preferredTee ?? null });
+    const writtenName = players[index]?.name;
+    updatePlayer(index, { playerId: golferId });
+    // Clear the player's per-nine tees so the defaulting effect re-derives
+    // them from the newly assigned golfer's preference.
+    setNines((current) =>
+      current.map((nine) => ({
+        ...nine,
+        teeIds: nine.teeIds.map((teeId, playerIndex) =>
+          nine.playerNames[playerIndex] === writtenName ? null : teeId,
+        ),
+      })),
+    );
   }
 
   function updateNine(index: number, update: Partial<NineReview>) {
@@ -477,19 +529,26 @@ export function ReviewRound({
   }
 
   // Changing the course re-derives each nine's set: an exact par-sequence
-  // match wins, then a case-insensitive name match, else unassigned.
+  // match against any of a set's tee layouts wins, then a case-insensitive
+  // name match, else unassigned. Tees reset so the defaults re-derive.
   function changeCourse(nextCourseId: string | null) {
     setCourseId(nextCourseId);
     const nextCourse = courses.find((course) => course.id === nextCourseId);
     setNines((current) =>
       current.map((nine) => {
         const signature = parSignature(nine.holes);
-        const byPars = nextCourse?.sets.filter((set) => parSignature(set.holes) === signature);
+        const byPars = nextCourse?.sets.filter((set) =>
+          set.tees.some((tee) => parSignature(tee.holes) === signature),
+        );
         const byName = nextCourse?.sets.find(
           (set) => set.name.toLowerCase() === (nine.nineName ?? "").toLowerCase(),
         );
         const next = byPars?.length === 1 ? byPars[0] : byName;
-        return { ...nine, courseSetId: next?.id ?? null };
+        return {
+          ...nine,
+          courseSetId: next?.id ?? null,
+          teeIds: nine.playerNames.map(() => null),
+        };
       }),
     );
   }
@@ -584,14 +643,25 @@ export function ReviewRound({
       }
       const set = selectedCourse?.sets.find((entry) => entry.id === nine.courseSetId);
       if (!set) return;
-      const setNumbers = new Set(set.holes.map((hole) => hole.number));
-      const missing = nine.holes.filter((hole) => !setNumbers.has(hole.number));
-      if (missing.length > 0) {
-        list.push(
-          `“${title}”: ${set.name} has no hole ${missing.map((hole) => hole.number).join(", ")} — ` +
-            "pick a different nine.",
-        );
+      if (set.tees.length === 0) {
+        list.push(`“${title}”: ${set.name} has no tees recorded — pick a different nine.`);
+        return;
       }
+      nine.playerNames.forEach((name, playerIndex) => {
+        const tee = set.tees.find((entry) => entry.id === nine.teeIds[playerIndex]);
+        if (!tee) {
+          list.push(`Pick which tee ${golferLabel(name)} played “${title}” from.`);
+          return;
+        }
+        const teeNumbers = new Set(tee.holes.map((hole) => hole.number));
+        const missing = nine.holes.filter((hole) => !teeNumbers.has(hole.number));
+        if (missing.length > 0) {
+          list.push(
+            `“${title}”: the ${teeLabel(tee)} tees of ${set.name} have no hole ` +
+              `${missing.map((hole) => hole.number).join(", ")} — pick a different nine or tee.`,
+          );
+        }
+      });
       if (
         nines.some(
           (other, otherIndex) => otherIndex !== index && other.courseSetId === nine.courseSetId,
@@ -619,23 +689,28 @@ export function ReviewRound({
         scorecardId,
         outingId: mergeTarget?.id ?? null,
         courseId: mergeTarget ? null : courseId,
-        newCourse: null,
-        nines: nines.map((nine) => ({
-          courseSetId: nine.courseSetId,
-          newSet: null,
-          players: nine.playerNames.map((name, playerIndex) => {
-            const player = players.find((entry) => entry.name === name);
-            if (!player?.playerId) throw new Error(`“${name}” is not matched to a golfer.`);
-            return {
-              playerId: player.playerId,
-              tee: player.tee,
-              scores: nine.holes.map((hole, holeIndex) => ({
-                holeNumber: hole.number,
-                score: nine.scores[holeIndex]?.[playerIndex] ?? null,
-              })),
-            };
-          }),
-        })),
+        nines: nines.map((nine) => {
+          if (nine.courseSetId === null) {
+            throw new Error(`“${defaultNineName(nine)}” has no nine selected.`);
+          }
+          return {
+            courseSetId: nine.courseSetId,
+            players: nine.playerNames.map((name, playerIndex) => {
+              const player = players.find((entry) => entry.name === name);
+              if (!player?.playerId) throw new Error(`“${name}” is not matched to a golfer.`);
+              const teeId = nine.teeIds[playerIndex] ?? null;
+              if (teeId === null) throw new Error(`“${name}” has no tee selected.`);
+              return {
+                playerId: player.playerId,
+                courseSetTeeId: teeId,
+                scores: nine.holes.map((hole, holeIndex) => ({
+                  holeNumber: hole.number,
+                  score: nine.scores[holeIndex]?.[playerIndex] ?? null,
+                })),
+              };
+            }),
+          };
+        }),
       };
       const response = await client.api.outings.$post({ json: payload });
       if (!response.ok) {
@@ -712,7 +787,7 @@ export function ReviewRound({
 
         <ReviewSection
           title="Golfers"
-          description="Match each name written on the card to a golfer and confirm their tee."
+          description="Match each name written on the card to a golfer — tees are picked per nine in the next step."
         >
           <div className="flex flex-col divide-y">
             {players.map((player, index) => {
@@ -734,55 +809,33 @@ export function ReviewRound({
                       Same golfer as {aliases.join(" and ")} — their nines are scored as one player.
                     </p>
                   )}
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <Select
-                      items={[
-                        { value: null, label: "— Choose golfer —" },
-                        ...golfers.map((golfer) => ({
-                          value: golfer.id,
-                          label: golfer.name ?? golfer.email ?? "Unnamed golfer",
-                        })),
-                      ]}
-                      value={player.playerId}
-                      onValueChange={(value) => assignGolfer(index, value as string | null)}
+                  <Select
+                    items={[
+                      { value: null, label: "— Choose golfer —" },
+                      ...golfers.map((golfer) => ({
+                        value: golfer.id,
+                        label: golfer.name ?? golfer.email ?? "Unnamed golfer",
+                      })),
+                    ]}
+                    value={player.playerId}
+                    onValueChange={(value) => assignGolfer(index, value as string | null)}
+                  >
+                    <SelectTrigger
+                      className="w-full"
+                      aria-label={`Golfer for ${player.name}`}
+                      aria-invalid={player.playerId === null}
                     >
-                      <SelectTrigger
-                        className="w-full"
-                        aria-label={`Golfer for ${player.name}`}
-                        aria-invalid={player.playerId === null}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={null}>— Choose golfer —</SelectItem>
-                        {golfers.map((golfer) => (
-                          <SelectItem key={golfer.id} value={golfer.id}>
-                            {golfer.name ?? golfer.email ?? "Unnamed golfer"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      items={[
-                        { value: null, label: "Tee not recorded" },
-                        ...TEES.map((tee) => ({ value: tee, label: `${TEE_LABELS[tee]} tees` })),
-                      ]}
-                      value={player.tee}
-                      onValueChange={(value) => updatePlayer(index, { tee: value as Tee | null })}
-                    >
-                      <SelectTrigger className="w-full" aria-label={`Tee for ${player.name}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={null}>Tee not recorded</SelectItem>
-                        {TEES.map((tee) => (
-                          <SelectItem key={tee} value={tee}>
-                            {TEE_LABELS[tee]} tees
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={null}>— Choose golfer —</SelectItem>
+                      {golfers.map((golfer) => (
+                        <SelectItem key={golfer.id} value={golfer.id}>
+                          {golfer.name ?? golfer.email ?? "Unnamed golfer"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               );
             })}
@@ -816,13 +869,24 @@ export function ReviewRound({
     <div className="flex flex-col gap-5">
       {nines.map((nine, nineIndex) => {
         const set = selectedCourse?.sets.find((entry) => entry.id === nine.courseSetId);
-        const setParByNumber = new Map(set?.holes.map((hole) => [hole.number, hole.par]) ?? []);
+        // Par per tee, for the database-par column and the score notation:
+        // the column shows the first player's tee (pars rarely differ), each
+        // score cell judges against the tee its player actually hit from.
+        const parByTee = new Map(
+          (set?.tees ?? []).map((tee) => [
+            tee.id,
+            new Map(tee.holes.map((hole) => [hole.number, hole.par])),
+          ]),
+        );
+        const playerPars = (playerIndex: number) =>
+          parByTee.get(nine.teeIds[playerIndex] ?? "") ?? null;
+        const displayPars = playerPars(0) ?? [...parByTee.values()][0] ?? null;
         const computedTotals = nineComputedTotals(nine);
         return (
           <ReviewSection
             key={nineIndex}
             title={defaultNineName(nine)}
-            description="Confirm which nine this is, fix any misread scores, then check the totals."
+            description="Confirm which nine this is and each golfer's tee, fix any misread scores, then check the totals."
           >
             <div className="flex flex-col gap-2">
               <Label>Nine at {selectedCourse?.name ?? "the course"}</Label>
@@ -836,7 +900,11 @@ export function ReviewRound({
                 ]}
                 value={nine.courseSetId}
                 onValueChange={(value) =>
-                  updateNine(nineIndex, { courseSetId: value as string | null })
+                  updateNine(nineIndex, {
+                    courseSetId: value as string | null,
+                    // Reset tees so the defaults re-derive for the new set.
+                    teeIds: nine.playerNames.map(() => null),
+                  })
                 }
               >
                 <SelectTrigger
@@ -849,7 +917,9 @@ export function ReviewRound({
                 <SelectContent>
                   <SelectItem value={null}>— Choose nine —</SelectItem>
                   {(selectedCourse?.sets ?? []).map((entry) => {
-                    const numbers = entry.holes.map((hole) => hole.number);
+                    const numbers = entry.tees.flatMap((tee) =>
+                      tee.holes.map((hole) => hole.number),
+                    );
                     const range =
                       numbers.length > 0
                         ? ` · holes ${Math.min(...numbers)}–${Math.max(...numbers)}`
@@ -864,6 +934,49 @@ export function ReviewRound({
                 </SelectContent>
               </Select>
             </div>
+
+            {set && set.tees.length > 0 && (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {nine.playerNames.map((name, playerIndex) => (
+                  <div key={name} className="flex flex-col gap-2">
+                    <Label>Tee for {golferLabel(name)}</Label>
+                    <Select
+                      items={[
+                        { value: null, label: "— Choose tee —" },
+                        ...sortTees(set.tees).map((tee) => ({
+                          value: tee.id,
+                          label: teeLabel(tee),
+                        })),
+                      ]}
+                      value={nine.teeIds[playerIndex] ?? null}
+                      onValueChange={(value) =>
+                        updateNine(nineIndex, {
+                          teeIds: nine.teeIds.map((teeId, index) =>
+                            index === playerIndex ? (value as string | null) : teeId,
+                          ),
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        className="w-full"
+                        aria-label={`Tee for ${golferLabel(name)} on ${defaultNineName(nine)}`}
+                        aria-invalid={nine.teeIds[playerIndex] === null}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={null}>— Choose tee —</SelectItem>
+                        {sortTees(set.tees).map((tee) => (
+                          <SelectItem key={tee.id} value={tee.id}>
+                            {teeLabel(tee)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full min-w-max text-sm">
@@ -883,14 +996,14 @@ export function ReviewRound({
                     <tr key={hole.number} className="border-b">
                       <td className="p-2 pl-0 font-medium">{hole.number}</td>
                       <td className="p-2 text-muted-foreground">
-                        {setParByNumber.get(hole.number) ?? hole.par}
+                        {displayPars?.get(hole.number) ?? hole.par}
                       </td>
                       {nine.playerNames.map((name, playerIndex) => (
                         <td key={name} className="p-2 text-center">
                           <GolfScore
                             aria-label={`${golferLabel(name)}'s score on hole ${hole.number}`}
                             score={nine.scores[holeIndex]?.[playerIndex] ?? null}
-                            par={setParByNumber.get(hole.number) ?? hole.par}
+                            par={playerPars(playerIndex)?.get(hole.number) ?? hole.par}
                             onChange={(raw) => setScore(nineIndex, holeIndex, playerIndex, raw)}
                           />
                         </td>
@@ -903,8 +1016,8 @@ export function ReviewRound({
                     <td className="p-2 pl-0 font-medium">Total</td>
                     <td className="p-2" />
                     {nine.playerNames.map((name, playerIndex) => (
-                      <td key={name} className="p-2 text-center font-medium tabular-nums">
-                        {computedTotals[playerIndex] ?? "–"}
+                      <td key={name} className="p-2 text-center font-medium">
+                        <Score value={computedTotals[playerIndex] ?? null} />
                       </td>
                     ))}
                   </tr>

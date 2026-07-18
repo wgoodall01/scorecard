@@ -1,6 +1,5 @@
 export type CaptureQueueMessage = {
-  captureId: string;
-  email: string;
+  scorecardId: string;
 };
 
 export type Env = {

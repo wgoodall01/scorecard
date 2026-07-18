@@ -3,14 +3,16 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
-import { course, courseSet, hole, outing, outingPlayer, score, TEES, uuidv7 } from "../schema";
+import { course, courseSet, courseSetTee, outing, score, scoreSet, uuidv7 } from "../schema";
 import { requireAuth, zodBody, zodQuery } from "./shared";
 
 const NaiveDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const SubmitPlayerScores = z.object({
   playerId: z.string().min(1),
-  tee: z.enum(TEES).nullable(),
+  // The tee this player played this nine from; must belong to the nine's
+  // course set.
+  courseSetTeeId: z.string().min(1),
   scores: z.array(
     z.object({
       holeNumber: z.number().int().min(1).max(18),
@@ -20,23 +22,13 @@ export const SubmitPlayerScores = z.object({
 });
 export type SubmitPlayerScoresSchema = z.infer<typeof SubmitPlayerScores>;
 
-export const NewCourseSet = z.object({
-  name: z.string().trim().min(1),
-  disposition: z.enum(["front", "back"]).nullable(),
-  holes: z
-    .array(z.object({ number: z.number().int().min(1).max(18), par: z.number().int().min(1) }))
-    .min(1),
+// Submissions only ever reference EXISTING courses, sets, and tees — there
+// is no API to create or edit course data; it's imported directly into the
+// database (seed script, ratings scraper).
+const SubmitNine = z.object({
+  courseSetId: z.string().min(1),
+  players: z.array(SubmitPlayerScores).min(1),
 });
-export type NewCourseSetSchema = z.infer<typeof NewCourseSet>;
-
-const SubmitNine = z
-  .object({
-    // Exactly one of courseSetId (an existing set) or newSet (create it).
-    courseSetId: z.string().min(1).nullable(),
-    newSet: NewCourseSet.nullable(),
-    players: z.array(SubmitPlayerScores).min(1),
-  })
-  .refine((nine) => (nine.courseSetId === null) !== (nine.newSet === null));
 
 export const SubmitOutingRequest = z
   .object({
@@ -45,75 +37,89 @@ export const SubmitOutingRequest = z
     scorecardId: z.string().min(1).nullable(),
     // Merge target: when set, scores are added to this outing and the
     // course/date come from it. Otherwise a new outing is created on
-    // courseId, or on a newly created newCourse.
+    // courseId.
     outingId: z.string().min(1).nullable(),
     courseId: z.string().min(1).nullable(),
-    newCourse: z
-      .object({ name: z.string().trim().min(1), location: z.string().trim().min(1).nullable() })
-      .nullable(),
     nines: z.array(SubmitNine).min(1),
   })
-  .refine(
-    (request) =>
-      request.outingId !== null || (request.courseId === null) !== (request.newCourse === null),
-  );
+  .refine((request) => request.outingId !== null || request.courseId !== null);
 export type SubmitOutingRequestSchema = z.infer<typeof SubmitOutingRequest>;
 
 // Everything the outing page needs, assembled from one relational query.
+// Scores key by hole NUMBER (not hole id): two players on the same nine may
+// have played different tees, whose holes are distinct rows.
 async function loadOutingDetail(db: ReturnType<typeof getDb>, id: string) {
   const found = await db.query.outing.findFirst({
     where: eq(outing.id, id),
     with: {
       course: true,
-      players: { with: { player: { columns: { id: true, name: true, email: true } } } },
-      scores: {
+      scoreSets: {
         with: {
-          hole: { with: { courseSet: { with: { holes: true } } } },
-          scorecard: true,
+          player: { columns: { id: true, name: true, email: true } },
+          tee: { with: { courseSet: true, holes: true } },
+          scores: { with: { hole: true, scorecard: true } },
         },
       },
     },
   });
   if (!found) return null;
 
-  // Group scores into the sets that were actually played.
+  // Group score sets into the course sets that were actually played.
   const sets = new Map<
     string,
     {
       id: string;
       name: string;
-      disposition: "front" | "back" | null;
-      holes: { id: string; number: number; name: string | null; par: number }[];
-      // scores[playerId][holeId] = strokes
-      scores: Record<string, Record<string, number>>;
+      // The display layout: the holes of the first tee seen on this set
+      // (pars can differ slightly between tees; per-player exactness lives
+      // in the score notation, which is judged server-side of the tee they
+      // actually played via `parByPlayer`).
+      holes: { number: number; par: number }[];
+      // scores[playerId][holeNumber] = strokes
+      scores: Record<string, Record<number, number>>;
+      // Which tee each player played this nine from.
+      tees: Record<string, { id: string; name: string }>;
+      // parByPlayer[playerId][holeNumber] = par of the hole on THEIR tee.
+      parByPlayer: Record<string, Record<number, number>>;
     }
   >();
-  for (const cell of found.scores) {
-    const set = cell.hole.courseSet;
+  const players = new Map<string, { id: string; name: string | null; email: string | null }>();
+  for (const played of found.scoreSets) {
+    players.set(played.player.id, played.player);
+    const set = played.tee.courseSet;
     let entry = sets.get(set.id);
     if (!entry) {
       entry = {
         id: set.id,
         name: set.name,
-        disposition: set.disposition ?? null,
-        holes: [...set.holes]
+        holes: [...played.tee.holes]
           .sort((a, b) => a.number - b.number)
-          .map(({ id, number, name, par }) => ({ id, number, name, par })),
+          .map(({ number, par }) => ({ number, par })),
         scores: {},
+        tees: {},
+        parByPlayer: {},
       };
       sets.set(set.id, entry);
     }
-    (entry.scores[cell.playerId] ??= {})[cell.holeId] = cell.score;
+    entry.tees[played.playerId] = { id: played.tee.id, name: played.tee.name };
+    const holePars = new Map(played.tee.holes.map((teeHole) => [teeHole.id, teeHole]));
+    for (const cell of played.scores) {
+      const teeHole = holePars.get(cell.holeId) ?? cell.hole;
+      (entry.scores[played.playerId] ??= {})[teeHole.number] = cell.score;
+      (entry.parByPlayer[played.playerId] ??= {})[teeHole.number] = teeHole.par;
+    }
   }
 
   // The distinct captured cards these scores came from, oldest first.
   const scorecards = new Map<string, { id: string; createdAt: string }>();
-  for (const cell of found.scores) {
-    if (cell.scorecard) {
-      scorecards.set(cell.scorecard.id, {
-        id: cell.scorecard.id,
-        createdAt: cell.scorecard.createdAt,
-      });
+  for (const played of found.scoreSets) {
+    for (const cell of played.scores) {
+      if (cell.scorecard) {
+        scorecards.set(cell.scorecard.id, {
+          id: cell.scorecard.id,
+          createdAt: cell.scorecard.createdAt,
+        });
+      }
     }
   }
 
@@ -121,12 +127,7 @@ async function loadOutingDetail(db: ReturnType<typeof getDb>, id: string) {
     id: found.id,
     date: found.date,
     course: { id: found.course.id, name: found.course.name, location: found.course.location },
-    players: found.players.map((entry) => ({
-      id: entry.player.id,
-      name: entry.player.name,
-      email: entry.player.email,
-      tee: entry.tee ?? null,
-    })),
+    players: [...players.values()],
     sets: [...sets.values()].sort((a, b) => (a.holes[0]?.number ?? 0) - (b.holes[0]?.number ?? 0)),
     scorecards: [...scorecards.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
   };
@@ -134,36 +135,71 @@ async function loadOutingDetail(db: ReturnType<typeof getDb>, id: string) {
 
 export type OutingDetail = NonNullable<Awaited<ReturnType<typeof loadOutingDetail>>>;
 
-// Summaries for the outings list: course, players, sets, per-player strokes.
+// Summaries for the outings list: course, players, sets, per-player strokes
+// (flagged `incomplete` when the player scored some but not all of the
+// outing's holes — an incomplete total isn't comparable to complete ones).
 async function loadOutingSummaries(db: ReturnType<typeof getDb>, where?: ReturnType<typeof eq>) {
   const outings = await db.query.outing.findMany({
     where,
     orderBy: [desc(outing.date), desc(outing.id)],
     with: {
       course: true,
-      players: { with: { player: { columns: { id: true, name: true, email: true } } } },
-      scores: { with: { hole: { with: { courseSet: { columns: { id: true, name: true } } } } } },
+      scoreSets: {
+        with: {
+          player: { columns: { id: true, name: true, email: true } },
+          tee: {
+            with: {
+              courseSet: { columns: { id: true, name: true } },
+              holes: { columns: { number: true } },
+            },
+          },
+          scores: { columns: { score: true } },
+        },
+      },
     },
   });
 
   return outings.map((entry) => {
     const sets = new Map<string, string>();
     const totals = new Map<string, number>();
-    for (const cell of entry.scores) {
-      sets.set(cell.hole.courseSet.id, cell.hole.courseSet.name);
-      totals.set(cell.playerId, (totals.get(cell.playerId) ?? 0) + cell.score);
+    const scoredCells = new Map<string, number>();
+    const players = new Map<string, { id: string; name: string | null; email: string | null }>();
+    // The outing's hole count: per set, the union of hole numbers across
+    // the tees that were actually played (they should agree).
+    const holeNumbersBySet = new Map<string, Set<number>>();
+    for (const played of entry.scoreSets) {
+      sets.set(played.tee.courseSet.id, played.tee.courseSet.name);
+      players.set(played.player.id, played.player);
+      let numbers = holeNumbersBySet.get(played.tee.courseSet.id);
+      if (!numbers) {
+        numbers = new Set();
+        holeNumbersBySet.set(played.tee.courseSet.id, numbers);
+      }
+      for (const teeHole of played.tee.holes) numbers.add(teeHole.number);
+      for (const cell of played.scores) {
+        totals.set(played.playerId, (totals.get(played.playerId) ?? 0) + cell.score);
+        scoredCells.set(played.playerId, (scoredCells.get(played.playerId) ?? 0) + 1);
+      }
     }
+    const totalHoles = [...holeNumbersBySet.values()].reduce(
+      (sum, numbers) => sum + numbers.size,
+      0,
+    );
     return {
       id: entry.id,
       date: entry.date,
       course: { id: entry.course.id, name: entry.course.name },
       sets: [...sets.entries()].map(([id, name]) => ({ id, name })),
-      players: entry.players.map((player) => ({
-        id: player.player.id,
-        name: player.player.name,
-        email: player.player.email,
-        total: totals.get(player.playerId) ?? null,
-      })),
+      players: [...players.values()].map((player) => {
+        const scored = scoredCells.get(player.id) ?? 0;
+        return {
+          id: player.id,
+          name: player.name,
+          email: player.email,
+          total: totals.get(player.id) ?? null,
+          incomplete: scored > 0 && scored < totalHoles,
+        };
+      }),
     };
   });
 }
@@ -173,7 +209,12 @@ export const outingRoutes = new Hono<Env>()
     const db = getDb(c.env.DB);
     const courses = await db.query.course.findMany({
       orderBy: [asc(course.name)],
-      with: { sets: { orderBy: [asc(courseSet.name)], with: { holes: true, ratings: true } } },
+      with: {
+        sets: {
+          orderBy: [asc(courseSet.name)],
+          with: { tees: { orderBy: [asc(courseSetTee.name)], with: { holes: true } } },
+        },
+      },
     });
     return c.json({ courses });
   })
@@ -242,9 +283,11 @@ export const outingRoutes = new Hono<Env>()
   // Merge another outing's rows into this one — the counterpart of the
   // capture flow's "add to existing outing", for two rounds that were
   // recorded separately (one foursome, two scorecards, both submitted as
-  // fresh outings). Everything moves to the target: where both outings have
-  // the same player+hole score or the same player, the target's row wins,
-  // and the emptied source outing is deleted.
+  // fresh outings). Everything moves to the target. Where both outings have
+  // a score for the same player on the same nine and hole number (whichever
+  // tee it was recorded against), the target's cell wins; score sets that
+  // duplicate a target (player, tee) pair pour their remaining scores into
+  // the target's set, and the emptied source outing is deleted.
   .post(
     "/outings/:id/merge",
     requireAuth,
@@ -267,27 +310,69 @@ export const outingRoutes = new Hono<Env>()
       }
 
       await db.batch([
-        // Drop source cells the target already has...
+        // Drop source cells the target already has — same player, same
+        // course set, same hole NUMBER (the tees, and so the hole ids, may
+        // differ between the two recordings of the nine)...
         db.delete(score).where(
-          and(
-            eq(score.outingId, sourceId),
-            sql`(${score.playerId}, ${score.holeId}) IN
-                (SELECT player_id, hole_id FROM score WHERE outing_id = ${targetId})`,
-          ),
+          sql`${score.scoreSetId} IN (SELECT id FROM score_set WHERE outing_id = ${sourceId})
+              AND EXISTS (
+                SELECT 1
+                FROM score_set src
+                JOIN course_set_tee src_tee ON src_tee.id = src.course_set_tee_id
+                JOIN hole src_hole          ON src_hole.id = ${score.holeId}
+                JOIN score_set tgt          ON tgt.outing_id = ${targetId}
+                                           AND tgt.player_id = src.player_id
+                JOIN course_set_tee tgt_tee ON tgt_tee.id = tgt.course_set_tee_id
+                                           AND tgt_tee.course_set_id = src_tee.course_set_id
+                JOIN hole tgt_hole          ON tgt_hole.course_set_tee_id = tgt_tee.id
+                                           AND tgt_hole.number = src_hole.number
+                JOIN score tgt_score        ON tgt_score.score_set_id = tgt.id
+                                           AND tgt_score.hole_id = tgt_hole.id
+                WHERE src.id = ${score.scoreSetId}
+              )`,
         ),
-        // ...move the rest, and likewise for the per-outing player tees...
-        db.update(score).set({ outingId: targetId }).where(eq(score.outingId, sourceId)),
-        db.delete(outingPlayer).where(
-          and(
-            eq(outingPlayer.outingId, sourceId),
-            sql`${outingPlayer.playerId} IN
-                (SELECT player_id FROM outing_player WHERE outing_id = ${targetId})`,
-          ),
-        ),
+        // ...pour scores whose (player, tee) score set already exists on the
+        // target into that set...
         db
-          .update(outingPlayer)
-          .set({ outingId: targetId })
-          .where(eq(outingPlayer.outingId, sourceId)),
+          .update(score)
+          .set({
+            scoreSetId: sql`(
+              SELECT tgt.id FROM score_set src
+              JOIN score_set tgt ON tgt.outing_id = ${targetId}
+                                AND tgt.player_id = src.player_id
+                                AND tgt.course_set_tee_id = src.course_set_tee_id
+              WHERE src.id = ${score.scoreSetId})`,
+          })
+          .where(
+            sql`${score.scoreSetId} IN (
+              SELECT src.id FROM score_set src
+              JOIN score_set tgt ON tgt.outing_id = ${targetId}
+                                AND tgt.player_id = src.player_id
+                                AND tgt.course_set_tee_id = src.course_set_tee_id
+              WHERE src.outing_id = ${sourceId})`,
+          ),
+        // ...retire the source score sets those scores just left...
+        db.delete(scoreSet).where(
+          and(
+            eq(scoreSet.outingId, sourceId),
+            sql`EXISTS (
+              SELECT 1 FROM score_set tgt
+              WHERE tgt.outing_id = ${targetId}
+                AND tgt.player_id = ${scoreSet.playerId}
+                AND tgt.course_set_tee_id = ${scoreSet.courseSetTeeId})`,
+          ),
+        ),
+        // ...move the remaining score sets wholesale...
+        db.update(scoreSet).set({ outingId: targetId }).where(eq(scoreSet.outingId, sourceId)),
+        // ...drop any score set the conflict pass emptied out...
+        db
+          .delete(scoreSet)
+          .where(
+            and(
+              eq(scoreSet.outingId, targetId),
+              sql`NOT EXISTS (SELECT 1 FROM score s WHERE s.score_set_id = ${scoreSet.id})`,
+            ),
+          ),
         // ...then retire the emptied source outing.
         db.delete(outing).where(eq(outing.id, sourceId)),
       ]);
@@ -320,81 +405,77 @@ export const outingRoutes = new Hono<Env>()
       let courseId: string;
       const batch: Parameters<typeof db.batch>[0][number][] = [];
 
+      // Score sets that already exist on the target outing (merge case),
+      // keyed player/tee — scores upsert into them rather than tripping the
+      // score_set unique index.
+      const scoreSetIds = new Map<string, string>();
       if (request.outingId) {
         const existing = await db.query.outing.findFirst({
           where: eq(outing.id, request.outingId),
+          with: { scoreSets: true },
         });
         if (!existing) return c.json({ error: "Outing not found" }, 404);
         outingId = existing.id;
         courseId = existing.courseId;
-      } else {
-        if (request.newCourse) {
-          courseId = uuidv7();
-          batch.push(
-            db.insert(course).values({
-              id: courseId,
-              name: request.newCourse.name,
-              location: request.newCourse.location,
-            }),
-          );
-        } else {
-          const existingCourse = await db.query.course.findFirst({
-            where: eq(course.id, request.courseId ?? ""),
-          });
-          if (!existingCourse) return c.json({ error: "Course not found" }, 404);
-          courseId = existingCourse.id;
+        for (const existingSet of existing.scoreSets) {
+          scoreSetIds.set(`${existingSet.playerId}/${existingSet.courseSetTeeId}`, existingSet.id);
         }
+      } else {
+        const existingCourse = await db.query.course.findFirst({
+          where: eq(course.id, request.courseId ?? ""),
+        });
+        if (!existingCourse) return c.json({ error: "Course not found" }, 404);
+        courseId = existingCourse.id;
         outingId = uuidv7();
         batch.push(db.insert(outing).values({ id: outingId, date: request.date, courseId }));
       }
 
-      // Per nine: resolve (or create) the course set and its holes, keyed by
-      // hole number, then stage every player's non-null scores.
-      const playerTees = new Map<string, (typeof TEES)[number] | null>();
+      // Per nine: resolve the course set with its tees and their holes, then
+      // stage every player's score set and non-null scores.
       for (const nine of request.nines) {
-        let holeIdByNumber: Map<number, string>;
-        if (nine.newSet) {
-          const setId = uuidv7();
-          batch.push(
-            db.insert(courseSet).values({
-              id: setId,
-              courseId,
-              name: nine.newSet.name,
-              disposition: nine.newSet.disposition,
-            }),
-          );
-          holeIdByNumber = new Map();
-          for (const newHole of nine.newSet.holes) {
-            const holeId = uuidv7();
-            holeIdByNumber.set(newHole.number, holeId);
+        const existingSet = await db.query.courseSet.findFirst({
+          where: eq(courseSet.id, nine.courseSetId),
+          with: { tees: { with: { holes: true } } },
+        });
+        if (!existingSet || existingSet.courseId !== courseId) {
+          return c.json({ error: "Course set not found on this course" }, 404);
+        }
+        // holeIdByNumber per tee id.
+        const holesByTee = new Map<string, Map<number, string>>(
+          existingSet.tees.map((tee) => [
+            tee.id,
+            new Map(tee.holes.map((entry) => [entry.number, entry.id])),
+          ]),
+        );
+
+        for (const player of nine.players) {
+          const teeId = player.courseSetTeeId;
+          if (!holesByTee.has(teeId)) {
+            return c.json({ error: "Tee not found on the selected course set" }, 400);
+          }
+          const holeIdByNumber = holesByTee.get(teeId)!;
+
+          const scoreSetKey = `${player.playerId}/${teeId}`;
+          let scoreSetId = scoreSetIds.get(scoreSetKey);
+          if (!scoreSetId) {
+            scoreSetId = uuidv7();
+            scoreSetIds.set(scoreSetKey, scoreSetId);
             batch.push(
-              db.insert(hole).values({
-                id: holeId,
-                courseSetId: setId,
-                number: newHole.number,
-                par: newHole.par,
+              db.insert(scoreSet).values({
+                id: scoreSetId,
+                outingId,
+                playerId: player.playerId,
+                courseSetTeeId: teeId,
               }),
             );
           }
-        } else {
-          const existingSet = await db.query.courseSet.findFirst({
-            where: eq(courseSet.id, nine.courseSetId ?? ""),
-            with: { holes: true },
-          });
-          if (!existingSet || existingSet.courseId !== courseId) {
-            return c.json({ error: "Course set not found on this course" }, 404);
-          }
-          holeIdByNumber = new Map(existingSet.holes.map((entry) => [entry.number, entry.id]));
-        }
 
-        for (const player of nine.players) {
-          if (!playerTees.has(player.playerId)) playerTees.set(player.playerId, player.tee);
           for (const cell of player.scores) {
             if (cell.score === null) continue;
             const holeId = holeIdByNumber.get(cell.holeNumber);
             if (!holeId) {
               return c.json(
-                { error: `Hole ${cell.holeNumber} does not exist on the selected course set` },
+                { error: `Hole ${cell.holeNumber} does not exist on the selected tee` },
                 400,
               );
             }
@@ -402,31 +483,18 @@ export const outingRoutes = new Hono<Env>()
               db
                 .insert(score)
                 .values({
-                  outingId,
-                  playerId: player.playerId,
+                  scoreSetId,
                   holeId,
                   score: cell.score,
                   scorecardId: request.scorecardId,
                 })
                 .onConflictDoUpdate({
-                  target: [score.outingId, score.playerId, score.holeId],
+                  target: [score.scoreSetId, score.holeId],
                   set: { score: cell.score, scorecardId: request.scorecardId },
                 }),
             );
           }
         }
-      }
-
-      for (const [playerId, tee] of playerTees) {
-        batch.push(
-          db
-            .insert(outingPlayer)
-            .values({ outingId, playerId, tee })
-            .onConflictDoUpdate({
-              target: [outingPlayer.outingId, outingPlayer.playerId],
-              set: { tee },
-            }),
-        );
       }
 
       if (batch.length > 0) {

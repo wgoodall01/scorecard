@@ -22,6 +22,8 @@ The handwritten names may be full names, first names, last names, initials (e.g.
 
 Use the searchPlayers tool as many times as you need. It does a case-insensitive substring search over player names, emails, and nicknames — so search with short fragments: a last name, a first name, a nickname guess, or even a single letter to list candidates. For initials like "WG", search each initial and look for a player whose first and last name start with those letters. For misspellings, try fragments that survive the typo (e.g. "smit" for "Smtih") or single letters, then compare candidates by similarity.
 
+The searches are independent of each other, so batch them: issue ALL the searches you currently want as parallel searchPlayers calls in a single turn (e.g. open with one search per written name at once), rather than one search per turn. Follow up with another parallel batch only where the results leave a name unresolved.
+
 Matching rules:
 - Only return a userId you saw in a searchPlayers result.
 - Match a player only when they are clearly the best fit. If two registered players could both plausibly be the written name (e.g. "J. Smith" when both John Smith and Jane Smith exist), return null for that name — a wrong match is worse than no match.

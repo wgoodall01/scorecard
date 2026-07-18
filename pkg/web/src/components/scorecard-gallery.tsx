@@ -16,7 +16,7 @@ export function ScorecardGallery({ scorecards }: { scorecards: { id: string }[] 
     const created: string[] = [];
     void Promise.all(
       scorecards.map(async (card) => {
-        const response = await client.api.scorecards[":id"].image.$get({
+        const response = await client.api.scorecard[":id"].image.$get({
           param: { id: card.id },
         });
         if (!response.ok || cancelled) return null;

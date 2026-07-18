@@ -20,7 +20,7 @@ import { z } from "zod";
 import { evalModel, type ModelSpec } from "../../../model";
 import { type MatchEvalCase, runMatchEvalCli } from "../../match_eval";
 import { matchCourseSets } from "../agent";
-import { courseSearchFromList, courseSetParsFromList } from "../search";
+import { courseSearchFromList, courseSetParsFromList, holeRange } from "../search";
 
 const evalDir = fileURLToPath(new URL(".", import.meta.url));
 
@@ -35,15 +35,7 @@ const Fixture = z.object({
       id: z.string(),
       name: z.string(),
       location: z.string().nullable(),
-      sets: z.array(
-        z
-          .object({
-            id: z.string(),
-            name: z.string(),
-            disposition: z.enum(["front", "back"]).nullable(),
-          })
-          .and(ParLayout),
-      ),
+      sets: z.array(z.object({ id: z.string(), name: z.string() }).and(ParLayout)),
     }),
   ),
   cases: z.array(
@@ -79,6 +71,8 @@ function loadCases(): Promise<MatchEvalCase[]> {
       ...courses.map((course) => course.id),
       ...courses.flatMap((course) => course.sets.map((set) => set.id)),
     ]);
+    // The searchable corpus mirrors production: each set advertises its
+    // hole range, derived from its layout.
     const searchable = courses.map((course) => ({
       id: course.id,
       name: course.name,
@@ -86,7 +80,7 @@ function loadCases(): Promise<MatchEvalCase[]> {
       sets: course.sets.map((set) => ({
         id: set.id,
         name: set.name,
-        disposition: set.disposition,
+        holes: holeRange(holesFrom(set).map((hole) => hole.number)),
       })),
     }));
     const setPars = courses.flatMap((course) =>

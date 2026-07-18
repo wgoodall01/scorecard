@@ -92,11 +92,13 @@ WITH cells AS (
     cs.id    AS set_id,
     cs.name  AS set_name
   FROM score s
-  JOIN outing o      ON o.id = s.outing_id
-  JOIN course c      ON c.id = o.course_id
-  JOIN "user" u      ON u.id = s.player_id
-  JOIN hole h        ON h.id = s.hole_id
-  JOIN course_set cs ON cs.id = h.course_set_id
+  JOIN score_set ss     ON ss.id = s.score_set_id
+  JOIN outing o         ON o.id = ss.outing_id
+  JOIN course c         ON c.id = o.course_id
+  JOIN "user" u         ON u.id = ss.player_id
+  JOIN hole h           ON h.id = s.hole_id
+  JOIN course_set_tee t ON t.id = h.course_set_tee_id
+  JOIN course_set cs    ON cs.id = t.course_set_id
   WHERE o.date >= ?1
 ),
 rounds AS (

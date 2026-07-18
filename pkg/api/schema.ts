@@ -1,11 +1,34 @@
 import { relations, sql } from "drizzle-orm";
 import { customType, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import type { ScoresExtractData } from "./src/agent/card_extract/schema";
 
 const varchar = customType<{ data: string }>({
   dataType() {
     return "varchar";
   },
 });
+
+// An unindexed JSON blob (TEXT affinity), (de)serialized at the driver edge.
+const json = customType<{ data: unknown; driverData: string }>({
+  dataType() {
+    return "json";
+  },
+  toDriver(value) {
+    return JSON.stringify(value);
+  },
+  fromDriver(value) {
+    return JSON.parse(value);
+  },
+});
+
+// Audit timestamps on every table: ISO-8601 strings maintained by drizzle
+// ($defaultFn/$onUpdateFn — app-level, so raw-SQL writers like the seed
+// script must set them explicitly; the migration backfills existing rows).
+const isoNow = () => new Date().toISOString();
+const timestamps = {
+  createdAt: varchar("created_at").notNull().$defaultFn(isoNow),
+  updatedAt: varchar("updated_at").notNull().$defaultFn(isoNow).$onUpdateFn(isoNow),
+};
 
 export function uuidv7() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -26,8 +49,12 @@ export function uuidv7() {
     .join("");
 }
 
-// The tees a player can play from. Stored as plain varchar (null = unknown);
-// this list is the app-level source of truth for validation and UI options.
+// App-level tee CATEGORIES. Real tees are course_set_tee rows with whatever
+// name the course prints ("Blue", "White II", …); a row's nullable `type`
+// tags it with one of these categories so a golfer's profile preference
+// (user.preferred_tee) can pick a default tee on any course. Stored as plain
+// varchar (null = uncategorized); this list is the app-level source of truth
+// for validation and UI options.
 export const TEES = ["tips", "back", "standard", "senior", "front", "junior"] as const;
 export type Tee = (typeof TEES)[number];
 
@@ -43,6 +70,7 @@ export const user = sqliteTable(
     admin: integer("admin", { mode: "boolean" }).notNull().default(false),
     handicap: integer("handicap"),
     preferredTee: varchar("preferred_tee").$type<Tee>(),
+    ...timestamps,
   },
   (table) => [uniqueIndex("user_email_unique").on(table.email)],
 );
@@ -56,6 +84,7 @@ export const nickname = sqliteTable(
       .references(() => user.id),
     nickname: varchar("nickname").notNull(),
     nicknameType: varchar("nickname_type").notNull(),
+    ...timestamps,
   },
   (table) => [
     // A golfer can't hold the same nickname twice in different cases.
@@ -69,9 +98,12 @@ export const course = sqliteTable("course", {
   location: varchar("location"),
   // The USGA course rating database's id for this facility (ncrdb.usga.org).
   ncrdbFacilityId: integer("ncrdb_facility_id"),
+  ...timestamps,
 });
 
-// A named set of holes (a "nine") within a course.
+// A named set of holes (a "nine") within a course. There is no stored
+// front/back disposition — a nine's place is derived from its holes'
+// numbers where the UI needs it, which keeps sets nonoverlapping.
 export const courseSet = sqliteTable(
   "course_set",
   {
@@ -80,47 +112,68 @@ export const courseSet = sqliteTable(
       .notNull()
       .references(() => course.id),
     name: varchar("name").notNull(),
-    disposition: varchar("disposition").$type<"front" | "back">(),
-    // The NCRDB "course" behind this nine's ratings — the database rates
-    // 18-hole nine-combinations (ncrdb.usga.org/courseTeeInfo?CourseID=…), so
-    // this is the combo this nine fronts, whose Front(9) split rates the nine.
-    ncrdbCourseId: integer("ncrdb_course_id"),
+    // USGA/NCRDB provenance: "this nine is the front/back half of THIS
+    // rated 18-hole course" (the NCRDB rates nine-combinations,
+    // ncrdb.usga.org/courseTeeInfo?CourseID=…). A nine's per-tee 9-hole
+    // ratings are that course's Front(9)/Back(9) splits per usgaCourseNine.
+    usgaCourseId: integer("usga_course_id"),
+    usgaCourseNine: varchar("usga_course_nine").$type<"front" | "back">(),
+    ...timestamps,
   },
   (table) => [uniqueIndex("course_set_name_unique").on(table.courseId, table.name)],
 );
 
-// 9-hole USGA ratings for a nine, from a given app-level tee (the TEES
-// enum; each course's seed maps those onto the tee markers the USGA rated —
-// see seed/courses.yaml). courseRating is in strokes to one decimal,
-// slopeRating 55–155. An 18-hole combination is rated by summing two nines'
-// Course Ratings and averaging their Slopes. A (nine, tee) pair with no row
-// is unrated from that tee.
-export const courseSetRating = sqliteTable(
-  "course_set_rating",
+// A tee position on a nine — the thing a golfer actually plays from. `name`
+// is whatever the course prints on the card/markers ("Blue", "White",
+// "Combo I", …), `gender` the rated gender ("m"/"f", null = unspecified),
+// and `type` the app-level TEES category used to match a golfer's profile
+// preference (null = a tee outside the standard categories; those are still
+// playable). courseRating is the 9-hole USGA rating in strokes to one
+// decimal and slopeRating 55–155 (an 18-hole combination is rated by
+// summing two nines' Course Ratings and averaging their Slopes); both are
+// null when the tee is unrated — scores can still be recorded from it, they
+// just can't post handicap differentials.
+export const courseSetTee = sqliteTable(
+  "course_set_tee",
   {
     id: text("id").primaryKey().$defaultFn(uuidv7),
     courseSetId: text("course_set_id")
       .notNull()
       .references(() => courseSet.id),
-    tee: varchar("tee").$type<Tee>().notNull(),
-    courseRating: real("course_rating").notNull(),
-    slopeRating: integer("slope_rating").notNull(),
+    name: varchar("name").notNull(),
+    gender: varchar("gender").$type<"m" | "f">(),
+    type: varchar("type").$type<Tee>(),
+    courseRating: real("course_rating"),
+    slopeRating: integer("slope_rating"),
+    ...timestamps,
   },
-  (table) => [uniqueIndex("course_set_rating_unique").on(table.courseSetId, table.tee)],
+  (table) => [
+    // One tee per (nine, name, gender), case-insensitively; gender NULL
+    // coalesces so two ungendered "White" rows still collide. drizzle-kit
+    // mangles multi-argument index expressions, so the generated SQL for
+    // this index is maintained by hand in the migration.
+    uniqueIndex("course_set_tee_unique").on(
+      table.courseSetId,
+      sql`lower(${table.name})`,
+      sql`coalesce(${table.gender}, '')`,
+    ),
+  ],
 );
 
+// Holes belong to a TEE, not the nine itself — par (and one day yardage)
+// legitimately differs between tee positions on the same nine.
 export const hole = sqliteTable(
   "hole",
   {
     id: text("id").primaryKey().$defaultFn(uuidv7),
-    courseSetId: text("course_set_id")
+    courseSetTeeId: text("course_set_tee_id")
       .notNull()
-      .references(() => courseSet.id),
+      .references(() => courseSetTee.id),
     number: integer("number").notNull(),
-    name: varchar("name"),
     par: integer("par").notNull(),
+    ...timestamps,
   },
-  (table) => [uniqueIndex("hole_number_unique").on(table.courseSetId, table.number)],
+  (table) => [uniqueIndex("hole_number_unique").on(table.courseSetTeeId, table.number)],
 );
 
 // One or more scorecards recorded by a group of players in a single outing.
@@ -131,11 +184,15 @@ export const outing = sqliteTable("outing", {
   courseId: text("course_id")
     .notNull()
     .references(() => course.id),
+  ...timestamps,
 });
 
-// Which tee each player played from on a given outing (null = not recorded).
-export const outingPlayer = sqliteTable(
-  "outing_player",
+// The root of a player's scores on one nine of an outing: which tee they
+// played it from. A player gets one score_set per (outing, tee) — so a
+// 27-hole day can mix tees nine-by-nine, and every score commits to a tee
+// (it must: holes are per-tee rows).
+export const scoreSet = sqliteTable(
+  "score_set",
   {
     id: text("id").primaryKey().$defaultFn(uuidv7),
     outingId: text("outing_id")
@@ -144,42 +201,55 @@ export const outingPlayer = sqliteTable(
     playerId: text("player_id")
       .notNull()
       .references(() => user.id),
-    tee: varchar("tee").$type<Tee>(),
+    courseSetTeeId: text("course_set_tee_id")
+      .notNull()
+      .references(() => courseSetTee.id),
+    ...timestamps,
   },
-  (table) => [uniqueIndex("outing_player_unique").on(table.outingId, table.playerId)],
+  (table) => [
+    uniqueIndex("score_set_unique").on(table.outingId, table.playerId, table.courseSetTeeId),
+  ],
 );
 
-// A captured scorecard image. The id IS the capture id, so the original
-// image, extracted.json, and matched.json live in R2 at cards/<id>/….
+// A captured scorecard image, created at upload and tagged with the
+// uploading user. The id IS the capture id: the original photo lives in R2
+// at cards/<id>/image, but extraction results live HERE, not in R2.
 export const scorecard = sqliteTable("scorecard", {
-  id: text("id").primaryKey(),
-  // ISO timestamp of when the extraction completed.
-  createdAt: varchar("created_at").notNull(),
-  uploaderEmail: varchar("uploader_email"),
+  id: text("id").primaryKey().$defaultFn(uuidv7),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  // The completed scores extraction ({ extracted, matched }) as one
+  // unindexed JSON blob; null while the queue consumer is still working (or
+  // extraction was never requested). A failed extraction records
+  // scoresError instead — status derives from these two columns.
+  scoresExtract: json("scores_extract").$type<ScoresExtractData>(),
+  scoresError: varchar("scores_error"),
+  ...timestamps,
 });
 
 export const score = sqliteTable(
   "score",
   {
     id: text("id").primaryKey().$defaultFn(uuidv7),
-    outingId: text("outing_id")
+    scoreSetId: text("score_set_id")
       .notNull()
-      .references(() => outing.id),
-    playerId: text("player_id")
-      .notNull()
-      .references(() => user.id),
+      .references(() => scoreSet.id),
+    // Must belong to the score_set's tee (app-enforced; SQLite can't).
     holeId: text("hole_id")
       .notNull()
       .references(() => hole.id),
     score: integer("score").notNull(),
     // Which captured card this score was read from (null = entered by hand).
     scorecardId: text("scorecard_id").references(() => scorecard.id),
+    ...timestamps,
   },
-  (table) => [uniqueIndex("score_cell_unique").on(table.outingId, table.playerId, table.holeId)],
+  (table) => [uniqueIndex("score_cell_unique").on(table.scoreSetId, table.holeId)],
 );
 
 export const userRelations = relations(user, ({ many }) => ({
   nicknames: many(nickname),
+  scorecards: many(scorecard),
 }));
 
 export const nicknameRelations = relations(nickname, ({ one }) => ({
@@ -193,40 +263,45 @@ export const courseRelations = relations(course, ({ many }) => ({
 
 export const courseSetRelations = relations(courseSet, ({ one, many }) => ({
   course: one(course, { fields: [courseSet.courseId], references: [course.id] }),
-  holes: many(hole),
-  ratings: many(courseSetRating),
+  tees: many(courseSetTee),
 }));
 
-export const courseSetRatingRelations = relations(courseSetRating, ({ one }) => ({
+export const courseSetTeeRelations = relations(courseSetTee, ({ one, many }) => ({
   courseSet: one(courseSet, {
-    fields: [courseSetRating.courseSetId],
+    fields: [courseSetTee.courseSetId],
     references: [courseSet.id],
   }),
+  holes: many(hole),
+  scoreSets: many(scoreSet),
 }));
 
 export const holeRelations = relations(hole, ({ one, many }) => ({
-  courseSet: one(courseSet, { fields: [hole.courseSetId], references: [courseSet.id] }),
+  tee: one(courseSetTee, { fields: [hole.courseSetTeeId], references: [courseSetTee.id] }),
   scores: many(score),
 }));
 
 export const outingRelations = relations(outing, ({ one, many }) => ({
   course: one(course, { fields: [outing.courseId], references: [course.id] }),
-  players: many(outingPlayer),
+  scoreSets: many(scoreSet),
+}));
+
+export const scoreSetRelations = relations(scoreSet, ({ one, many }) => ({
+  outing: one(outing, { fields: [scoreSet.outingId], references: [outing.id] }),
+  player: one(user, { fields: [scoreSet.playerId], references: [user.id] }),
+  tee: one(courseSetTee, {
+    fields: [scoreSet.courseSetTeeId],
+    references: [courseSetTee.id],
+  }),
   scores: many(score),
 }));
 
-export const outingPlayerRelations = relations(outingPlayer, ({ one }) => ({
-  outing: one(outing, { fields: [outingPlayer.outingId], references: [outing.id] }),
-  player: one(user, { fields: [outingPlayer.playerId], references: [user.id] }),
-}));
-
-export const scorecardRelations = relations(scorecard, ({ many }) => ({
+export const scorecardRelations = relations(scorecard, ({ one, many }) => ({
+  user: one(user, { fields: [scorecard.userId], references: [user.id] }),
   scores: many(score),
 }));
 
 export const scoreRelations = relations(score, ({ one }) => ({
-  outing: one(outing, { fields: [score.outingId], references: [outing.id] }),
-  player: one(user, { fields: [score.playerId], references: [user.id] }),
+  scoreSet: one(scoreSet, { fields: [score.scoreSetId], references: [scoreSet.id] }),
   hole: one(hole, { fields: [score.holeId], references: [hole.id] }),
   scorecard: one(scorecard, { fields: [score.scorecardId], references: [scorecard.id] }),
 }));

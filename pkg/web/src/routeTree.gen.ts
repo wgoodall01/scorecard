@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ScorecardsRouteImport } from './routes/scorecards'
 import { Route as OutingsRouteImport } from './routes/outings'
 import { Route as MeRouteImport } from './routes/me'
 import { Route as LoginRouteImport } from './routes/login'
@@ -17,11 +18,17 @@ import { Route as GolfersRouteImport } from './routes/golfers'
 import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as CaptureRouteImport } from './routes/capture'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ScorecardsIdRouteImport } from './routes/scorecards_.$id'
 import { Route as OutingsIdRouteImport } from './routes/outings_.$id'
 import { Route as LoginMagicRouteImport } from './routes/login_.magic'
 import { Route as GolfersIdRouteImport } from './routes/golfers_.$id'
 import { Route as CoursesIdRouteImport } from './routes/courses_.$id'
 
+const ScorecardsRoute = ScorecardsRouteImport.update({
+  id: '/scorecards',
+  path: '/scorecards',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OutingsRoute = OutingsRouteImport.update({
   id: '/outings',
   path: '/outings',
@@ -62,6 +69,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ScorecardsIdRoute = ScorecardsIdRouteImport.update({
+  id: '/scorecards_/$id',
+  path: '/scorecards/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OutingsIdRoute = OutingsIdRouteImport.update({
   id: '/outings_/$id',
   path: '/outings/$id',
@@ -92,10 +104,12 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
+  '/scorecards': typeof ScorecardsRoute
   '/courses/$id': typeof CoursesIdRoute
   '/golfers/$id': typeof GolfersIdRoute
   '/login/magic': typeof LoginMagicRoute
   '/outings/$id': typeof OutingsIdRoute
+  '/scorecards/$id': typeof ScorecardsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -106,10 +120,12 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
+  '/scorecards': typeof ScorecardsRoute
   '/courses/$id': typeof CoursesIdRoute
   '/golfers/$id': typeof GolfersIdRoute
   '/login/magic': typeof LoginMagicRoute
   '/outings/$id': typeof OutingsIdRoute
+  '/scorecards/$id': typeof ScorecardsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -121,10 +137,12 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
+  '/scorecards': typeof ScorecardsRoute
   '/courses_/$id': typeof CoursesIdRoute
   '/golfers_/$id': typeof GolfersIdRoute
   '/login_/magic': typeof LoginMagicRoute
   '/outings_/$id': typeof OutingsIdRoute
+  '/scorecards_/$id': typeof ScorecardsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -137,10 +155,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/me'
     | '/outings'
+    | '/scorecards'
     | '/courses/$id'
     | '/golfers/$id'
     | '/login/magic'
     | '/outings/$id'
+    | '/scorecards/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -151,10 +171,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/me'
     | '/outings'
+    | '/scorecards'
     | '/courses/$id'
     | '/golfers/$id'
     | '/login/magic'
     | '/outings/$id'
+    | '/scorecards/$id'
   id:
     | '__root__'
     | '/'
@@ -165,10 +187,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/me'
     | '/outings'
+    | '/scorecards'
     | '/courses_/$id'
     | '/golfers_/$id'
     | '/login_/magic'
     | '/outings_/$id'
+    | '/scorecards_/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -180,14 +204,23 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MeRoute: typeof MeRoute
   OutingsRoute: typeof OutingsRoute
+  ScorecardsRoute: typeof ScorecardsRoute
   CoursesIdRoute: typeof CoursesIdRoute
   GolfersIdRoute: typeof GolfersIdRoute
   LoginMagicRoute: typeof LoginMagicRoute
   OutingsIdRoute: typeof OutingsIdRoute
+  ScorecardsIdRoute: typeof ScorecardsIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/scorecards': {
+      id: '/scorecards'
+      path: '/scorecards'
+      fullPath: '/scorecards'
+      preLoaderRoute: typeof ScorecardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/outings': {
       id: '/outings'
       path: '/outings'
@@ -244,6 +277,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/scorecards_/$id': {
+      id: '/scorecards_/$id'
+      path: '/scorecards/$id'
+      fullPath: '/scorecards/$id'
+      preLoaderRoute: typeof ScorecardsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/outings_/$id': {
       id: '/outings_/$id'
       path: '/outings/$id'
@@ -284,10 +324,12 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MeRoute: MeRoute,
   OutingsRoute: OutingsRoute,
+  ScorecardsRoute: ScorecardsRoute,
   CoursesIdRoute: CoursesIdRoute,
   GolfersIdRoute: GolfersIdRoute,
   LoginMagicRoute: LoginMagicRoute,
   OutingsIdRoute: OutingsIdRoute,
+  ScorecardsIdRoute: ScorecardsIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

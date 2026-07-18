@@ -8,45 +8,76 @@ import { createToken } from "./shared";
 const app = new Hono<Env>().route("/", outingRoutes);
 
 // The pool's D1 storage persists across tests; start each test from empty
-// tables (delete order respects foreign keys).
+// tables (delete order respects foreign keys). Fixture: one set ("White")
+// with two tees — tw (White markers, holes w1/w2 = numbers 1/2) and tb
+// (Blue markers, holes b1/b2 = the same numbers).
 beforeEach(async () => {
   await env.DB.batch(
-    ["score", "outing_player", "outing", "hole", "course_set", "course", "nickname", "user"].map(
-      (table) => env.DB.prepare(`DELETE FROM "${table}"`),
-    ),
+    [
+      "score",
+      "score_set",
+      "outing",
+      "hole",
+      "course_set_tee",
+      "course_set",
+      "course",
+      "nickname",
+      "user",
+    ].map((table) => env.DB.prepare(`DELETE FROM "${table}"`)),
   );
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO course (id, name) VALUES ('course', 'Buck Hill Falls')`),
     env.DB.prepare(
-      `INSERT INTO course_set (id, course_id, name, disposition) VALUES ('front', 'course', 'White', 'front')`,
+      `INSERT INTO course_set (id, course_id, name) VALUES ('front', 'course', 'White')`,
     ),
     env.DB.prepare(
-      `INSERT INTO hole (id, course_set_id, number, par) VALUES ('h1', 'front', 1, 4), ('h2', 'front', 2, 4)`,
+      `INSERT INTO course_set_tee (id, course_set_id, name, type) VALUES ('tw', 'front', 'White', 'standard'), ('tb', 'front', 'Blue', 'back')`,
     ),
-    env.DB.prepare(`INSERT INTO user (id, name) VALUES ('alice', 'Alice'), ('bob', 'Bob')`),
+    env.DB.prepare(
+      `INSERT INTO hole (id, course_set_tee_id, number, par)
+       VALUES ('w1', 'tw', 1, 4), ('w2', 'tw', 2, 4), ('b1', 'tb', 1, 4), ('b2', 'tb', 2, 4)`,
+    ),
+    env.DB.prepare(
+      `INSERT INTO user (id, name) VALUES ('alice', 'Alice'), ('bob', 'Bob'), ('dave', 'Dave')`,
+    ),
   ]);
 });
+
+const TEE_BY_HOLE: Record<string, string> = { w1: "tw", w2: "tw", b1: "tb", b2: "tb" };
 
 async function seedOuting(
   id: string,
   date: string,
-  players: { playerId: string; tee?: string; scores: Record<string, number> }[],
+  players: { playerId: string; scores: Record<string, number> }[],
 ) {
+  const scoreSets = new Set(
+    players.flatMap((player) =>
+      Object.keys(player.scores).map((holeId) => `${player.playerId}/${TEE_BY_HOLE[holeId]}`),
+    ),
+  );
   const statements = [
     env.DB.prepare(`INSERT INTO outing (id, date, course_id) VALUES (?, ?, 'course')`).bind(
       id,
       date,
     ),
-    ...players.flatMap((player) => [
-      env.DB.prepare(
-        `INSERT INTO outing_player (id, outing_id, player_id, tee) VALUES (?, ?, ?, ?)`,
-      ).bind(`${id}:${player.playerId}`, id, player.playerId, player.tee ?? null),
-      ...Object.entries(player.scores).map(([holeId, strokes]) =>
+    ...[...scoreSets].map((key) => {
+      const [playerId, teeId] = key.split("/");
+      return env.DB.prepare(
+        `INSERT INTO score_set (id, outing_id, player_id, course_set_tee_id) VALUES (?, ?, ?, ?)`,
+      ).bind(`${id}:${playerId}:${teeId}`, id, playerId, teeId);
+    }),
+    ...players.flatMap((player) =>
+      Object.entries(player.scores).map(([holeId, strokes]) =>
         env.DB.prepare(
-          `INSERT INTO score (id, outing_id, player_id, hole_id, score) VALUES (?, ?, ?, ?, ?)`,
-        ).bind(`${id}:${player.playerId}:${holeId}`, id, player.playerId, holeId, strokes),
+          `INSERT INTO score (id, score_set_id, hole_id, score) VALUES (?, ?, ?, ?)`,
+        ).bind(
+          `${id}:${player.playerId}:${holeId}`,
+          `${id}:${player.playerId}:${TEE_BY_HOLE[holeId]}`,
+          holeId,
+          strokes,
+        ),
       ),
-    ]),
+    ),
   ];
   await env.DB.batch(statements);
 }
@@ -76,12 +107,12 @@ async function submitOuting(date: string) {
         scorecardId: null,
         outingId: null,
         courseId: "course",
-        newCourse: null,
         nines: [
           {
             courseSetId: "front",
-            newSet: null,
-            players: [{ playerId: "alice", tee: null, scores: [{ holeNumber: 1, score: 4 }] }],
+            players: [
+              { playerId: "alice", courseSetTeeId: "tw", scores: [{ holeNumber: 1, score: 4 }] },
+            ],
           },
         ],
       }),
@@ -110,10 +141,19 @@ describe("POST /outings", () => {
 
 describe("POST /outings/:id/merge", () => {
   it("moves rows to the target, keeps the target's cells on conflict, deletes the source", async () => {
-    await seedOuting("o1", "2026-07-01", [{ playerId: "alice", tee: "back", scores: { h1: 4 } }]);
+    // alice: same tee on both — hole 1 conflicts (target wins), hole 2 pours
+    // into the target's existing score set. bob: only on the source — his
+    // score set moves wholesale. dave: DIFFERENT tees on the two outings
+    // but the same nine and hole number — the target's cell wins and his
+    // emptied source score set is dropped.
+    await seedOuting("o1", "2026-07-01", [
+      { playerId: "alice", scores: { w1: 4 } },
+      { playerId: "dave", scores: { w1: 5 } },
+    ]);
     await seedOuting("o2", "2026-07-01", [
-      { playerId: "alice", tee: "front", scores: { h1: 7, h2: 5 } },
-      { playerId: "bob", scores: { h1: 6 } },
+      { playerId: "alice", scores: { w1: 7, w2: 5 } },
+      { playerId: "bob", scores: { b1: 6 } },
+      { playerId: "dave", scores: { b1: 8 } },
     ]);
 
     const res = await mergeOutings("o1", "o2");
@@ -121,20 +161,26 @@ describe("POST /outings/:id/merge", () => {
     expect(await res.json()).toEqual({ outingId: "o1" });
 
     const { results: scores } = await env.DB.prepare(
-      `SELECT outing_id, player_id, hole_id, score FROM score ORDER BY player_id, hole_id`,
+      `SELECT ss.outing_id, ss.player_id, ss.course_set_tee_id AS tee, s.hole_id, s.score
+       FROM score s JOIN score_set ss ON ss.id = s.score_set_id
+       ORDER BY ss.player_id, s.hole_id`,
     ).all();
     expect(scores).toEqual([
-      { outing_id: "o1", player_id: "alice", hole_id: "h1", score: 4 },
-      { outing_id: "o1", player_id: "alice", hole_id: "h2", score: 5 },
-      { outing_id: "o1", player_id: "bob", hole_id: "h1", score: 6 },
+      { outing_id: "o1", player_id: "alice", tee: "tw", hole_id: "w1", score: 4 },
+      { outing_id: "o1", player_id: "alice", tee: "tw", hole_id: "w2", score: 5 },
+      { outing_id: "o1", player_id: "bob", tee: "tb", hole_id: "b1", score: 6 },
+      { outing_id: "o1", player_id: "dave", tee: "tw", hole_id: "w1", score: 5 },
     ]);
 
-    const { results: players } = await env.DB.prepare(
-      `SELECT outing_id, player_id, tee FROM outing_player ORDER BY player_id`,
+    // Exactly one score set per surviving (player, tee) — alice's source set
+    // was folded into the target's, and dave's emptied source set is gone.
+    const { results: scoreSets } = await env.DB.prepare(
+      `SELECT outing_id, player_id, course_set_tee_id AS tee FROM score_set ORDER BY player_id`,
     ).all();
-    expect(players).toEqual([
-      { outing_id: "o1", player_id: "alice", tee: "back" },
-      { outing_id: "o1", player_id: "bob", tee: null },
+    expect(scoreSets).toEqual([
+      { outing_id: "o1", player_id: "alice", tee: "tw" },
+      { outing_id: "o1", player_id: "bob", tee: "tb" },
+      { outing_id: "o1", player_id: "dave", tee: "tw" },
     ]);
 
     const { results: outings } = await env.DB.prepare(`SELECT id FROM outing`).all();
@@ -142,14 +188,14 @@ describe("POST /outings/:id/merge", () => {
   });
 
   it("rejects merging outings on different dates", async () => {
-    await seedOuting("o1", "2026-07-01", [{ playerId: "alice", scores: { h1: 4 } }]);
-    await seedOuting("o2", "2026-07-02", [{ playerId: "bob", scores: { h1: 6 } }]);
+    await seedOuting("o1", "2026-07-01", [{ playerId: "alice", scores: { w1: 4 } }]);
+    await seedOuting("o2", "2026-07-02", [{ playerId: "bob", scores: { w1: 6 } }]);
     const res = await mergeOutings("o1", "o2");
     expect(res.status).toBe(400);
   });
 
   it("rejects merging an outing into itself", async () => {
-    await seedOuting("o1", "2026-07-01", [{ playerId: "alice", scores: { h1: 4 } }]);
+    await seedOuting("o1", "2026-07-01", [{ playerId: "alice", scores: { w1: 4 } }]);
     const res = await mergeOutings("o1", "o1");
     expect(res.status).toBe(400);
   });

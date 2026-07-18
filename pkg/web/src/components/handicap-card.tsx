@@ -23,24 +23,24 @@ function shortDate(date: string) {
 }
 
 const chartConfig = {
-  index: { label: "Handicap", color: "var(--chart-3)" },
+  index: { label: "Casual Handicap", color: "var(--chart-3)" },
 } satisfies ChartConfig;
 
 export function HandicapCard({ handicap }: { handicap: PlayerHandicap | null }) {
   return (
     <section className="rounded-xl border bg-card">
       <div className="flex items-center gap-2 border-b p-5">
-        <h2 className="font-medium">Handicap</h2>
+        <h2 className="font-medium">Casual Handicap</h2>
         {handicap?.provisional && handicap.index !== null && (
           <Badge variant="secondary">Provisional</Badge>
         )}
       </div>
       <div className="flex flex-col gap-4 p-5">
-        {!handicap && <p className="text-sm text-muted-foreground">Loading handicap…</p>}
+        {!handicap && <p className="text-sm text-muted-foreground">Loading casual handicap…</p>}
         {handicap && handicap.index === null && (
           <p className="text-sm text-muted-foreground">
-            No rated rounds recorded yet — a handicap appears after the first captured round on a
-            rated nine.
+            No rated rounds recorded yet — a casual handicap appears after the first captured round
+            on a rated nine.
           </p>
         )}
         {handicap && handicap.index !== null && (
@@ -98,7 +98,7 @@ export function HandicapCard({ handicap }: { handicap: PlayerHandicap | null }) 
                             <div className="flex w-full flex-col gap-1">
                               <div className="flex items-center justify-between gap-4 leading-none">
                                 <span className="text-muted-foreground">
-                                  Handicap{point.provisional ? " (provisional)" : ""}
+                                  Casual Handicap{point.provisional ? " (provisional)" : ""}
                                 </span>
                                 <span className="font-medium tabular-nums">
                                   {formatIndex(Number(value))}

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Camera, ChevronRight, GitMerge, NotebookText, Trophy } from "lucide-react";
-import type { Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -14,35 +13,50 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { GolfScore } from "@/components/golf-score";
+import { Score } from "@/components/score";
 import { ScorecardGallery } from "@/components/scorecard-gallery";
 import { useAuth } from "@/lib/auth-context";
-import { TEE_LABELS } from "@/lib/tees";
 
 export type OutingSummary = {
   id: string;
   date: string;
   course: { id: string; name: string };
   sets: { id: string; name: string }[];
-  players: { id: string; name: string | null; email: string | null; total: number | null }[];
+  players: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    total: number | null;
+    incomplete: boolean;
+  }[];
 };
 
 export type OutingDetail = {
   id: string;
   date: string;
   course: { id: string; name: string; location: string | null };
-  players: { id: string; name: string | null; email: string | null; tee: Tee | null }[];
+  players: { id: string; name: string | null; email: string | null }[];
   sets: {
     id: string;
     name: string;
-    disposition: "front" | "back" | null;
-    holes: { id: string; number: number; name: string | null; par: number }[];
-    scores: Record<string, Record<string, number>>;
+    // The display layout (holes are per-tee rows; this is one tee's view).
+    holes: { number: number; par: number }[];
+    // scores[playerId][holeNumber] = strokes
+    scores: Record<string, Record<number, number>>;
+    // The tee each player played this nine from.
+    tees: Record<string, { id: string; name: string }>;
+    // parByPlayer[playerId][holeNumber] = par on the tee they played.
+    parByPlayer: Record<string, Record<number, number>>;
   }[];
   scorecards: { id: string; createdAt: string }[];
 };
 
-export function dispositionLabel(disposition: "front" | "back" | null) {
-  return disposition === "front" ? "Front 9" : disposition === "back" ? "Back 9" : "Other";
+// "Front 9" / "Back 9", derived from a nine's hole numbers — sets carry no
+// stored disposition.
+export function nineLabel(holeNumbers: number[]) {
+  if (holeNumbers.length > 0 && holeNumbers.every((number) => number <= 9)) return "Front 9";
+  if (holeNumbers.length > 0 && holeNumbers.every((number) => number >= 10)) return "Back 9";
+  return "Nine";
 }
 
 type CourseOption = {
@@ -284,24 +298,16 @@ export function OutingList({
                         {rounds.map((round, index) => (
                           <p
                             key={index}
-                            className="text-lg font-semibold tabular-nums"
+                            className="text-lg font-semibold"
                             title={`${round.setNames.join(" + ")} · ${round.holes} holes`}
                           >
-                            {round.counted && (
-                              <span
-                                className="mr-1 text-muted-foreground"
-                                title="Counts toward the current handicap"
-                              >
-                                *
-                              </span>
-                            )}
-                            {round.strokes}
+                            <Score value={round.strokes} inHandicap={round.counted} />
                           </p>
                         ))}
                       </div>
                     ) : (
-                      <p className="shrink-0 text-lg font-semibold tabular-nums">
-                        {highlighted.total ?? "–"}
+                      <p className="shrink-0 text-lg font-semibold">
+                        <Score value={highlighted.total} incomplete={highlighted.incomplete} />
                       </p>
                     )
                   ) : (
@@ -316,12 +322,19 @@ export function OutingList({
                   ))}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {entry.players
-                    .map(
-                      (player) =>
-                        `${playerLabel(player)}${player.total !== null ? ` (${player.total})` : ""}`,
-                    )
-                    .join(", ")}
+                  {entry.players.map((player, index) => (
+                    <Fragment key={player.id}>
+                      {index > 0 && ", "}
+                      {playerLabel(player)}
+                      {player.total !== null && (
+                        <>
+                          {" ("}
+                          <Score value={player.total} incomplete={player.incomplete} />
+                          {")"}
+                        </>
+                      )}
+                    </Fragment>
+                  ))}
                 </p>
               </Link>
             </li>
@@ -330,6 +343,19 @@ export function OutingList({
       </ul>
     </section>
   );
+}
+
+// The tee(s) a player hit from across the outing's nines, for the
+// leaderboard's subtitle — usually one name, but a mixed-tee day lists each.
+function playerTeeLabel(outing: OutingDetail, playerId: string) {
+  const names = [
+    ...new Set(
+      outing.sets
+        .map((set) => set.tees[playerId]?.name)
+        .filter((name): name is string => name !== undefined),
+    ),
+  ];
+  return names.length > 0 ? `${names.join(" · ")} tees` : "Tee not recorded";
 }
 
 // Each player's total strokes across every nine in the outing, flagged when
@@ -469,12 +495,19 @@ export function OutingDetailPage({ outingId }: { outingId: string }) {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
-                        {candidate.players
-                          .map(
-                            (player) =>
-                              `${playerLabel(player)}${player.total !== null ? ` (${player.total})` : ""}`,
-                          )
-                          .join(", ")}
+                        {candidate.players.map((player, index) => (
+                          <Fragment key={player.id}>
+                            {index > 0 && ", "}
+                            {playerLabel(player)}
+                            {player.total !== null && (
+                              <>
+                                {" ("}
+                                <Score value={player.total} incomplete={player.incomplete} />
+                                {")"}
+                              </>
+                            )}
+                          </Fragment>
+                        ))}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {candidate.sets.map((set) => set.name).join(" · ") || "No scores yet"}
@@ -570,12 +603,11 @@ function GolfersTable({ outing }: { outing: OutingDetail }) {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{playerLabel(player)}</span>
                   <span className="block text-sm text-muted-foreground">
-                    {player.tee ? `${TEE_LABELS[player.tee]} tees` : "Tee not recorded"}
+                    {playerTeeLabel(outing, player.id)}
                   </span>
                 </span>
-                <span className="shrink-0 text-lg font-semibold tabular-nums">
-                  {total ?? "–"}
-                  {incomplete && "*"}
+                <span className="shrink-0 text-lg font-semibold">
+                  <Score value={total} incomplete={incomplete} />
                 </span>
               </Link>
             </li>
@@ -584,8 +616,8 @@ function GolfersTable({ outing }: { outing: OutingDetail }) {
       </ul>
       {anyIncomplete && (
         <p className="border-t p-5 py-3 text-xs text-muted-foreground">
-          * didn't play all {totalHoles} holes in this outing — the total only counts the holes with
-          a recorded score.
+          <sup>+</sup> didn't play all {totalHoles} holes in this outing — the total only counts the
+          holes with a recorded score.
         </p>
       )}
     </section>
@@ -612,7 +644,7 @@ function ScorecardTable({
     <section className="rounded-xl border bg-card">
       <div className="flex items-center justify-between gap-3 border-b p-5">
         <h2 className="font-medium">{set.name}</h2>
-        <Badge variant="secondary">{dispositionLabel(set.disposition)}</Badge>
+        <Badge variant="secondary">{nineLabel(set.holes.map((hole) => hole.number))}</Badge>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -629,19 +661,17 @@ function ScorecardTable({
           </thead>
           <tbody>
             {set.holes.map((hole) => (
-              <tr key={hole.id} className="border-b">
-                <td className="p-3 pl-5 font-medium">
-                  {hole.number}
-                  {hole.name && (
-                    <span className="ml-2 text-xs text-muted-foreground">{hole.name}</span>
-                  )}
-                </td>
+              <tr key={hole.number} className="border-b">
+                <td className="p-3 pl-5 font-medium">{hole.number}</td>
                 <td className="p-3 text-muted-foreground">{hole.par}</td>
                 {setPlayers.map((player) => {
-                  const value = set.scores[player.id]?.[hole.id];
+                  const value = set.scores[player.id]?.[hole.number];
+                  // Notation (birdie circles, bogey squares) is judged
+                  // against the par of the tee THIS player hit from.
+                  const par = set.parByPlayer[player.id]?.[hole.number] ?? hole.par;
                   return (
                     <td key={player.id} className="p-3 pr-5 text-right tabular-nums">
-                      <GolfScore score={value ?? null} par={hole.par} />
+                      <GolfScore score={value ?? null} par={par} />
                     </td>
                   );
                 })}
@@ -653,8 +683,8 @@ function ScorecardTable({
               <td className="p-3 pl-5 font-medium">Total</td>
               <td className="p-3" />
               {setPlayers.map((player) => (
-                <td key={player.id} className="p-3 pr-5 text-right font-medium tabular-nums">
-                  {totalFor(player.id) ?? "–"}
+                <td key={player.id} className="p-3 pr-5 text-right font-medium">
+                  <Score value={totalFor(player.id)} />
                 </td>
               ))}
             </tr>

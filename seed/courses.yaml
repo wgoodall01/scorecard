@@ -1,8 +1,11 @@
 # Course seed data. Upserted by script/update_seed.nu.
 #
-# Courses upsert by id; sets by (course, name) and holes by (set, number) —
-# the ids below are only used on first insert, so hand-created rows with the
-# same natural keys keep their ids and nothing double-inserts.
+# Courses upsert by id; sets by (course, name); tees by (set, lower(name),
+# gender); holes by (tee, number). EVERY row's id is hardcoded below and is
+# only used on first insert — hand-created rows with the same natural keys
+# keep their ids and nothing double-inserts. Holes live PER TEE (par can
+# differ by tee position); exact per-tee pars and ratings will be
+# re-upserted by the planned USGA scraper.
 courses:
   - id: 019f7224-8600-7a93-b371-af4ba7a96372
     name: Buck Hill Falls Golf Course
@@ -11,146 +14,265 @@ courses:
     # The NCRDB (ncrdb.usga.org) knows the facility as 20114 and rates it as
     # three 18-hole nine-combinations: 21162 = White/Blue, 21163 = Blue/Red,
     # 21164 = Red/White. Each nine carries the CourseID of the combo it
-    # fronts; its per-tee 9-hole ratings are that combo's Front(9) splits.
+    # fronts (usga_course_nine: front); its per-tee 9-hole ratings are that
+    # combo's Front(9) splits.
     #
-    # App tees map onto BHF's rated markers (men's ratings) as:
-    #   back -> Blue markers (the longest set — BHF has no tips),
-    #   standard -> White (the everyday card the hole pars come from),
-    #   senior -> Gold, front -> Red, junior -> Green.
-    # Unmapped tees (tips, and any unrated pick) fall back to standard.
+    # BHF's men's markers, longest to shortest: Blue, White, Gold, Red,
+    # Green (no tips). Their app-level `type` tags them for matching a
+    # golfer's preferred-tee profile setting.
     sets:
       - id: 019f7224-8600-7909-9260-233d35044908
         name: White
-        disposition: front
-        ncrdb_course_id: 21162
-        ratings:
-          - {
-              id: 019f73ae-72d6-7ac8-84a3-48a1e439692c,
-              tee: back,
-              course_rating: 35.7,
-              slope_rating: 127,
-            }
-          - {
-              id: 019f73ae-72d6-7ee6-890a-c9366aea8032,
-              tee: standard,
-              course_rating: 35.0,
-              slope_rating: 125,
-            }
-          - {
-              id: 019f73b6-7eb8-70cd-9fea-2e4d5a3b19a4,
-              tee: senior,
-              course_rating: 33.1,
-              slope_rating: 116,
-            }
-          - {
-              id: 019f73ae-72d6-7656-b190-3c03a4cb2691,
-              tee: front,
-              course_rating: 32.4,
-              slope_rating: 113,
-            }
-          - {
-              id: 019f73ae-72d6-74db-9011-d4f524035dc9,
-              tee: junior,
-              course_rating: 30.4,
-              slope_rating: 104,
-            }
-        holes:
-          - { id: 019f7224-8600-793d-b7ce-a444db130a32, number: 1, par: 4 }
-          - { id: 019f7224-8600-7a2b-addf-ca8bb029ea22, number: 2, par: 5 }
-          - { id: 019f7224-8600-7af6-9b85-5bf2c99f07fc, number: 3, par: 4 }
-          - { id: 019f7224-8600-7cf0-9b1f-20814b11650b, number: 4, par: 5 }
-          - { id: 019f7224-8600-7b64-a8e8-f92977cc383d, number: 5, par: 4 }
-          - { id: 019f7224-8600-7de8-b67c-d878bfa06cce, number: 6, par: 4 }
-          - { id: 019f7224-8600-71c1-8765-13eaf3a33416, number: 7, par: 3 }
-          - { id: 019f7224-8600-7c90-9bb7-ad11df9ee010, number: 8, par: 4 }
-          - { id: 019f7224-8600-7d9e-9030-72aeb8edee50, number: 9, par: 3 }
+        usga_course_id: 21162
+        usga_course_nine: front
+        tees:
+          - id: 019f73ae-72d6-7ac8-84a3-48a1e439692c
+            name: Blue
+            type: back
+            gender: m
+            course_rating: 35.7
+            slope_rating: 127
+            holes:
+              - { id: 019f762c-5601-74f3-8d88-138e2a9578dd, number: 1, par: 4 }
+              - { id: 019f762c-5602-75bb-a532-b12ad91e61a2, number: 2, par: 5 }
+              - { id: 019f762c-5602-7c57-a2a0-106074397497, number: 3, par: 4 }
+              - { id: 019f762c-5602-712a-ba37-f83b432f2204, number: 4, par: 5 }
+              - { id: 019f762c-5602-70fb-a809-009f4d1f2355, number: 5, par: 4 }
+              - { id: 019f762c-5602-7cbd-bc22-341863d4c0a7, number: 6, par: 4 }
+              - { id: 019f762c-5602-784f-905a-9745dba0f5c0, number: 7, par: 3 }
+              - { id: 019f762c-5602-772c-9924-33308d196cef, number: 8, par: 4 }
+              - { id: 019f762c-5602-7c9a-8ba4-b42f1a698188, number: 9, par: 3 }
+          - id: 019f73ae-72d6-7ee6-890a-c9366aea8032
+            name: White
+            type: standard
+            gender: m
+            course_rating: 35
+            slope_rating: 125
+            holes:
+              - { id: 019f762c-5602-7895-938f-eca934da94c8, number: 1, par: 4 }
+              - { id: 019f762c-5602-76e5-bfd7-b1b5a05c6f9c, number: 2, par: 5 }
+              - { id: 019f762c-5602-7728-a2e7-776158456813, number: 3, par: 4 }
+              - { id: 019f762c-5602-7b1b-8da2-2e6992681aae, number: 4, par: 5 }
+              - { id: 019f762c-5602-7cde-a24e-b55d987368dd, number: 5, par: 4 }
+              - { id: 019f762c-5602-7ddc-a6b8-6af10d2456a7, number: 6, par: 4 }
+              - { id: 019f762c-5602-768c-bbbe-3dc8a125dbd6, number: 7, par: 3 }
+              - { id: 019f762c-5602-70b6-841f-bb26f75010bc, number: 8, par: 4 }
+              - { id: 019f762c-5602-77b3-b8ac-98820ef64f29, number: 9, par: 3 }
+          - id: 019f73b6-7eb8-70cd-9fea-2e4d5a3b19a4
+            name: Gold
+            type: senior
+            gender: m
+            course_rating: 33.1
+            slope_rating: 116
+            holes:
+              - { id: 019f762c-5602-759b-a62e-5a9e132214a3, number: 1, par: 4 }
+              - { id: 019f762c-5602-7602-9d87-26b67cc3095b, number: 2, par: 5 }
+              - { id: 019f762c-5602-73ef-a90a-fa4821b7b668, number: 3, par: 4 }
+              - { id: 019f762c-5602-77f2-9803-dc98991cce8a, number: 4, par: 5 }
+              - { id: 019f762c-5602-7eb6-9d20-c9bdc7861701, number: 5, par: 4 }
+              - { id: 019f762c-5602-7f8b-b8c9-6c49c46da81c, number: 6, par: 4 }
+              - { id: 019f762c-5602-75d5-b217-de2ecc229f26, number: 7, par: 3 }
+              - { id: 019f762c-5602-76b2-8d3c-260ff832b877, number: 8, par: 4 }
+              - { id: 019f762c-5602-7cc7-927d-216655ae8493, number: 9, par: 3 }
+          - id: 019f73ae-72d6-7656-b190-3c03a4cb2691
+            name: Red
+            type: front
+            gender: m
+            course_rating: 32.4
+            slope_rating: 113
+            holes:
+              - { id: 019f762c-5602-7075-a701-27ca2af3315e, number: 1, par: 4 }
+              - { id: 019f762c-5602-76b9-9c05-d0c8e9b3dd36, number: 2, par: 5 }
+              - { id: 019f762c-5602-71f7-9768-d58dbed09823, number: 3, par: 4 }
+              - { id: 019f762c-5602-76b1-b84c-413cab5ddc26, number: 4, par: 5 }
+              - { id: 019f762c-5602-7c06-989e-2942bac25ace, number: 5, par: 4 }
+              - { id: 019f762c-5602-7cbc-8a57-1fb470d0dcd1, number: 6, par: 4 }
+              - { id: 019f762c-5602-7bc3-abbe-bed468e0b852, number: 7, par: 3 }
+              - { id: 019f762c-5602-72b3-bdff-be04acacc20c, number: 8, par: 4 }
+              - { id: 019f762c-5602-7bc1-9469-038f07f27aa4, number: 9, par: 3 }
+          - id: 019f73ae-72d6-74db-9011-d4f524035dc9
+            name: Green
+            type: junior
+            gender: m
+            course_rating: 30.4
+            slope_rating: 104
+            holes:
+              - { id: 019f762c-5602-7c8f-97fb-f5365b1c63d6, number: 1, par: 4 }
+              - { id: 019f762c-5602-7cfb-a06e-e48b977a1e1a, number: 2, par: 5 }
+              - { id: 019f762c-5602-712c-936e-94164c4558bc, number: 3, par: 4 }
+              - { id: 019f762c-5602-7d4d-8ec1-745ca9a5b8ea, number: 4, par: 5 }
+              - { id: 019f762c-5602-7d6f-97dd-ed12351e59b3, number: 5, par: 4 }
+              - { id: 019f762c-5602-7666-b13f-70fd347647d1, number: 6, par: 4 }
+              - { id: 019f762c-5602-72c7-86b3-f0893d14b659, number: 7, par: 3 }
+              - { id: 019f762c-5602-77d1-b4f1-f08b34d652df, number: 8, par: 4 }
+              - { id: 019f762c-5602-7e8e-843a-d0a40d7c7cf8, number: 9, par: 3 }
       - id: 019f7224-8600-7f69-a0ae-12627b0a7b22
         name: Blue
-        disposition: back
-        ncrdb_course_id: 21163
-        ratings:
-          - {
-              id: 019f73ae-72d6-7995-b175-0027b7552bdd,
-              tee: back,
-              course_rating: 35.6,
-              slope_rating: 131,
-            }
-          - {
-              id: 019f73ae-72d6-768c-8c9a-76fe482b9c12,
-              tee: standard,
-              course_rating: 34.8,
-              slope_rating: 126,
-            }
-          - {
-              id: 019f73b6-7eb8-706c-a8a4-91aaca68e95a,
-              tee: senior,
-              course_rating: 33.3,
-              slope_rating: 115,
-            }
-          - {
-              id: 019f73ae-72d6-75e8-bd1f-db30e5d69f53,
-              tee: front,
-              course_rating: 32.5,
-              slope_rating: 112,
-            }
-          - {
-              id: 019f73ae-72d6-7d7a-8be8-7f4fec5344c3,
-              tee: junior,
-              course_rating: 30.4,
-              slope_rating: 105,
-            }
-        holes:
-          - { id: 019f7224-8600-76a1-968c-12d95649060a, number: 10, par: 4 }
-          - { id: 019f7224-8600-734d-bcd8-178790650fc4, number: 11, par: 4 }
-          - { id: 019f7224-8600-7514-bf5b-9b4d9bea9163, number: 12, par: 5 }
-          - { id: 019f7224-8600-7899-bbb7-c719147a9ee2, number: 13, par: 5 }
-          - { id: 019f7224-8600-70a9-91b2-fd4154558863, number: 14, par: 3 }
-          - { id: 019f7224-8600-7460-9722-e4673a8d15b9, number: 15, par: 4 }
-          - { id: 019f7224-8600-7eef-bb5b-2ba4746f6db3, number: 16, par: 3 }
-          - { id: 019f7224-8600-720d-b222-2fc64a08646c, number: 17, par: 4 }
-          - { id: 019f7224-8600-7cae-ac84-80b2d586e948, number: 18, par: 4 }
+        usga_course_id: 21163
+        usga_course_nine: front
+        tees:
+          - id: 019f73ae-72d6-7995-b175-0027b7552bdd
+            name: Blue
+            type: back
+            gender: m
+            course_rating: 35.6
+            slope_rating: 131
+            holes:
+              - { id: 019f762c-5602-7b44-b19d-c33b0e4e8bb1, number: 10, par: 4 }
+              - { id: 019f762c-5602-79d5-97be-1ae6f9727139, number: 11, par: 4 }
+              - { id: 019f762c-5602-73ef-9175-1c53588e3530, number: 12, par: 5 }
+              - { id: 019f762c-5602-71a2-bc05-3edf6ea86099, number: 13, par: 5 }
+              - { id: 019f762c-5602-7319-9b41-439fbad381b2, number: 14, par: 3 }
+              - { id: 019f762c-5602-7a0b-b25b-62e2d1a777c4, number: 15, par: 4 }
+              - { id: 019f762c-5602-7677-b39e-1528e135a0dc, number: 16, par: 3 }
+              - { id: 019f762c-5602-7ca2-b43b-7369261aa20f, number: 17, par: 4 }
+              - { id: 019f762c-5602-7b5e-8700-f4e176563b9c, number: 18, par: 4 }
+          - id: 019f73ae-72d6-768c-8c9a-76fe482b9c12
+            name: White
+            type: standard
+            gender: m
+            course_rating: 34.8
+            slope_rating: 126
+            holes:
+              - { id: 019f762c-5602-7fc4-8f3e-4131d58760d4, number: 10, par: 4 }
+              - { id: 019f762c-5602-7b90-9c51-64b12487d4b8, number: 11, par: 4 }
+              - { id: 019f762c-5602-7236-b248-050a5916047f, number: 12, par: 5 }
+              - { id: 019f762c-5602-7c06-a6cb-9f42eb0f6672, number: 13, par: 5 }
+              - { id: 019f762c-5602-71a5-a717-268646d97cb4, number: 14, par: 3 }
+              - { id: 019f762c-5602-719b-bd82-f964af8fe8dc, number: 15, par: 4 }
+              - { id: 019f762c-5602-76c2-8828-629999a4e7da, number: 16, par: 3 }
+              - { id: 019f762c-5602-77aa-9fa9-11648249a1f4, number: 17, par: 4 }
+              - { id: 019f762c-5602-7fd7-9eab-5dfb4d4e3922, number: 18, par: 4 }
+          - id: 019f73b6-7eb8-706c-a8a4-91aaca68e95a
+            name: Gold
+            type: senior
+            gender: m
+            course_rating: 33.3
+            slope_rating: 115
+            holes:
+              - { id: 019f762c-5602-7004-8a62-768b6efd7d03, number: 10, par: 4 }
+              - { id: 019f762c-5602-7d7e-a26c-1c9cb993a60b, number: 11, par: 4 }
+              - { id: 019f762c-5602-73ae-b0fe-f54e6590661f, number: 12, par: 5 }
+              - { id: 019f762c-5602-7baf-bf56-b237d13254a8, number: 13, par: 5 }
+              - { id: 019f762c-5602-7364-b609-b35178e31d4f, number: 14, par: 3 }
+              - { id: 019f762c-5602-7a6b-9ace-eaa4feccfd5f, number: 15, par: 4 }
+              - { id: 019f762c-5602-7e8d-8d56-286107f803ef, number: 16, par: 3 }
+              - { id: 019f762c-5602-7eca-8856-9d841a964729, number: 17, par: 4 }
+              - { id: 019f762c-5602-7b74-b6e8-b827e1706e68, number: 18, par: 4 }
+          - id: 019f73ae-72d6-75e8-bd1f-db30e5d69f53
+            name: Red
+            type: front
+            gender: m
+            course_rating: 32.5
+            slope_rating: 112
+            holes:
+              - { id: 019f762c-5602-7534-a7bc-4a28dff02fb9, number: 10, par: 4 }
+              - { id: 019f762c-5602-7486-9e6e-204560cdc9d6, number: 11, par: 4 }
+              - { id: 019f762c-5602-7369-abdd-255f5b50adb6, number: 12, par: 5 }
+              - { id: 019f762c-5602-731c-8912-77466028d880, number: 13, par: 5 }
+              - { id: 019f762c-5602-784e-8d21-11326ad3bf56, number: 14, par: 3 }
+              - { id: 019f762c-5602-766d-8141-e0c8f96fe48d, number: 15, par: 4 }
+              - { id: 019f762c-5602-7474-a5eb-951c111f6d99, number: 16, par: 3 }
+              - { id: 019f762c-5602-70b1-ac09-a289011aabb7, number: 17, par: 4 }
+              - { id: 019f762c-5602-75a2-84d8-a9155acce794, number: 18, par: 4 }
+          - id: 019f73ae-72d6-7d7a-8be8-7f4fec5344c3
+            name: Green
+            type: junior
+            gender: m
+            course_rating: 30.4
+            slope_rating: 105
+            holes:
+              - { id: 019f762c-5602-7da7-a530-ca994e9f853a, number: 10, par: 4 }
+              - { id: 019f762c-5602-76a5-817c-9346cc546310, number: 11, par: 4 }
+              - { id: 019f762c-5602-7061-a17d-0e5b55f98e01, number: 12, par: 5 }
+              - { id: 019f762c-5602-7fc8-b3d2-637ce00b4afd, number: 13, par: 5 }
+              - { id: 019f762c-5602-7af1-85db-fd9b5c6c1365, number: 14, par: 3 }
+              - { id: 019f762c-5602-700f-af2a-69e3cd339edc, number: 15, par: 4 }
+              - { id: 019f762c-5602-782c-ae08-cbbe7db81555, number: 16, par: 3 }
+              - { id: 019f762c-5602-768f-803c-90bcbb78ebe6, number: 17, par: 4 }
+              - { id: 019f762c-5602-70d9-9274-667faaeb79a3, number: 18, par: 4 }
       - id: 019f7224-8600-758e-91f1-a0206f01191d
         name: Red
-        disposition: front
-        ncrdb_course_id: 21164
-        ratings:
-          - {
-              id: 019f73ae-72d6-7407-985d-ad6e65209718,
-              tee: back,
-              course_rating: 33.8,
-              slope_rating: 121,
-            }
-          - {
-              id: 019f73ae-72d6-7812-a0d8-6874c9e2b3d6,
-              tee: standard,
-              course_rating: 33.6,
-              slope_rating: 118,
-            }
-          - {
-              id: 019f73b6-7eb8-724c-84e2-e46a16f45c84,
-              tee: senior,
-              course_rating: 32.2,
-              slope_rating: 113,
-            }
-          - {
-              id: 019f73ae-72d6-7282-9caf-c8cd9dcc3e64,
-              tee: front,
-              course_rating: 31.7,
-              slope_rating: 110,
-            }
-          - {
-              id: 019f73ae-72d6-75be-b0c6-b5090060d496,
-              tee: junior,
-              course_rating: 30.3,
-              slope_rating: 105,
-            }
-        holes:
-          - { id: 019f7224-8600-7a33-93fe-df76aaed4745, number: 1, par: 3 }
-          - { id: 019f7224-8600-7a60-ae8b-312847333713, number: 2, par: 4 }
-          - { id: 019f7224-8600-74f1-936d-3f9958a4a5dd, number: 3, par: 3 }
-          - { id: 019f7224-8600-797d-ae74-15f3ad7da841, number: 4, par: 4 }
-          - { id: 019f7224-8600-7961-bfe4-23ed4ed1b412, number: 5, par: 4 }
-          - { id: 019f7224-8600-733b-ac53-ac156b074c11, number: 6, par: 5 }
-          - { id: 019f7224-8600-7fe9-b5fe-a9d365f9a3ff, number: 7, par: 4 }
-          - { id: 019f7224-8600-71dd-b316-3280d008ee07, number: 8, par: 4 }
-          - { id: 019f7224-8600-7a9f-b2ab-8e418b20e63f, number: 9, par: 3 }
+        usga_course_id: 21164
+        usga_course_nine: front
+        tees:
+          - id: 019f73ae-72d6-7407-985d-ad6e65209718
+            name: Blue
+            type: back
+            gender: m
+            course_rating: 33.8
+            slope_rating: 121
+            holes:
+              - { id: 019f762c-5602-7c44-b738-b0b352abfeef, number: 1, par: 3 }
+              - { id: 019f762c-5602-724a-a9bb-7806ea113ec2, number: 2, par: 4 }
+              - { id: 019f762c-5602-7386-95a6-229dcf0fe4ee, number: 3, par: 3 }
+              - { id: 019f762c-5602-7540-8505-bace1bb0f6bb, number: 4, par: 4 }
+              - { id: 019f762c-5602-7293-be86-b9e2c2a8fe2d, number: 5, par: 4 }
+              - { id: 019f762c-5602-7e36-b2b8-f4417fd70348, number: 6, par: 5 }
+              - { id: 019f762c-5602-7154-8a90-0015a88e7669, number: 7, par: 4 }
+              - { id: 019f762c-5602-786b-bad5-97f91235efd4, number: 8, par: 4 }
+              - { id: 019f762c-5602-7957-884d-a5a91c1e0359, number: 9, par: 3 }
+          - id: 019f73ae-72d6-7812-a0d8-6874c9e2b3d6
+            name: White
+            type: standard
+            gender: m
+            course_rating: 33.6
+            slope_rating: 118
+            holes:
+              - { id: 019f762c-5602-7191-9b07-6d445acf2dfa, number: 1, par: 3 }
+              - { id: 019f762c-5602-7e96-8784-0294e81a9fdd, number: 2, par: 4 }
+              - { id: 019f762c-5602-7a19-906b-6bf7bb0a1070, number: 3, par: 3 }
+              - { id: 019f762c-5602-7fbe-8277-06e194e2dce3, number: 4, par: 4 }
+              - { id: 019f762c-5602-703a-be17-7f3cdf09b7a7, number: 5, par: 4 }
+              - { id: 019f762c-5602-7435-8dcd-9557e6a4517f, number: 6, par: 5 }
+              - { id: 019f762c-5602-7c17-ad8e-05488523e3af, number: 7, par: 4 }
+              - { id: 019f762c-5602-70b0-99bc-b60863f52dab, number: 8, par: 4 }
+              - { id: 019f762c-5602-742c-b34d-d1697cfcf394, number: 9, par: 3 }
+          - id: 019f73b6-7eb8-724c-84e2-e46a16f45c84
+            name: Gold
+            type: senior
+            gender: m
+            course_rating: 32.2
+            slope_rating: 113
+            holes:
+              - { id: 019f762c-5602-757f-9f76-9f8185641c9d, number: 1, par: 3 }
+              - { id: 019f762c-5602-7055-9c20-5f0a88ae148c, number: 2, par: 4 }
+              - { id: 019f762c-5602-77d8-9912-3919b9b9f1e5, number: 3, par: 3 }
+              - { id: 019f762c-5602-7f6e-88af-843614d3f382, number: 4, par: 4 }
+              - { id: 019f762c-5602-7c8a-afd7-41e487ac342e, number: 5, par: 4 }
+              - { id: 019f762c-5602-7c3b-90b3-21696c01f3ae, number: 6, par: 5 }
+              - { id: 019f762c-5602-794d-8a60-ba3dde7764d3, number: 7, par: 4 }
+              - { id: 019f762c-5602-7a66-894f-98ba63c2b484, number: 8, par: 4 }
+              - { id: 019f762c-5602-7dec-a0fd-7acbff05d13a, number: 9, par: 3 }
+          - id: 019f73ae-72d6-7282-9caf-c8cd9dcc3e64
+            name: Red
+            type: front
+            gender: m
+            course_rating: 31.7
+            slope_rating: 110
+            holes:
+              - { id: 019f762c-5602-76aa-832d-d4ba84d8ac3d, number: 1, par: 3 }
+              - { id: 019f762c-5602-77ff-867d-16cf592d3616, number: 2, par: 4 }
+              - { id: 019f762c-5602-7f72-acdc-3955d5592657, number: 3, par: 3 }
+              - { id: 019f762c-5602-743a-93bc-4a56a8f3684a, number: 4, par: 4 }
+              - { id: 019f762c-5602-7b0f-a05e-5654a549fa69, number: 5, par: 4 }
+              - { id: 019f762c-5602-75d6-b561-61490ac106ca, number: 6, par: 5 }
+              - { id: 019f762c-5602-7cdb-a6df-c94987b4f3b1, number: 7, par: 4 }
+              - { id: 019f762c-5602-732f-ae02-8bff5ced5857, number: 8, par: 4 }
+              - { id: 019f762c-5602-79b8-8b75-4d268646d46c, number: 9, par: 3 }
+          - id: 019f73ae-72d6-75be-b0c6-b5090060d496
+            name: Green
+            type: junior
+            gender: m
+            course_rating: 30.3
+            slope_rating: 105
+            holes:
+              - { id: 019f762c-5602-7ef3-86a1-a52188bc4942, number: 1, par: 3 }
+              - { id: 019f762c-5602-782d-b1ef-5517dbbcb086, number: 2, par: 4 }
+              - { id: 019f762c-5602-7f6d-a518-19f7244578af, number: 3, par: 3 }
+              - { id: 019f762c-5602-742d-8981-81de581724e8, number: 4, par: 4 }
+              - { id: 019f762c-5602-7d08-bda0-418e658e3705, number: 5, par: 4 }
+              - { id: 019f762c-5602-7d38-8b16-193f9957b549, number: 6, par: 5 }
+              - { id: 019f762c-5602-7045-ba06-8cff8d1facb0, number: 7, par: 4 }
+              - { id: 019f762c-5602-730f-938b-5a08c2f00626, number: 8, par: 4 }
+              - { id: 019f762c-5602-76ca-b1cc-f6b2623b939b, number: 9, par: 3 }
