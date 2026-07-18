@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Pencil, Search, UserRoundPlus } from "lucide-react";
+import { ChevronRight, Mail, Pencil, Search, UserRoundPlus } from "lucide-react";
 import type { Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { MultiCombobox } from "@/components/multi-combobox";
@@ -251,6 +251,8 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [updatingAdmin, setUpdatingAdmin] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+  const [inviting, setInviting] = useState(false);
 
   const isSelf = profile?.id === golferId;
   const canEdit = isAdmin || isSelf;
@@ -295,7 +297,32 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
     setPreferredTee(golfer.preferredTee);
     setNicknames(golfer.nicknames.map((entry) => entry.nickname));
     setProfileError(null);
+    setInviteStatus(null);
     setEditOpen(true);
+  }
+
+  // Re-sends the invite email to the golfer's SAVED address (the invite
+  // endpoint is idempotent on email, and admin-only).
+  async function sendInvite() {
+    if (!client || !golfer?.email) return;
+    setInviting(true);
+    setProfileError(null);
+    setInviteStatus(null);
+    try {
+      const response = await client.api.golfers.invite.$post({
+        json: { email: golfer.email },
+      });
+      if (!response.ok) {
+        throw new Error(await requestError(response, "Unable to send the invite."));
+      }
+      setInviteStatus(`Invite sent to ${golfer.email}.`);
+    } catch (inviteError) {
+      setProfileError(
+        inviteError instanceof Error ? inviteError.message : "Unable to send the invite.",
+      );
+    } finally {
+      setInviting(false);
+    }
   }
 
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
@@ -532,6 +559,30 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
               />
             </div>
           )}
+          {isAdmin && golfer && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+              <div>
+                <p className="text-sm font-medium">Invite email</p>
+                <p className="text-sm text-muted-foreground">
+                  {golfer.email
+                    ? `Emails a sign-in link to ${golfer.email}.`
+                    : "Add and save an email first."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={inviting || !golfer.email}
+                onClick={() => void sendInvite()}
+              >
+                <Mail data-icon="inline-start" />
+                {inviting ? "Sending…" : "Send Invite"}
+              </Button>
+            </div>
+          )}
+          {inviteStatus && <p className="text-sm text-muted-foreground">{inviteStatus}</p>}
           {profileError && <p className="text-sm text-destructive">{profileError}</p>}
           <Button type="submit" disabled={saving}>
             {saving ? "Saving…" : "Save changes"}
