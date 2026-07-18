@@ -24,7 +24,8 @@
     "deploy:ci": "bun db:migrate:remote && bunx wrangler deploy",
     "db:generate": "bun --filter api db:generate",
     "db:migrate:local": "bun --filter api db:migrate:local",
-    "db:migrate:remote": "bun --filter api db:migrate:remote"
+    "db:migrate:remote": "bun --filter api db:migrate:remote",
+    "db:file": "nu script/db_file.nu"
   },
   "devDependencies": {
     "oxfmt": "^0.59.0",

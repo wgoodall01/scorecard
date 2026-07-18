@@ -1,0 +1,5 @@
+# Scrape output. The raw JSONL and run state (checkpoint, logs) are large and
+# transient — only the compressed end-of-scrape snapshots (*.jsonl.zst) are
+# committed as a static record. sync.nu decompresses them on demand.
+/output/*
+!/output/*.jsonl.zst

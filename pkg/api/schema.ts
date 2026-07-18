@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { customType, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { customType, index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { ScoresExtractData } from "./src/agent/card_extract/schema";
 
 const varchar = customType<{ data: string }>({
@@ -145,9 +145,16 @@ export const courseSetTee = sqliteTable(
     type: varchar("type").$type<Tee>(),
     courseRating: real("course_rating"),
     slopeRating: integer("slope_rating"),
+    // Soft link to the USGA-imported tee (usga_tee.tee_id) this position was
+    // copied from, when it originated from the NCRDB dump. Deliberately NOT a
+    // foreign key: the usga_* tables are wholly owned by the scraper/sync
+    // script and may be re-synced independently, so app writes must not depend
+    // on a matching row existing. Indexed for lookups.
+    usgaTeeId: integer("usga_tee_id"),
     ...timestamps,
   },
   (table) => [
+    index("course_set_tee_usga_tee_id_idx").on(table.usgaTeeId),
     // One tee per (nine, name, gender), case-insensitively; gender NULL
     // coalesces so two ungendered "White" rows still collide. drizzle-kit
     // mangles multi-argument index expressions, so the generated SQL for
@@ -245,6 +252,92 @@ export const score = sqliteTable(
     ...timestamps,
   },
   (table) => [uniqueIndex("score_cell_unique").on(table.scoreSetId, table.holeId)],
+);
+
+// ---------------------------------------------------------------------------
+// USGA NCRDB mirror (usga_*) — READ-ONLY to the application.
+//
+// These three tables are a flattened mirror of the USGA National Course Rating
+// Database (ncrdb.usga.org), bulk-loaded by pkg/usga_ncrdb_scraper (the scraper
+// writes JSONL, scripts/sync.nu upserts it here). They are WHOLLY OWNED by that
+// scraper/sync pipeline: the app never INSERTs, UPDATEs, or DELETEs them — it
+// only reads them (e.g. to look up a course's rated tees when importing it into
+// the app-level course/course_set/course_set_tee tables, copying the values we
+// need). The natural USGA integer ids are the primary keys, and every id
+// (including cross-table references) is indexed. The USGA data has no per-hole
+// pars/yardages, which is why the app keeps its own course/hole tables rather
+// than pointing at these directly.
+//
+// The primitive columns are a direct flatten of the scraper's JSONL. Field
+// placement is driven strictly by the data: a field lives on usga_facility only
+// if it is IDENTICAL across every course a facility has; any field that ever
+// differs between two courses of the same facility (street address, city,
+// legacy id) lives on usga_course, so no varying value is ever lost by hoisting
+// it to the facility.
+// ---------------------------------------------------------------------------
+
+// A USGA facility (a club/property). Keyed by the NCRDB facilityID. Holds only
+// the fields verified constant across all of a facility's courses.
+export const usgaFacility = sqliteTable("usga_facility", {
+  facilityId: integer("facility_id").primaryKey(),
+  name: varchar("name").notNull(),
+  state: varchar("state"),
+  country: varchar("country"),
+  entCountryCode: integer("ent_country_code"),
+  entStateCode: integer("ent_state_code"),
+  telephone: varchar("telephone"),
+  email: varchar("email"),
+  stateDisplay: varchar("state_display"),
+  ...timestamps,
+});
+
+// A USGA "course" — really one rated nine-hole COMBINATION at a facility (e.g.
+// "WHITE/BLUE"), keyed by the NCRDB courseID. facility_id is the NCRDB
+// facilityID (soft reference into usga_facility, indexed). Address/city live
+// here (not on the facility) because they can differ course-to-course.
+export const usgaCourse = sqliteTable(
+  "usga_course",
+  {
+    courseId: integer("course_id").primaryKey(),
+    facilityId: integer("facility_id").notNull(),
+    name: varchar("name").notNull(),
+    fullName: varchar("full_name").notNull(),
+    address1: varchar("address1"),
+    address2: varchar("address2"),
+    city: varchar("city"),
+    legacyCrpCourseId: integer("legacy_crp_course_id"),
+    ...timestamps,
+  },
+  (table) => [index("usga_course_facility_id_idx").on(table.facilityId)],
+);
+
+// A USGA-rated tee position on a course (nine-combination), keyed by the NCRDB
+// teeId (globally unique in the dump). course_id references usga_course
+// (indexed). Nine-hole splits are flattened into front9_*/back9_* columns.
+// Ratings are stored as reported: course/bogey ratings are strokes to one
+// decimal (real), slope 55–155 (integer), length in yards (integer). Nulls
+// carry through from the source (some tees have no length or no back-nine
+// rating).
+export const usgaTee = sqliteTable(
+  "usga_tee",
+  {
+    teeId: integer("tee_id").primaryKey(),
+    courseId: integer("course_id").notNull(),
+    name: varchar("name").notNull(),
+    // "M" or "F" as reported by the USGA.
+    gender: varchar("gender").notNull(),
+    par: integer("par"),
+    courseRating: real("course_rating"),
+    bogeyRating: real("bogey_rating"),
+    slopeRating: integer("slope_rating"),
+    length: integer("length"),
+    front9CourseRating: real("front9_course_rating"),
+    front9SlopeRating: integer("front9_slope_rating"),
+    back9CourseRating: real("back9_course_rating"),
+    back9SlopeRating: integer("back9_slope_rating"),
+    ...timestamps,
+  },
+  (table) => [index("usga_tee_course_id_idx").on(table.courseId)],
 );
 
 export const userRelations = relations(user, ({ many }) => ({

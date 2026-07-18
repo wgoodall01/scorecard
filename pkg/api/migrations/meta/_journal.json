@@ -78,6 +78,13 @@
       "when": 1784397843169,
       "tag": "0010_hot_william_stryker",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1784399823204,
+      "tag": "0011_large_franklin_richards",
+      "breakpoints": true
     }
   ]
 }

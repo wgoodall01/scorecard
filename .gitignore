@@ -1,5 +1,6 @@
 node_modules
 .wrangler
+local.db
 pkg/web/dist
 .env.local
 .dev.vars
