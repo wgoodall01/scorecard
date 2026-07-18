@@ -1,0 +1,157 @@
+{
+  "courses": [
+    {
+      "id": "c-pebble",
+      "name": "Pebble Beach Golf Links",
+      "location": "Pebble Beach, CA",
+      "sets": [
+        {
+          "id": "s-pebble-front",
+          "name": "Front Nine",
+          "disposition": "front",
+          "firstHole": 1,
+          "pars": [4, 5, 4, 4, 3, 5, 3, 4, 4]
+        },
+        {
+          "id": "s-pebble-back",
+          "name": "Back Nine",
+          "disposition": "back",
+          "firstHole": 10,
+          "pars": [4, 4, 4, 3, 5, 4, 3, 5, 5]
+        }
+      ]
+    },
+    {
+      "id": "c-bhf",
+      "name": "Black Horse Farm Golf Club",
+      "location": "Lexington, KY",
+      "sets": [
+        {
+          "id": "s-bhf-white",
+          "name": "White",
+          "disposition": "front",
+          "firstHole": 1,
+          "pars": [4, 5, 4, 5, 4, 4, 3, 4, 3]
+        },
+        {
+          "id": "s-bhf-blue",
+          "name": "Blue",
+          "disposition": "back",
+          "firstHole": 10,
+          "pars": [4, 4, 5, 5, 3, 4, 3, 4, 4]
+        },
+        {
+          "id": "s-bhf-red",
+          "name": "Red",
+          "disposition": "front",
+          "firstHole": 1,
+          "pars": [3, 4, 3, 4, 4, 5, 4, 4, 3]
+        }
+      ]
+    },
+    {
+      "id": "c-river",
+      "name": "Riverbend Country Club",
+      "location": null,
+      "sets": [
+        {
+          "id": "s-river-front",
+          "name": "Front Nine",
+          "disposition": "front",
+          "firstHole": 1,
+          "pars": [4, 5, 4, 4, 3, 5, 3, 4, 4]
+        },
+        {
+          "id": "s-river-back",
+          "name": "Back Nine",
+          "disposition": "back",
+          "firstHole": 10,
+          "pars": [4, 4, 4, 3, 5, 4, 3, 5, 5]
+        }
+      ]
+    },
+    {
+      "id": "c-quarry",
+      "name": "The Quarry at Stonebridge",
+      "location": "San Antonio, TX",
+      "sets": [
+        {
+          "id": "s-quarry-lake",
+          "name": "Lake Nine",
+          "disposition": "front",
+          "firstHole": 1,
+          "pars": [5, 4, 3, 4, 4, 5, 3, 4, 4]
+        },
+        {
+          "id": "s-quarry-cliff",
+          "name": "Cliff Nine",
+          "disposition": "back",
+          "firstHole": 10,
+          "pars": [4, 3, 5, 4, 4, 3, 5, 4, 4]
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "label": "course-and-nine",
+      "courseName": "Pebble Beach Golf Links",
+      "nines": [{ "name": "Front Nine", "firstHole": 1, "pars": [4, 5, 4, 4, 3, 5, 3, 4, 4] }],
+      "expect": { "courseId": "c-pebble", "sets": ["s-pebble-front"] },
+      "note": "Riverbend's front nine shares this par sequence, so the exact phase abstains and the LLM must use the course name."
+    },
+    {
+      "label": "embellished-nine-names",
+      "courseName": null,
+      "nines": [
+        { "name": "WHITE OAK", "firstHole": 1, "pars": [4, 5, 4, 5, 4, 4, 3, 4, 3] },
+        { "name": "BLUE SPRUCE", "firstHole": 10, "pars": [4, 4, 5, 5, 3, 4, 3, 4, 4] }
+      ],
+      "expect": { "courseId": "c-bhf", "sets": ["s-bhf-white", "s-bhf-blue"] },
+      "note": "The card embellishes the nine names (db has plain White/Blue), but the par sequences match verbatim — resolved by the exact phase, no LLM."
+    },
+    {
+      "label": "embellished-names-misread-pars",
+      "courseName": null,
+      "nines": [
+        { "name": "WHITE OAK", "firstHole": 1, "pars": [4, 5, 4, 5, 4, 4, 3, 4, 4] },
+        { "name": "BLUE SPRUCE", "firstHole": 10, "pars": [4, 4, 5, 5, 3, 4, 3, 4, 5] }
+      ],
+      "expect": { "courseId": "c-bhf", "sets": ["s-bhf-white", "s-bhf-blue"] },
+      "note": "One par misread per nine defeats the exact phase; the LLM must still find White/Blue from the embellished names."
+    },
+    {
+      "label": "partial-course-name",
+      "courseName": "Pebble Beach",
+      "nines": [{ "name": "Back Nine", "firstHole": 10, "pars": [4, 4, 4, 3, 5, 4, 3, 5, 5] }],
+      "expect": { "courseId": "c-pebble", "sets": ["s-pebble-back"] }
+    },
+    {
+      "label": "generic-nine-ambiguous",
+      "courseName": null,
+      "nines": [{ "name": "Front Nine", "firstHole": 1, "pars": [4, 5, 4, 4, 3, 5, 3, 4, 4] }],
+      "expect": { "courseId": null, "sets": [null] },
+      "note": "'Front Nine' with this par sequence exists at two courses; with no course name the agent must abstain."
+    },
+    {
+      "label": "disposition-inference",
+      "courseName": "Riverbend Country Club",
+      "nines": [{ "name": null, "firstHole": 10, "pars": [4, 4, 4, 3, 5, 4, 3, 5, 5] }],
+      "expect": { "courseId": "c-river", "sets": ["s-river-back"] },
+      "note": "No printed nine name and a par sequence shared with Pebble — the course name plus holes 10-18 identify the back nine."
+    },
+    {
+      "label": "unknown-course",
+      "courseName": "St Andrews Old Course",
+      "nines": [{ "name": "Front", "firstHole": 1, "pars": [4, 4, 4, 4, 5, 4, 4, 3, 4] }],
+      "expect": { "courseId": null, "sets": [null] }
+    },
+    {
+      "label": "single-distinctive-set",
+      "courseName": null,
+      "nines": [{ "name": "Cliff Nine", "firstHole": 10, "pars": [4, 3, 5, 4, 4, 3, 5, 4, 3] }],
+      "expect": { "courseId": "c-quarry", "sets": ["s-quarry-cliff"] },
+      "note": "Pars misread (no exact match) — the distinctive nine name alone must find the course."
+    }
+  ]
+}

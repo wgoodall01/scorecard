@@ -1,0 +1,49 @@
+# Course seed data. Upserted by script/update_seed.nu.
+#
+# Courses upsert by id; sets by (course, name) and holes by (set, number) —
+# the ids below are only used on first insert, so hand-created rows with the
+# same natural keys keep their ids and nothing double-inserts.
+courses:
+  - id: 019f7224-8600-7a93-b371-af4ba7a96372
+    name: Buck Hill Falls Golf Course
+    location: Buck Hill Falls, PA
+    sets:
+      - id: 019f7224-8600-7909-9260-233d35044908
+        name: White
+        disposition: front
+        holes:
+          - { id: 019f7224-8600-793d-b7ce-a444db130a32, number: 1, par: 4 }
+          - { id: 019f7224-8600-7a2b-addf-ca8bb029ea22, number: 2, par: 5 }
+          - { id: 019f7224-8600-7af6-9b85-5bf2c99f07fc, number: 3, par: 4 }
+          - { id: 019f7224-8600-7cf0-9b1f-20814b11650b, number: 4, par: 5 }
+          - { id: 019f7224-8600-7b64-a8e8-f92977cc383d, number: 5, par: 4 }
+          - { id: 019f7224-8600-7de8-b67c-d878bfa06cce, number: 6, par: 4 }
+          - { id: 019f7224-8600-71c1-8765-13eaf3a33416, number: 7, par: 3 }
+          - { id: 019f7224-8600-7c90-9bb7-ad11df9ee010, number: 8, par: 4 }
+          - { id: 019f7224-8600-7d9e-9030-72aeb8edee50, number: 9, par: 3 }
+      - id: 019f7224-8600-7f69-a0ae-12627b0a7b22
+        name: Blue
+        disposition: back
+        holes:
+          - { id: 019f7224-8600-76a1-968c-12d95649060a, number: 10, par: 4 }
+          - { id: 019f7224-8600-734d-bcd8-178790650fc4, number: 11, par: 4 }
+          - { id: 019f7224-8600-7514-bf5b-9b4d9bea9163, number: 12, par: 5 }
+          - { id: 019f7224-8600-7899-bbb7-c719147a9ee2, number: 13, par: 5 }
+          - { id: 019f7224-8600-70a9-91b2-fd4154558863, number: 14, par: 3 }
+          - { id: 019f7224-8600-7460-9722-e4673a8d15b9, number: 15, par: 4 }
+          - { id: 019f7224-8600-7eef-bb5b-2ba4746f6db3, number: 16, par: 3 }
+          - { id: 019f7224-8600-720d-b222-2fc64a08646c, number: 17, par: 4 }
+          - { id: 019f7224-8600-7cae-ac84-80b2d586e948, number: 18, par: 4 }
+      - id: 019f7224-8600-758e-91f1-a0206f01191d
+        name: Red
+        disposition: front
+        holes:
+          - { id: 019f7224-8600-7a33-93fe-df76aaed4745, number: 1, par: 3 }
+          - { id: 019f7224-8600-7a60-ae8b-312847333713, number: 2, par: 4 }
+          - { id: 019f7224-8600-74f1-936d-3f9958a4a5dd, number: 3, par: 3 }
+          - { id: 019f7224-8600-797d-ae74-15f3ad7da841, number: 4, par: 4 }
+          - { id: 019f7224-8600-7961-bfe4-23ed4ed1b412, number: 5, par: 4 }
+          - { id: 019f7224-8600-733b-ac53-ac156b074c11, number: 6, par: 5 }
+          - { id: 019f7224-8600-7fe9-b5fe-a9d365f9a3ff, number: 7, par: 4 }
+          - { id: 019f7224-8600-71dd-b316-3280d008ee07, number: 8, par: 4 }
+          - { id: 019f7224-8600-7a9f-b2ab-8e418b20e63f, number: 9, par: 3 }

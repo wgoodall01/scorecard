@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { authService, createApiClient, type ApiClient } from "@/lib/auth";
 
-export type Profile = { id: string; email: string; name: string | null; admin: boolean };
+// email is null for golfers who exist only as players (no account yet) —
+// though the signed-in user's own profile always has one (they logged in).
+export type Profile = { id: string; email: string | null; name: string | null; admin: boolean };
 
 type AuthContextValue = {
   token: string | null;

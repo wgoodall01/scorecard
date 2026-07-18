@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import { uuidv7 } from "../schema";
+import type { MatchedData } from "../src/agent/card_extract/agent";
+import type { ExtractDataSchema } from "../src/agent/card_extract/schema";
 import { requireAuth } from "./shared";
 
 const MAX_CAPTURE_BYTES = 10 * 1024 * 1024;
@@ -13,7 +15,10 @@ export type CaptureRecord = {
   error?: string;
 };
 
-export function captureKey(captureId: string, name: "image" | "capture.json" | "extracted.json") {
+export function captureKey(
+  captureId: string,
+  name: "image" | "capture.json" | "extracted.json" | "matched.json",
+) {
   return `cards/${captureId}/${name}`;
 }
 
@@ -64,5 +69,20 @@ export const captureRoutes = new Hono<Env>()
 
     const resultObject = await c.env.BUCKET.get(captureKey(captureId, "extracted.json"));
     if (!resultObject) return c.json({ error: "Capture result not found" }, 500);
-    return c.json(await resultObject.json());
+    const matchedObject = await c.env.BUCKET.get(captureKey(captureId, "matched.json"));
+    return c.json({
+      extracted: await resultObject.json<ExtractDataSchema>(),
+      matched: matchedObject ? await matchedObject.json<MatchedData>() : null,
+    });
+  })
+  // The original photo behind a scorecard record, for the outing page's
+  // gallery. Any signed-in league member can view it (fetched with the
+  // bearer token and rendered from a blob URL — <img src> can't send auth).
+  .get("/scorecards/:id/image", requireAuth, async (c) => {
+    const imageObject = await c.env.BUCKET.get(captureKey(c.req.param("id"), "image"));
+    if (!imageObject) return c.json({ error: "Scorecard image not found" }, 404);
+    return c.body(imageObject.body, 200, {
+      "Content-Type": imageObject.httpMetadata?.contentType ?? "image/jpeg",
+      "Cache-Control": "private, max-age=86400",
+    });
   });

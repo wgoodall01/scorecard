@@ -1,5 +1,7 @@
 import { APICallError, generateObject } from "ai";
+import { getDb } from "../../../db";
 import type { CaptureQueueMessage, Env } from "../../../env";
+import { scorecard } from "../../../schema";
 import { captureKey, putCaptureRecord } from "../../../routes/capture";
 import { RateLimitError, ScorecardReadError } from "../../extraction_errors";
 import {
@@ -10,7 +12,11 @@ import {
   providerOptionsFor,
   resolveModel,
 } from "../../model";
-import { ExtractData } from "./schema";
+import { matchCourseSets } from "../course_match/agent";
+import { courseSearchFromDb, courseSetParsFromDb } from "../course_match/search";
+import { matchPlayers } from "../player_match/agent";
+import { playerSearchFromDb } from "../player_match/search";
+import { ExtractData, type ExtractDataSchema } from "./schema";
 
 const EXTRACTION_PROMPT = `You are extracting structured data from a photo of a golf scorecard.
 
@@ -115,6 +121,54 @@ async function normalizeImage(
   };
 }
 
+// What the matching agents produced for one capture — stored in R2 as
+// matched.json and returned by /capture/result alongside the extraction.
+// null everywhere = "no confident match; the review UI asks the user".
+export type MatchedData = {
+  players: { name: string; userId: string | null }[];
+  course: {
+    courseId: string | null;
+    sets: { nineName: string | null; courseSetId: string | null }[];
+  };
+};
+
+// Runs the player-match and course-set-match agents over an extraction,
+// against the live database. Matching is best-effort: any failure (including
+// rate limits — retrying the queue message would re-spend the much more
+// expensive vision extraction) degrades to nulls rather than failing the
+// capture, since the review UI lets the user pick manually either way.
+async function matchCapture(env: Env["Bindings"], data: ExtractDataSchema): Promise<MatchedData> {
+  const db = getDb(env.DB);
+  const resolver: ModelResolver = (spec) => resolveModel(env, spec);
+  const names = [...new Set(data.nines.flatMap((nine) => nine.players))];
+  const nines = data.nines.map((nine) => ({
+    name: nine.nineName,
+    holes: nine.holes.map((hole) => ({ number: hole.hole, par: hole.par })),
+  }));
+
+  const [players, course] = await Promise.all([
+    matchPlayers({ names, search: playerSearchFromDb(db), resolver }).catch((error) => {
+      console.error("Player matching failed", { error });
+      return names.map((name) => ({ name, userId: null }));
+    }),
+    matchCourseSets({
+      courseName: data.courseName,
+      nines,
+      search: courseSearchFromDb(db),
+      listSetPars: courseSetParsFromDb(db),
+      resolver,
+    }).catch((error) => {
+      console.error("Course matching failed", { error });
+      return {
+        courseId: null,
+        sets: nines.map((nine) => ({ nineName: nine.name, courseSetId: null })),
+      };
+    }),
+  ]);
+
+  return { players, course };
+}
+
 async function extractCapture(env: Env["Bindings"], captureId: string, email: string) {
   const imageObject = await env.BUCKET.get(captureKey(captureId, "image"));
   if (!imageObject) throw new Error("Capture image not found");
@@ -127,6 +181,20 @@ async function extractCapture(env: Env["Bindings"], captureId: string, email: st
   await env.BUCKET.put(captureKey(captureId, "extracted.json"), JSON.stringify(data), {
     httpMetadata: { contentType: "application/json" },
   });
+
+  // The scorecard row is the capture's database identity: scores submitted
+  // from this card reference it, and the R2 objects live under its id.
+  // onConflictDoNothing keeps queue retries idempotent.
+  await getDb(env.DB)
+    .insert(scorecard)
+    .values({ id: captureId, createdAt: new Date().toISOString(), uploaderEmail: email })
+    .onConflictDoNothing();
+
+  const matched = await matchCapture(env, data);
+  await env.BUCKET.put(captureKey(captureId, "matched.json"), JSON.stringify(matched), {
+    httpMetadata: { contentType: "application/json" },
+  });
+
   await putCaptureRecord(env, captureId, { email, status: "complete" });
 }
 

@@ -1,0 +1,65 @@
+{
+  "roster": [
+    {
+      "id": "u-will",
+      "name": "William Goodall",
+      "email": "will@goodall.dev",
+      "nicknames": ["Will", "WG"]
+    },
+    {
+      "id": "u-tom",
+      "name": "Thomas Baker",
+      "email": "tbaker@example.com",
+      "nicknames": ["Tommy", "TB"]
+    },
+    { "id": "u-kevin", "name": "Kevin Park", "email": "kpark@example.com", "nicknames": [] },
+    { "id": "u-dana", "name": "Dana Hughes", "email": "dana.hughes@example.com", "nicknames": [] },
+    {
+      "id": "u-mike",
+      "name": "Michael Anderson",
+      "email": "manderson@example.com",
+      "nicknames": ["Mike"]
+    },
+    {
+      "id": "u-ray",
+      "name": "Raymond Ortiz",
+      "email": "rortiz@example.com",
+      "nicknames": ["Ray Ray"]
+    }
+  ],
+  "cases": [
+    {
+      "label": "exact-names",
+      "names": ["William Goodall", "Kevin Park"],
+      "expect": ["u-will", "u-kevin"]
+    },
+    {
+      "label": "abbreviated-first",
+      "names": ["W. Goodall", "T. Baker"],
+      "expect": ["u-will", "u-tom"],
+      "note": "First-initial + last name should resolve when the last name is unique."
+    },
+    {
+      "label": "nicknames",
+      "names": ["Tommy", "Mike", "Ray Ray"],
+      "expect": ["u-tom", "u-mike", "u-ray"]
+    },
+    {
+      "label": "bare-initials",
+      "names": ["WG", "TB", "KP", "DH"],
+      "expect": ["u-will", "u-tom", "u-kevin", "u-dana"],
+      "note": "KP and DH aren't stored nicknames — the agent must derive them from full names."
+    },
+    {
+      "label": "first-names-only",
+      "names": ["Kevin", "Dana"],
+      "expect": ["u-kevin", "u-dana"]
+    },
+    {
+      "label": "unknown-player",
+      "names": ["Barry Lime", "Michael Anderson"],
+      "expect": [null, "u-mike"],
+      "note": "A name with no plausible roster member must return null, not the closest player."
+    }
+  ]
+}

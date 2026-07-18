@@ -12,10 +12,13 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as OutingsRouteImport } from './routes/outings'
 import { Route as MeRouteImport } from './routes/me'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as AdminRouteImport } from './routes/admin'
+import { Route as GolfersRouteImport } from './routes/golfers'
+import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OutingsIdRouteImport } from './routes/outings_.$id'
 import { Route as LoginMagicRouteImport } from './routes/login_.magic'
-import { Route as AdminUsersIdRouteImport } from './routes/admin_.users.$id'
+import { Route as GolfersIdRouteImport } from './routes/golfers_.$id'
+import { Route as CoursesIdRouteImport } from './routes/courses_.$id'
 
 const OutingsRoute = OutingsRouteImport.update({
   id: '/outings',
@@ -32,9 +35,14 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+const GolfersRoute = GolfersRouteImport.update({
+  id: '/golfers',
+  path: '/golfers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesRoute = CoursesRouteImport.update({
+  id: '/courses',
+  path: '/courses',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -42,83 +50,114 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OutingsIdRoute = OutingsIdRouteImport.update({
+  id: '/outings_/$id',
+  path: '/outings/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginMagicRoute = LoginMagicRouteImport.update({
   id: '/login_/magic',
   path: '/login/magic',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminUsersIdRoute = AdminUsersIdRouteImport.update({
-  id: '/admin_/users/$id',
-  path: '/admin/users/$id',
+const GolfersIdRoute = GolfersIdRouteImport.update({
+  id: '/golfers_/$id',
+  path: '/golfers/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesIdRoute = CoursesIdRouteImport.update({
+  id: '/courses_/$id',
+  path: '/courses/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/courses': typeof CoursesRoute
+  '/golfers': typeof GolfersRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
+  '/courses/$id': typeof CoursesIdRoute
+  '/golfers/$id': typeof GolfersIdRoute
   '/login/magic': typeof LoginMagicRoute
-  '/admin/users/$id': typeof AdminUsersIdRoute
+  '/outings/$id': typeof OutingsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/courses': typeof CoursesRoute
+  '/golfers': typeof GolfersRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
+  '/courses/$id': typeof CoursesIdRoute
+  '/golfers/$id': typeof GolfersIdRoute
   '/login/magic': typeof LoginMagicRoute
-  '/admin/users/$id': typeof AdminUsersIdRoute
+  '/outings/$id': typeof OutingsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/courses': typeof CoursesRoute
+  '/golfers': typeof GolfersRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
+  '/courses_/$id': typeof CoursesIdRoute
+  '/golfers_/$id': typeof GolfersIdRoute
   '/login_/magic': typeof LoginMagicRoute
-  '/admin_/users/$id': typeof AdminUsersIdRoute
+  '/outings_/$id': typeof OutingsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/admin'
+    | '/courses'
+    | '/golfers'
     | '/login'
     | '/me'
     | '/outings'
+    | '/courses/$id'
+    | '/golfers/$id'
     | '/login/magic'
-    | '/admin/users/$id'
+    | '/outings/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
+    | '/courses'
+    | '/golfers'
     | '/login'
     | '/me'
     | '/outings'
+    | '/courses/$id'
+    | '/golfers/$id'
     | '/login/magic'
-    | '/admin/users/$id'
+    | '/outings/$id'
   id:
     | '__root__'
     | '/'
-    | '/admin'
+    | '/courses'
+    | '/golfers'
     | '/login'
     | '/me'
     | '/outings'
+    | '/courses_/$id'
+    | '/golfers_/$id'
     | '/login_/magic'
-    | '/admin_/users/$id'
+    | '/outings_/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
+  CoursesRoute: typeof CoursesRoute
+  GolfersRoute: typeof GolfersRoute
   LoginRoute: typeof LoginRoute
   MeRoute: typeof MeRoute
   OutingsRoute: typeof OutingsRoute
+  CoursesIdRoute: typeof CoursesIdRoute
+  GolfersIdRoute: typeof GolfersIdRoute
   LoginMagicRoute: typeof LoginMagicRoute
-  AdminUsersIdRoute: typeof AdminUsersIdRoute
+  OutingsIdRoute: typeof OutingsIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -144,11 +183,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
+    '/golfers': {
+      id: '/golfers'
+      path: '/golfers'
+      fullPath: '/golfers'
+      preLoaderRoute: typeof GolfersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/courses': {
+      id: '/courses'
+      path: '/courses'
+      fullPath: '/courses'
+      preLoaderRoute: typeof CoursesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -158,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/outings_/$id': {
+      id: '/outings_/$id'
+      path: '/outings/$id'
+      fullPath: '/outings/$id'
+      preLoaderRoute: typeof OutingsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login_/magic': {
       id: '/login_/magic'
       path: '/login/magic'
@@ -165,11 +218,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginMagicRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin_/users/$id': {
-      id: '/admin_/users/$id'
-      path: '/admin/users/$id'
-      fullPath: '/admin/users/$id'
-      preLoaderRoute: typeof AdminUsersIdRouteImport
+    '/golfers_/$id': {
+      id: '/golfers_/$id'
+      path: '/golfers/$id'
+      fullPath: '/golfers/$id'
+      preLoaderRoute: typeof GolfersIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/courses_/$id': {
+      id: '/courses_/$id'
+      path: '/courses/$id'
+      fullPath: '/courses/$id'
+      preLoaderRoute: typeof CoursesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -177,12 +237,15 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
+  CoursesRoute: CoursesRoute,
+  GolfersRoute: GolfersRoute,
   LoginRoute: LoginRoute,
   MeRoute: MeRoute,
   OutingsRoute: OutingsRoute,
+  CoursesIdRoute: CoursesIdRoute,
+  GolfersIdRoute: GolfersIdRoute,
   LoginMagicRoute: LoginMagicRoute,
-  AdminUsersIdRoute: AdminUsersIdRoute,
+  OutingsIdRoute: OutingsIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

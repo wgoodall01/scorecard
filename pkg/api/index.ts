@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import type { CaptureQueueMessage, Env } from "./env";
-import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
 import { captureRoutes } from "./routes/capture";
+import { golferRoutes } from "./routes/golfers";
 import { healthRoutes } from "./routes/health";
+import { outingRoutes } from "./routes/outings";
 import { userRoutes } from "./routes/users";
 import { handleCaptureQueue } from "./src/agent/card_extract/agent";
 
@@ -15,12 +16,16 @@ export {
   type AuthTokenRequestSchema,
 } from "./routes/auth";
 export {
-  InviteRequest,
-  UpdateUserRequest,
-  type InviteRequestSchema,
-  type UpdateUserRequestSchema,
-} from "./routes/admin";
+  InviteGolferRequest,
+  UpdateGolferRequest,
+  type InviteGolferRequestSchema,
+  type UpdateGolferRequestSchema,
+} from "./routes/golfers";
+export { SubmitOutingRequest, type SubmitOutingRequestSchema } from "./routes/outings";
 export { Email, type EmailSchema } from "./routes/shared";
+export { TEES, type Tee } from "./schema";
+export type { MatchedData } from "./src/agent/card_extract/agent";
+export type { ExtractDataSchema, NineSchema } from "./src/agent/card_extract/schema";
 
 const app = new Hono<Env>()
   .basePath("/api")
@@ -28,7 +33,8 @@ const app = new Hono<Env>()
   .route("/", captureRoutes)
   .route("/", authRoutes)
   .route("/", userRoutes)
-  .route("/", adminRoutes);
+  .route("/", golferRoutes)
+  .route("/", outingRoutes);
 
 export type AppType = typeof app;
 

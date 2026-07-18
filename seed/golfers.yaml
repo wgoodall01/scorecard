@@ -1,0 +1,34 @@
+# Golfer seed data. Upserted by script/update_seed.nu.
+#
+# Users are upserted by ID — the uuidv7s below are canonical, so foreign keys
+# (nicknames, scores, outing_player) can rely on them. email may be null for
+# golfers who exist only as players; they can't sign in until one is set.
+# Re-running the seed resets each seeded golfer's email/name/admin to the
+# values here.
+golfers:
+  - id: 019f6c85-3717-70af-83f8-d0f9ba1ce208
+    email: wgoodall01@gmail.com
+    name: William Goodall
+    admin: true
+    nicknames:
+      - { id: 019f7224-85ff-76a2-a2f1-22df2aa3ea47, nickname: WAG, type: initials }
+      - { id: 019f7224-85ff-784e-b3dd-5e2003e26eae, nickname: WG, type: initials }
+      - { id: 019f7224-85ff-747c-92fa-11c7ad946ba4, nickname: Will, type: nickname }
+  - id: 019f7224-85ff-7d7a-89a9-97a1b957ccd0
+    email: ajg@ashleygoodall.com
+    name: Ashley Goodall
+    admin: false
+    nicknames:
+      - { id: 019f7224-85ff-7b7f-9f63-54fb3fb754a2, nickname: AJG, type: initials }
+  - id: 019f7224-85ff-7f8c-a189-f8455f397458
+    email: null
+    name: Adam Meredith
+    admin: false
+    nicknames:
+      - { id: 019f7224-85ff-7100-9702-28c451e827d6, nickname: AJM, type: initials }
+  - id: 019f7224-85ff-71e3-952e-b3ab19c5a282
+    email: null
+    name: Jacob Meredith
+    admin: false
+    nicknames:
+      - { id: 019f7224-85ff-71a4-ac49-e20a36be59f8, nickname: JJM, type: initials }

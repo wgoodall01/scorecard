@@ -11,6 +11,8 @@
     "dev": "wrangler dev --config ../../wrangler.toml",
     "test": "vitest run",
     "eval": "bun src/agent/card_extract/eval/eval.ts",
+    "eval:players": "bun src/agent/player_match/eval/eval.ts",
+    "eval:courses": "bun src/agent/course_match/eval/eval.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply scorecard --local --config ../../wrangler.toml",
     "db:migrate:remote": "wrangler d1 migrations apply scorecard --remote --config ../../wrangler.toml"

@@ -1,0 +1,36 @@
+{
+  "roster": [
+    {
+      "id": "u-greg",
+      "name": "Gregory Nolan",
+      "email": "gnolan@example.com",
+      "nicknames": ["Greg"]
+    },
+    { "id": "u-steph", "name": "Stephanie Irwin", "email": "sirwin@example.com", "nicknames": [] },
+    {
+      "id": "u-pat",
+      "name": "Patrick O'Leary",
+      "email": "poleary@example.com",
+      "nicknames": ["Pat"]
+    }
+  ],
+  "cases": [
+    {
+      "label": "misspellings",
+      "names": ["Gregg Nolan", "Stefanie Irwin"],
+      "expect": ["u-greg", "u-steph"],
+      "note": "Misspelled but uniquely resolvable — exact substring search fails, so the agent must probe with fragments."
+    },
+    {
+      "label": "dropped-apostrophe",
+      "names": ["Pat OLeary"],
+      "expect": ["u-pat"]
+    },
+    {
+      "label": "similar-but-different",
+      "names": ["Patricia Olsen"],
+      "expect": [null],
+      "note": "Superficially close to Patrick O'Leary but clearly a different person."
+    }
+  ]
+}

@@ -3,5 +3,5 @@ node_modules
 pkg/web/dist
 .env.local
 .dev.vars
-pkg/api/src/agent/card_extract/eval/results/
+pkg/api/src/agent/*/eval/results/
 .DS_Store

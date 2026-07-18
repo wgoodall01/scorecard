@@ -1,0 +1,71 @@
+{
+  "courses": [
+    {
+      "id": "c-oakmont",
+      "name": "Oakmont Hills",
+      "location": "Dayton, OH",
+      "sets": [
+        {
+          "id": "s-oakmont-east",
+          "name": "East",
+          "disposition": "front",
+          "firstHole": 1,
+          "pars": [4, 4, 3, 5, 4, 4, 3, 5, 4]
+        },
+        {
+          "id": "s-oakmont-west",
+          "name": "West",
+          "disposition": "back",
+          "firstHole": 10,
+          "pars": [5, 3, 4, 4, 5, 3, 4, 4, 4]
+        }
+      ]
+    },
+    {
+      "id": "c-oakland",
+      "name": "Oakland Greens",
+      "location": "Roseville, MN",
+      "sets": [
+        {
+          "id": "s-oakland-east",
+          "name": "East",
+          "disposition": "front",
+          "firstHole": 1,
+          "pars": [4, 4, 3, 5, 4, 4, 3, 5, 4]
+        },
+        {
+          "id": "s-oakland-west",
+          "name": "West",
+          "disposition": "back",
+          "firstHole": 10,
+          "pars": [5, 3, 4, 4, 5, 3, 4, 4, 4]
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "label": "shared-set-names",
+      "courseName": null,
+      "nines": [{ "name": "East", "firstHole": 1, "pars": [4, 4, 3, 5, 4, 4, 3, 5, 4] }],
+      "expect": { "courseId": null, "sets": [null] },
+      "note": "Both courses have an identical 'East' nine (name AND pars) — the agent must abstain."
+    },
+    {
+      "label": "course-name-pins-sets",
+      "courseName": "Oakland Greens",
+      "nines": [
+        { "name": "East", "firstHole": 1, "pars": [4, 4, 3, 5, 4, 4, 3, 5, 4] },
+        { "name": "West", "firstHole": 10, "pars": [5, 3, 4, 4, 5, 3, 4, 4, 4] }
+      ],
+      "expect": { "courseId": "c-oakland", "sets": ["s-oakland-east", "s-oakland-west"] }
+    },
+    {
+      "label": "partial-name-similar-courses",
+      "courseName": "Oakmont",
+      "nines": [{ "name": "West", "firstHole": 10, "pars": [5, 3, 4, 4, 5, 3, 4, 4, 4] }],
+      "expect": { "courseId": "c-oakmont", "sets": ["s-oakmont-west"] },
+      "note": "'Oak' is shared by both course names, but 'Oakmont' is unambiguous."
+    }
+  ]
+}

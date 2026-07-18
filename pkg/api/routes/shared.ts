@@ -68,6 +68,15 @@ export function zodBody<TSchema extends z.ZodType>(schema: TSchema, message: str
   });
 }
 
+// Query-string counterpart of zodBody, for the same RPC-typing reason.
+export function zodQuery<TSchema extends z.ZodType>(schema: TSchema, message: string) {
+  return validator("query", (value, c) => {
+    const result = schema.safeParse(value);
+    if (!result.success) return c.json({ error: message }, 400);
+    return result.data;
+  });
+}
+
 export async function readRequestBody<TSchema extends z.ZodType>(
   c: Context<Env>,
   schema: TSchema,

@@ -22,6 +22,27 @@
       "when": 1784238944199,
       "tag": "0002_clear_black_bolt",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784323663369,
+      "tag": "0003_blue_pete_wisdom",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784327196314,
+      "tag": "0004_known_dazzler",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784329322738,
+      "tag": "0005_wooden_sue_storm",
+      "breakpoints": true
     }
   ]
 }

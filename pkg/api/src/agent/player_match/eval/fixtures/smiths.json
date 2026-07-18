@@ -1,0 +1,37 @@
+{
+  "roster": [
+    { "id": "u-john", "name": "John Smith", "email": "john.smith@example.com", "nicknames": [] },
+    { "id": "u-jane", "name": "Jane Smith", "email": "jane.smith@example.com", "nicknames": [] },
+    {
+      "id": "u-jake",
+      "name": "Jacob Smithson",
+      "email": "jake@example.com",
+      "nicknames": ["Jake"]
+    },
+    { "id": "u-alice", "name": "Alice Wong", "email": "alice@example.com", "nicknames": [] }
+  ],
+  "cases": [
+    {
+      "label": "ambiguous-initial",
+      "names": ["J. Smith"],
+      "expect": [null],
+      "note": "Both John Smith and Jane Smith fit 'J. Smith' — the agent must abstain."
+    },
+    {
+      "label": "full-names-disambiguate",
+      "names": ["Jane Smith", "John Smith"],
+      "expect": ["u-jane", "u-john"]
+    },
+    {
+      "label": "ambiguous-surname",
+      "names": ["Smith", "Alice"],
+      "expect": [null, "u-alice"],
+      "note": "'Smith' alone is ambiguous even though 'Smithson' also substring-matches it."
+    },
+    {
+      "label": "unique-surname",
+      "names": ["Smithson"],
+      "expect": ["u-jake"]
+    }
+  ]
+}

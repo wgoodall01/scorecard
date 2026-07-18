@@ -18,6 +18,8 @@
     "fmt": "oxfmt --write",
     "test": "bun --filter api test",
     "eval": "bun --filter api eval",
+    "eval:players": "bun --filter api eval:players",
+    "eval:courses": "bun --filter api eval:courses",
     "deploy": "bun run build && bun run deploy:ci",
     "deploy:ci": "bun db:migrate:remote && bunx wrangler deploy",
     "db:generate": "bun --filter api db:generate",

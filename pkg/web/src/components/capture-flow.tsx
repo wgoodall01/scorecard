@@ -1,23 +1,18 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Camera,
   CircleAlert,
   CircleCheck,
   ClipboardCheck,
   ImageUp,
+  NotebookText,
   RefreshCcw,
   ScanText,
   Send,
 } from "lucide-react";
+import type { ExtractDataSchema, MatchedData } from "api";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Empty,
   EmptyContent,
@@ -28,12 +23,18 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { CameraDialog, useLikelyHasCamera } from "@/components/camera-dialog";
+import { ReviewRound } from "@/components/review-round";
 import { Stepper } from "@/components/stepper";
 import { useAuth } from "@/lib/auth-context";
 import { resizeImageForCapture } from "@/lib/image_resize";
 import { cn } from "@/lib/utils";
 
 type FlowStep = "capture" | "analyze" | "review" | "submit";
+
+type CaptureResult = {
+  extracted: ExtractDataSchema;
+  matched: MatchedData | null;
+};
 
 export function CaptureFlow() {
   const { token } = useAuth();
@@ -43,7 +44,9 @@ export function CaptureFlow() {
   const [image, setImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analyzeStatus, setAnalyzeStatus] = useState("");
-  const [extracted, setExtracted] = useState<string | null>(null);
+  const [result, setResult] = useState<CaptureResult | null>(null);
+  const [captureId, setCaptureId] = useState<string | null>(null);
+  const [outingId, setOutingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(
@@ -57,7 +60,9 @@ export function CaptureFlow() {
     setStep("capture");
     setImage(null);
     setPreviewUrl(null);
-    setExtracted(null);
+    setResult(null);
+    setCaptureId(null);
+    setOutingId(null);
     setError(null);
   }
 
@@ -72,7 +77,7 @@ export function CaptureFlow() {
 
     setStep("analyze");
     setError(null);
-    setExtracted(null);
+    setResult(null);
 
     try {
       setAnalyzeStatus("Uploading your photo…");
@@ -86,6 +91,7 @@ export function CaptureFlow() {
       const submitBody = (await submitResponse.json()) as { id?: string; error?: string };
       if (!submitResponse.ok || !submitBody.id)
         throw new Error(submitBody.error ?? "Unable to upload your scorecard.");
+      setCaptureId(submitBody.id);
 
       setAnalyzeStatus("Reading the round details…");
       for (let attempt = 0; attempt < 60; attempt++) {
@@ -106,7 +112,7 @@ export function CaptureFlow() {
               : "Unable to extract your scorecard.";
           throw new Error(message);
         }
-        setExtracted(JSON.stringify(resultBody, null, 2));
+        setResult(resultBody as CaptureResult);
         setStep("review");
         return;
       }
@@ -221,38 +227,18 @@ export function CaptureFlow() {
         </Empty>
       )}
 
-      {step === "review" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Review your round</CardTitle>
-            <CardDescription>
-              Check the photo and the details we extracted before submitting.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {previewUrl && (
-              <img
-                src={previewUrl}
-                alt="Captured scorecard"
-                className="max-h-80 w-full rounded-2xl border bg-muted object-contain"
-              />
-            )}
-            <pre className="max-h-64 overflow-auto rounded-2xl bg-muted p-4 text-left text-xs leading-relaxed">
-              {extracted}
-            </pre>
-          </CardContent>
-          <CardFooter className="justify-between gap-3">
-            <Button variant="outline" onClick={reset}>
-              <RefreshCcw data-icon="inline-start" />
-              Retake
-            </Button>
-            {/* TODO: POST the confirmed round to the API once a submit endpoint exists. */}
-            <Button onClick={() => setStep("submit")}>
-              <Send data-icon="inline-start" />
-              Submit round
-            </Button>
-          </CardFooter>
-        </Card>
+      {step === "review" && result && (
+        <ReviewRound
+          extracted={result.extracted}
+          matched={result.matched}
+          scorecardId={captureId}
+          previewUrl={previewUrl}
+          onRetake={reset}
+          onSubmitted={(submittedOutingId) => {
+            setOutingId(submittedOutingId);
+            setStep("submit");
+          }}
+        />
       )}
 
       {step === "submit" && (
@@ -262,15 +248,21 @@ export function CaptureFlow() {
               <CircleCheck />
             </EmptyMedia>
             <EmptyTitle>Scorecard submitted</EmptyTitle>
-            <EmptyDescription>
-              Your scorecard photo and extracted round details are saved.
-            </EmptyDescription>
+            <EmptyDescription>The round is saved and the scores are on the books.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button onClick={reset}>
-              <Camera data-icon="inline-start" />
-              Capture another
-            </Button>
+            <div className="flex flex-wrap justify-center gap-3">
+              {outingId && (
+                <Link className={buttonVariants()} to="/outings/$id" params={{ id: outingId }}>
+                  <NotebookText data-icon="inline-start" />
+                  View outing
+                </Link>
+              )}
+              <Button variant="outline" onClick={reset}>
+                <Camera data-icon="inline-start" />
+                Capture another
+              </Button>
+            </div>
           </EmptyContent>
         </Empty>
       )}

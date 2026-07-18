@@ -23,34 +23,19 @@ export function safeReturnTo(value: string | null) {
   return path === "/login" || path.startsWith("/login/") || path === "/register" ? "/" : value;
 }
 
-// Route-level auth guard: `checkAuth()` requires a signed-in user,
-// `checkAuth({ admin: true })` additionally requires an admin. Always gate
-// routes here — never with hand-written checks inside components.
-export function checkAuth(options?: { admin?: boolean }) {
-  return async ({ location }: { location: { href: string } }) => {
-    const loginRedirect = () =>
-      redirect({
+// Route-level auth guard: requires a signed-in user. Always gate routes here;
+// finer-grained permissions (e.g. admin-only controls) are checked in
+// components against the profile and enforced by the API.
+export function checkAuth() {
+  return ({ location }: { location: { href: string } }) => {
+    const token = authService.getToken();
+    if (!token) {
+      throw redirect({
         to: "/login",
         search: { returnTo: safeReturnTo(location.href) },
         replace: true,
       });
-
-    const token = authService.getToken();
-    if (!token) throw loginRedirect();
-    if (!options?.admin) return;
-
-    const response = await createApiClient(token).api.me.$get();
-    if (response.ok) {
-      const { user } = await response.json();
-      if (!user.admin) throw redirect({ to: "/", replace: true });
-      return;
     }
-    if (response.status === 401 || response.status === 404) {
-      // The stored token no longer maps to a user — drop it and sign in again.
-      authService.clearToken();
-      throw loginRedirect();
-    }
-    throw new ApiError(await requestError(response), response.status);
   };
 }
 
