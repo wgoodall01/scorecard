@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MePage } from "@/pages/me";
+import { CapturePage } from "@/pages/capture";
 import { checkAuth } from "@/lib/auth";
 
-export const Route = createFileRoute("/me")({
+export const Route = createFileRoute("/capture")({
   beforeLoad: checkAuth(),
-  component: MePage,
+  component: CapturePage,
 });

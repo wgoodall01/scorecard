@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as OutingsRouteImport } from './routes/outings'
 import { Route as MeRouteImport } from './routes/me'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as HonorsRouteImport } from './routes/honors'
 import { Route as GolfersRouteImport } from './routes/golfers'
 import { Route as CoursesRouteImport } from './routes/courses'
+import { Route as CaptureRouteImport } from './routes/capture'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OutingsIdRouteImport } from './routes/outings_.$id'
 import { Route as LoginMagicRouteImport } from './routes/login_.magic'
@@ -35,6 +37,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HonorsRoute = HonorsRouteImport.update({
+  id: '/honors',
+  path: '/honors',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GolfersRoute = GolfersRouteImport.update({
   id: '/golfers',
   path: '/golfers',
@@ -43,6 +50,11 @@ const GolfersRoute = GolfersRouteImport.update({
 const CoursesRoute = CoursesRouteImport.update({
   id: '/courses',
   path: '/courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CaptureRoute = CaptureRouteImport.update({
+  id: '/capture',
+  path: '/capture',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -73,8 +85,10 @@ const CoursesIdRoute = CoursesIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/capture': typeof CaptureRoute
   '/courses': typeof CoursesRoute
   '/golfers': typeof GolfersRoute
+  '/honors': typeof HonorsRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
@@ -85,8 +99,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/capture': typeof CaptureRoute
   '/courses': typeof CoursesRoute
   '/golfers': typeof GolfersRoute
+  '/honors': typeof HonorsRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
@@ -98,8 +114,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/capture': typeof CaptureRoute
   '/courses': typeof CoursesRoute
   '/golfers': typeof GolfersRoute
+  '/honors': typeof HonorsRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/outings': typeof OutingsRoute
@@ -112,8 +130,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/capture'
     | '/courses'
     | '/golfers'
+    | '/honors'
     | '/login'
     | '/me'
     | '/outings'
@@ -124,8 +144,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/capture'
     | '/courses'
     | '/golfers'
+    | '/honors'
     | '/login'
     | '/me'
     | '/outings'
@@ -136,8 +158,10 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/capture'
     | '/courses'
     | '/golfers'
+    | '/honors'
     | '/login'
     | '/me'
     | '/outings'
@@ -149,8 +173,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CaptureRoute: typeof CaptureRoute
   CoursesRoute: typeof CoursesRoute
   GolfersRoute: typeof GolfersRoute
+  HonorsRoute: typeof HonorsRoute
   LoginRoute: typeof LoginRoute
   MeRoute: typeof MeRoute
   OutingsRoute: typeof OutingsRoute
@@ -183,6 +209,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/honors': {
+      id: '/honors'
+      path: '/honors'
+      fullPath: '/honors'
+      preLoaderRoute: typeof HonorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/golfers': {
       id: '/golfers'
       path: '/golfers'
@@ -195,6 +228,13 @@ declare module '@tanstack/react-router' {
       path: '/courses'
       fullPath: '/courses'
       preLoaderRoute: typeof CoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/capture': {
+      id: '/capture'
+      path: '/capture'
+      fullPath: '/capture'
+      preLoaderRoute: typeof CaptureRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -237,8 +277,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CaptureRoute: CaptureRoute,
   CoursesRoute: CoursesRoute,
   GolfersRoute: GolfersRoute,
+  HonorsRoute: HonorsRoute,
   LoginRoute: LoginRoute,
   MeRoute: MeRoute,
   OutingsRoute: OutingsRoute,

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { MagicLinkPage } from "@/App";
+import { MagicLinkPage } from "@/pages/login";
 
 export const MagicLinkSearch = z.object({
   email: z.string().catch(""),

@@ -1,8 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { CapturePage } from "@/App";
-import { checkAuth } from "@/lib/auth";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+// The app has no home page yet; capture is the de-facto landing tab.
 export const Route = createFileRoute("/")({
-  beforeLoad: checkAuth(),
-  component: CapturePage,
+  beforeLoad: () => {
+    throw redirect({ to: "/capture", replace: true });
+  },
 });

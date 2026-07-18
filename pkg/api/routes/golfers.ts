@@ -14,10 +14,20 @@ export const Nickname = z.object({
 });
 export type NicknameSchema = z.infer<typeof Nickname>;
 
+// The nickname_user_nickname_unique index forbids case-insensitive duplicate
+// nicknames per golfer; reject them at the request edge so the write can't
+// trip the constraint.
+export const Nicknames = z
+  .array(Nickname)
+  .refine(
+    (list) => new Set(list.map((entry) => entry.nickname.toLowerCase())).size === list.length,
+  );
+export type NicknamesSchema = z.infer<typeof Nicknames>;
+
 export const InviteGolferRequest = z.object({
   email: Email,
   name: z.string().trim().min(1).optional(),
-  nicknames: z.array(Nickname).optional(),
+  nicknames: Nicknames.optional(),
 });
 export type InviteGolferRequestSchema = z.infer<typeof InviteGolferRequest>;
 
@@ -29,7 +39,7 @@ export const UpdateGolferRequest = z
     handicap: z.number().int().min(-10).max(54).nullable().optional(),
     preferredTee: z.enum(TEES).nullable().optional(),
     // Replace-all semantics: the full nickname list the golfer should end up with.
-    nicknames: z.array(Nickname).optional(),
+    nicknames: Nicknames.optional(),
   })
   .refine((fields) => Object.keys(fields).length > 0);
 export type UpdateGolferRequestSchema = z.infer<typeof UpdateGolferRequest>;

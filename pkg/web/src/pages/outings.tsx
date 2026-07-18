@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Camera, ChevronRight, NotebookText } from "lucide-react";
+import { Camera, ChevronRight, GitMerge, NotebookText, Trophy } from "lucide-react";
 import type { Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { GolfScore } from "@/components/golf-score";
 import { ScorecardGallery } from "@/components/scorecard-gallery";
 import { useAuth } from "@/lib/auth-context";
 import { TEE_LABELS } from "@/lib/tees";
@@ -217,7 +218,7 @@ export function OutingsPage() {
                 : "Capture your first scorecard to begin building your history."}
             </p>
             {!hasFilters && (
-              <Link className={buttonVariants({ className: "mt-5" })} to="/">
+              <Link className={buttonVariants({ className: "mt-5" })} to="/capture">
                 <Camera data-icon="inline-start" />
                 Capture a scorecard
               </Link>
@@ -313,28 +314,72 @@ export function OutingDetailPage({ outingId }: { outingId: string }) {
   const { client } = useAuth();
   const [outing, setOuting] = useState<OutingDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mergeCandidates, setMergeCandidates] = useState<OutingSummary[]>([]);
+  const [merging, setMerging] = useState<string | null>(null);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+
+  const loadOuting = useCallback(async () => {
+    if (!client) return;
+    try {
+      const response = await client.api.outings[":id"].$get({ param: { id: outingId } });
+      if (!response.ok) {
+        setError("This outing could not be found.");
+        return;
+      }
+      const { outing: loadedOuting } = await response.json();
+      setOuting(loadedOuting);
+    } catch {
+      setError("Unable to load this outing.");
+    }
+  }, [client, outingId]);
 
   useEffect(() => {
-    if (!client) return;
+    void loadOuting();
+  }, [loadOuting]);
+
+  // Auto-suggest merges: other outings at this course on the same date are
+  // almost certainly the same round captured on separate scorecards.
+  useEffect(() => {
+    if (!client || !outing) return;
     let cancelled = false;
-    void client.api.outings[":id"].$get({ param: { id: outingId } }).then(
-      async (response) => {
+    void client.api.outings
+      .$get({ query: { courseId: outing.course.id } })
+      .then(async (response) => {
+        if (cancelled || !response.ok) return;
+        const { outings } = await response.json();
         if (cancelled) return;
-        if (!response.ok) {
-          setError("This outing could not be found.");
-          return;
-        }
-        const { outing: loadedOuting } = await response.json();
-        setOuting(loadedOuting);
-      },
-      () => {
-        if (!cancelled) setError("Unable to load this outing.");
-      },
-    );
+        setMergeCandidates(
+          outings.filter((entry) => entry.date === outing.date && entry.id !== outing.id),
+        );
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [client, outingId]);
+  }, [client, outing]);
+
+  async function merge(sourceId: string) {
+    if (!client) return;
+    setMerging(sourceId);
+    setMergeError(null);
+    try {
+      const response = await client.api.outings[":id"].merge.$post({
+        param: { id: outingId },
+        json: { outingId: sourceId },
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Unable to merge these outings.");
+      }
+      await loadOuting();
+    } catch (mergeFailure) {
+      setMergeError(
+        mergeFailure instanceof Error ? mergeFailure.message : "Unable to merge these outings.",
+      );
+    } finally {
+      setMerging(null);
+    }
+  }
 
   return (
     <AppShell>
@@ -367,6 +412,53 @@ export function OutingDetailPage({ outingId }: { outingId: string }) {
             </p>
           </header>
 
+          {mergeCandidates.length > 0 && (
+            <section className="flex flex-col gap-3 rounded-xl border border-primary/40 bg-primary/5 p-5">
+              <h2 className="flex items-center gap-2 font-medium">
+                <GitMerge aria-hidden="true" className="size-4" />
+                Same-day outings
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {mergeCandidates.length === 1 ? "Another outing was" : "Other outings were"}{" "}
+                recorded at {outing.course.name} on this date — likely the same round on separate
+                scorecards. Merging pulls {mergeCandidates.length === 1 ? "its" : "their"} scores
+                into this outing.
+              </p>
+              <ul className="flex flex-col gap-2">
+                {mergeCandidates.map((candidate) => (
+                  <li
+                    key={candidate.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {candidate.players
+                          .map(
+                            (player) =>
+                              `${playerLabel(player)}${player.total !== null ? ` (${player.total})` : ""}`,
+                          )
+                          .join(", ")}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {candidate.sets.map((set) => set.name).join(" · ") || "No scores yet"}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={merging !== null}
+                      onClick={() => void merge(candidate.id)}
+                    >
+                      <GitMerge data-icon="inline-start" />
+                      {merging === candidate.id ? "Merging…" : "Merge in"}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              {mergeError && <p className="text-sm text-destructive">{mergeError}</p>}
+            </section>
+          )}
+
           <GolfersTable outing={outing} />
 
           {outing.sets.map((set) => (
@@ -390,10 +482,28 @@ export function OutingDetailPage({ outingId }: { outingId: string }) {
   );
 }
 
-// The golfers table doubles as the round leaderboard: each row links to the
-// golfer's page, with their tee and total round score (rightmost column).
+// The golfers table doubles as the round leaderboard: rows sort by total
+// strokes ascending (best round first) and the winning complete round gets a
+// trophy (ties share it). Incomplete rounds sort after complete ones and
+// never win — their totals aren't comparable.
 function GolfersTable({ outing }: { outing: OutingDetail }) {
   const { totalHoles, totals, anyIncomplete } = computeRoundTotals(outing);
+
+  const ranked = [...totals].sort((a, b) => {
+    if ((a.total === null) !== (b.total === null)) return a.total === null ? 1 : -1;
+    if (a.total === null || b.total === null) return 0;
+    if (a.incomplete !== b.incomplete) return a.incomplete ? 1 : -1;
+    return a.total - b.total;
+  });
+
+  function isWinner(entry: (typeof totals)[number]): boolean {
+    if (entry.total === null || entry.incomplete) return false;
+    return !totals.some(
+      (other) => other.total !== null && !other.incomplete && other.total < (entry.total ?? 0),
+    );
+  }
+
+  const hasWinner = ranked.some((entry) => isWinner(entry));
 
   return (
     <section className="rounded-xl border bg-card">
@@ -401,26 +511,39 @@ function GolfersTable({ outing }: { outing: OutingDetail }) {
         <h2 className="font-medium">Golfers</h2>
       </div>
       <ul className="flex flex-col">
-        {totals.map(({ player, total, incomplete }) => (
-          <li key={player.id} className="border-b last:border-b-0">
-            <Link
-              to="/golfers/$id"
-              params={{ id: player.id }}
-              className="flex items-center justify-between gap-3 p-5 py-3 transition-colors hover:bg-muted/50"
-            >
-              <span className="min-w-0">
-                <span className="block truncate font-medium">{playerLabel(player)}</span>
-                <span className="block text-sm text-muted-foreground">
-                  {player.tee ? `${TEE_LABELS[player.tee]} tees` : "Tee not recorded"}
+        {ranked.map((entry) => {
+          const { player, total, incomplete } = entry;
+          return (
+            <li key={player.id} className="border-b last:border-b-0">
+              <Link
+                to="/golfers/$id"
+                params={{ id: player.id }}
+                className="flex items-center justify-between gap-3 p-5 py-3 transition-colors hover:bg-muted/50"
+              >
+                {hasWinner && (
+                  <span className="flex w-7 shrink-0 items-center" aria-hidden={!isWinner(entry)}>
+                    {isWinner(entry) && (
+                      <Trophy
+                        aria-label="First place"
+                        className="size-5 text-amber-600 dark:text-amber-400"
+                      />
+                    )}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{playerLabel(player)}</span>
+                  <span className="block text-sm text-muted-foreground">
+                    {player.tee ? `${TEE_LABELS[player.tee]} tees` : "Tee not recorded"}
+                  </span>
                 </span>
-              </span>
-              <span className="shrink-0 text-lg font-semibold tabular-nums">
-                {total ?? "–"}
-                {incomplete && "*"}
-              </span>
-            </Link>
-          </li>
-        ))}
+                <span className="shrink-0 text-lg font-semibold tabular-nums">
+                  {total ?? "–"}
+                  {incomplete && "*"}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
       {anyIncomplete && (
         <p className="border-t p-5 py-3 text-xs text-muted-foreground">
@@ -481,7 +604,7 @@ function ScorecardTable({
                   const value = set.scores[player.id]?.[hole.id];
                   return (
                     <td key={player.id} className="p-3 pr-5 text-right tabular-nums">
-                      {value ?? "–"}
+                      <GolfScore score={value ?? null} par={hole.par} />
                     </td>
                   );
                 })}

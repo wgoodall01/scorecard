@@ -223,7 +223,6 @@ function InviteGolferDialog({
           <MultiCombobox
             values={nicknames}
             onChange={setNicknames}
-            addLabel="Add nickname"
             placeholder="Nickname or initials…"
           />
         </div>
@@ -501,7 +500,6 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
             <MultiCombobox
               values={nicknames}
               onChange={setNicknames}
-              addLabel="Add nickname"
               placeholder="Nickname or initials…"
             />
           </div>

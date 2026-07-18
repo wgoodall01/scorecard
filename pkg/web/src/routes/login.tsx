@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { LoginPage } from "@/App";
+import { LoginPage } from "@/pages/login";
 import { safeReturnTo } from "@/lib/auth";
 
 export const LoginSearch = z.object({

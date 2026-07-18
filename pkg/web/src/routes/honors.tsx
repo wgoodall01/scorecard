@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MePage } from "@/pages/me";
+import { HonorsPage } from "@/pages/honors";
 import { checkAuth } from "@/lib/auth";
 
-export const Route = createFileRoute("/me")({
+export const Route = createFileRoute("/honors")({
   beforeLoad: checkAuth(),
-  component: MePage,
+  component: HonorsPage,
 });

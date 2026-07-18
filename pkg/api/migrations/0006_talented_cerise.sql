@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `nickname_user_nickname_unique` ON `nickname` (`user_id`,lower("nickname"));

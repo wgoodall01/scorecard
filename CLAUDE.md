@@ -8,26 +8,51 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
 
 - `pkg/web`: Vite + React + TypeScript front end, styled with Tailwind and
   shadcn/ui. `src/lib/api.ts` creates Hono's typed RPC client from the API's
-  exported `AppType`. Page components live in `src/App.tsx` (shell, login,
-  capture, me) and `src/pages/` (golfers, outings); routes under `src/routes`
-  are thin `createFileRoute` wrappers. Import only TYPES from the `api`
+  exported `AppType`. `src/App.tsx` is the app shell ONLY (AppShell, nav,
+  PageHeading/PageTitle); every page component lives in `src/pages/`
+  (capture, login, me, golfers, outings, courses, honors); routes under
+  `src/routes` are thin `createFileRoute` wrappers (capture lives at
+  `/capture`; the root `/` is only a redirect to it). Router rules: navigate
+  with typed `Link`/`useNavigate` (`LinkProps["to"]` for nav helpers), use
+  `navigate({ href })` only for runtime-validated paths like the login
+  `returnTo` — never `window.location.assign`; search params go through
+  `validateSearch` zod schemas; the router sets `defaultPreload: "intent"`
+  and `scrollRestoration` in `src/router.tsx`. Import only TYPES from the `api`
   package (`Tee`, `ExtractDataSchema`, …) — importing a value would pull the
   Worker module graph into the web bundle (`src/lib/tees.ts` mirrors the
   `TEES` list for this reason). The capture review step
   (`src/components/review-round.tsx`) is the mobile-first editor over the
   extraction: score grid, golfer + tee pickers seeded from `matched` and
-  each golfer's `preferredTee`, course/set pickers over existing courses,
-  a date input defaulting to the handwritten date else today, and the
-  `/outings/check`-driven "add to existing outing" prompt; submit POSTs
-  `/outings` (with the capture's `scorecardId`) and links to `/outings/$id`.
-  It is TWO sub-steps: date/course/golfers first, then per-nine review —
-  each nine is assigned to an EXISTING course set only (no new-nine creation
-  from capture; the Courses tab is the registry, and "import nines via
-  scorecard" comes later), pars display from the db set, and before submit
-  every handwritten total (per nine and the 18-hole totals) must be
-  confirmed via a required choice: totals agree / written totals are wrong /
-  I corrected a score. The Courses tab (`src/pages/courses.tsx`) lists
-  courses and shows each course's nines with hole/par tables.
+  each golfer's `preferredTee`, an async-loading course combobox
+  (`src/components/async-combobox.tsx`, re-fetched on every open) over
+  existing courses, a date input defaulting to the handwritten date else
+  today (future dates are flagged and a "Today" button resolves them; the
+  API also rejects them), and the `/outings/check`-driven "add to existing
+  outing" prompt, which lists any existing scores the merge would overwrite
+  (per golfer, "Blue 1–9"-style); submit POSTs `/outings` (with the
+  capture's `scorecardId`) and links to `/outings/$id`. It is TWO sub-steps:
+  date/course/golfers first, then per-nine review (which shows matched
+  golfers' FULL names, not the written scrawl; two written names MAY map to
+  one golfer — cards sometimes alias a person per nine — but not within a
+  single nine) — each nine is assigned to an
+  EXISTING course set only (no new-nine creation from capture; the Courses
+  tab is the registry, and "import nines via scorecard" comes later), pars
+  display from the db set, and before submit every handwritten total (per
+  nine and the 18-hole totals) is checked: totals that matched the summed
+  scores at extraction auto-confirm and render checkmarks only, while
+  mismatches require an explicit ruling — written totals are wrong / I
+  corrected a score. The Courses tab (`src/pages/courses.tsx`) lists
+  courses and shows each course's nines with hole/par tables. The outing
+  detail page auto-suggests same-day-same-course outings and can merge them
+  via `/outings/:id/merge`; its Golfers card is a leaderboard (sorted
+  ascending, a lucide Trophy on the winning complete round, ties share).
+  Score cells everywhere render through
+  `src/components/golf-score.tsx` — standard golf notation (circle birdie,
+  double circle eagle+, square bogey, double square double+), read-only by
+  default, editable with `onChange` (the review grid). Golfer nickname
+  editing uses `src/components/multi-combobox.tsx`, a chips-in-one-input
+  wrapper over the stock shadcn/Base UI `ui/combobox.tsx` in `multiple` mode
+  with creatable free-text entries.
 - `pkg/api`: Cloudflare Worker written with Hono + TypeScript. `index.ts` is
   the composition root; its default export is `{ fetch, queue }` and
   `POST /api/ping` responds with `{ time: Date }`.
@@ -39,7 +64,9 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   query API). Tables: `user` (+ `handicap`, `preferred_tee` — the `TEES` const
   is the app-level tee list; `email` is NULLABLE-but-unique: a golfer can
   exist purely as a player with no account email, and can't sign in until one
-  is set), `nickname` (user_id, nickname, nickname_type),
+  is set), `nickname` (user_id, nickname, nickname_type; a case-insensitive
+  expression index makes nicknames unique per user, and the golfers routes
+  reject duplicate lists at the request edge),
   `course`, `course_set` (a "nine"; `disposition` front/back/null; name unique
   per course), `hole` (number unique per set), `outing` (naive `date`
   "YYYY-MM-DD" + course_id), `outing_player` (per-outing tee per player),
@@ -61,12 +88,32 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   scores on any of the given course sets — the one-foursome-two-scorecards
   case); `/outings/:id` detail (sets derived from scores, holes, per-player
   tees, score cell maps, plus the distinct `scorecards` behind those scores);
-  POST `/outings` submits a reviewed capture — it records `scorecardId` on
-  every score row, can create the course and/or course sets (with holes)
-  inline (API capability only: the review UI no longer offers it; it's
-  reserved for the future "import nines via scorecard" flow), merge into an
-  existing outing via `outingId`, upserts `outing_player` tees, and writes
-  all rows through one `db.batch`.
+  POST `/outings` submits a reviewed capture — it rejects future dates
+  ("today" judged at UTC+14 so no honest local today loses; merges exempt),
+  records `scorecardId` on every score row, can create the course and/or
+  course sets (with holes) inline (API capability only: the review UI no
+  longer offers it; it's reserved for the future "import nines via
+  scorecard" flow), merge into an existing outing via `outingId`, upserts
+  `outing_player` tees, and writes all rows through one `db.batch`;
+  POST `/outings/:id/merge` merges an already-recorded same-date-same-course
+  outing into `:id` (rows move to the target, the target wins player+hole
+  and player conflicts, the source outing is deleted).
+- `pkg/api/routes/honors.ts` + `pkg/api/src/honors.ts`: the honors board.
+  `computeHonors(db, since)` runs ONE SQLite query (CTEs + window functions;
+  raw D1, deliberately not Drizzle) over the recent window
+  (`HONOR_WINDOW_DAYS`, 90 days). The query emits a single row with one
+  `json_object` column per honor slug (NULL = unawarded) — scalar-subquery
+  columns rather than a UNION ALL arm per honor because D1 caps
+  compound-SELECT terms — and the app code is a bind + JSON.parse into the
+  `Honor` discriminated union (medalist, hot-nine, birdie-machine,
+  par-machine, metronome, iron-golfer, comeback-kid, crater, snowman,
+  anchor). One holder per honor; tie-breaks favor the most recent
+  achievement; rate honors need ≥18 holes in the window; the anchor needs
+  ≥2 eligible players. `GET /honors` recomputes on every request.
+  `src/honors.test.ts` seeds the test D1 and asserts the board. The web's
+  Honors tab (`pkg/web/src/pages/honors.tsx`) renders every slug — claimed
+  cards get per-honor custom stat/story UI, unclaimed ones a dimmed
+  placeholder.
 - `pkg/api/routes/capture.ts`: routes only — `/capture/submit` uploads the
   image to R2 and enqueues a `CAPTURE_QUEUE` message; `/capture/result` polls
   the capture record and, when complete, returns `{ extracted, matched }`
@@ -169,7 +216,11 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   binding — real (tiny, 1px) vision+structured-output calls, so `bun test`
   needs network and costs fractions of a cent. Test files run sequentially
   (`fileParallelism: false`) — the remote AI-binding proxy drops when another
-  workerd test file runs in parallel with it.
+  workerd test file runs in parallel with it. A setup file
+  (`pkg/api/test/apply-migrations.ts`) applies the D1 migrations to the test
+  database (read in `vitest.config.ts`, passed via the `TEST_MIGRATIONS`
+  binding); test D1 storage persists across tests, so DB-touching test files
+  wipe their tables in a `beforeEach`.
 - `bun db:generate`: generate D1 SQL migrations from the Drizzle schema.
 - `bun db:migrate:local` / `bun db:migrate:remote`: apply migrations.
 - `nu script/update_seed.nu --local --remote`: upsert the seed data in

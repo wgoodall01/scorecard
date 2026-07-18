@@ -1,108 +1,95 @@
-import { useState } from "react";
-import { Plus, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Fragment, useMemo, useState } from "react";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxValue,
+  useComboboxAnchor,
+} from "@/components/ui/combobox";
 
-// Multi-value free-input combobox (shadcn Popover + Command): selected values
-// render as removable badges, and the palette accepts both listed suggestions
-// and arbitrary typed entries.
+// Multi-value free-input combobox: ONE input styled like every other Input,
+// with the selected values as removable chips inside it (Base UI Combobox in
+// `multiple` mode, popup anchored to the chips container). Listed suggestions
+// filter as you type, and anything new gets an Add “…” item at the top —
+// values are case-insensitively unique.
 export function MultiCombobox({
   values,
   onChange,
   suggestions = [],
   placeholder = "Type to add…",
-  addLabel = "Add",
   disabled = false,
 }: {
   values: string[];
   onChange: (values: string[]) => void;
   suggestions?: string[];
   placeholder?: string;
-  addLabel?: string;
   disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const anchor = useComboboxAnchor();
   const [query, setQuery] = useState("");
 
-  const has = (value: string) =>
-    values.some((entry) => entry.toLowerCase() === value.trim().toLowerCase());
+  const trimmed = query.trim();
+  const known = useMemo(
+    () => new Set([...values, ...suggestions].map((entry) => entry.toLowerCase())),
+    [values, suggestions],
+  );
+  const creatable = trimmed !== "" && !known.has(trimmed.toLowerCase()) ? trimmed : null;
 
-  function add(value: string) {
-    const trimmed = value.trim();
-    if (trimmed && !has(trimmed)) onChange([...values, trimmed]);
-    setQuery("");
-    setOpen(false);
-  }
-
-  const available = suggestions.filter((suggestion) => !has(suggestion));
-  const showAdd = query.trim().length > 0 && !has(query);
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const item of [...(creatable ? [creatable] : []), ...suggestions, ...values]) {
+      const key = item.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push(item);
+    }
+    return list;
+  }, [creatable, suggestions, values]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {values.map((value) => (
-        <Badge key={value} variant="secondary" className="gap-1 pr-1">
-          {value}
-          {!disabled && (
-            <button
-              type="button"
-              aria-label={`Remove ${value}`}
-              className="rounded-full p-0.5 transition-colors hover:bg-foreground/10"
-              onClick={() => onChange(values.filter((entry) => entry !== value))}
-            >
-              <X className="size-3" />
-            </button>
+    <Combobox
+      multiple
+      autoHighlight
+      disabled={disabled}
+      items={items}
+      value={values}
+      onValueChange={(next) => onChange(next as string[])}
+      inputValue={query}
+      onInputValueChange={setQuery}
+    >
+      <ComboboxChips ref={anchor}>
+        <ComboboxValue>
+          {(selected: string[]) => (
+            <Fragment>
+              {selected.map((value) => (
+                <ComboboxChip key={value} showRemove={!disabled}>
+                  {value}
+                </ComboboxChip>
+              ))}
+              <ComboboxChipsInput
+                placeholder={selected.length === 0 ? placeholder : undefined}
+                disabled={disabled}
+              />
+            </Fragment>
           )}
-        </Badge>
-      ))}
-      {!disabled && (
-        <Popover
-          open={open}
-          onOpenChange={(nextOpen) => {
-            setOpen(nextOpen);
-            if (!nextOpen) setQuery("");
-          }}
-        >
-          <PopoverTrigger render={<Button type="button" variant="outline" size="sm" />}>
-            <Plus data-icon="inline-start" />
-            {addLabel}
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-1">
-            <Command>
-              <CommandInput value={query} onValueChange={setQuery} placeholder={placeholder} />
-              <CommandList>
-                <CommandEmpty>Type a new entry to add it.</CommandEmpty>
-                {(showAdd || available.length > 0) && (
-                  <CommandGroup>
-                    {showAdd && (
-                      <CommandItem key="__add__" value={query} onSelect={() => add(query)}>
-                        Add “{query.trim()}”
-                      </CommandItem>
-                    )}
-                    {available.map((suggestion) => (
-                      <CommandItem
-                        key={suggestion}
-                        value={suggestion}
-                        onSelect={() => add(suggestion)}
-                      >
-                        {suggestion}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      )}
-    </div>
+        </ComboboxValue>
+      </ComboboxChips>
+      <ComboboxContent anchor={anchor}>
+        <ComboboxEmpty>Type a new entry to add it.</ComboboxEmpty>
+        <ComboboxList>
+          {(item: string) => (
+            <ComboboxItem key={item} value={item}>
+              {item === creatable ? <>Add “{item}”</> : item}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   );
 }

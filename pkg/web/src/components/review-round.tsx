@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,18 +7,13 @@ import {
   GitMerge,
   RefreshCcw,
   Send,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import type { ExtractDataSchema, MatchedData, SubmitOutingRequestSchema, Tee } from "api";
+import { AsyncCombobox } from "@/components/async-combobox";
+import { GolfScore } from "@/components/golf-score";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 import type { Golfer } from "@/pages/golfers";
 import { formatOutingDate, playerLabel, type OutingDetail } from "@/pages/outings";
 import { TEE_LABELS, TEES } from "@/lib/tees";
@@ -113,6 +109,14 @@ function sumOrNull(values: (number | null)[]): number | null {
   return present.length > 0 ? present.reduce((sum, value) => sum + value, 0) : null;
 }
 
+// True when there's at least one handwritten total and every one of them
+// equals the summed scores — the case that needs no human ruling, so the
+// review pre-selects "Totals agree" instead of demanding a click.
+function writtenTotalsMatch(written: (number | null)[], computed: (number | null)[]): boolean {
+  if (!written.some((value) => value !== null)) return false;
+  return written.every((value, index) => value === null || value === computed[index]);
+}
+
 type TotalsRow = { label: string; written: number | null; computed: number | null };
 
 // null = section fine (or nothing handwritten to check); otherwise the
@@ -121,17 +125,70 @@ function totalsProblem(section: string, rows: TotalsRow[], choice: TotalsChoice 
   const checked = rows.filter((row) => row.written !== null);
   if (checked.length === 0) return null;
   const matches = checked.every((row) => row.computed === row.written);
-  if (choice === null) return `Confirm the written totals for ${section}.`;
-  if (choice !== "wrong" && !matches) {
+  // The silently confirmed state: only the initializers ever set "agree", so
+  // agree + matches means the totals checked out at extraction and still do.
+  if (matches && choice === "agree") return null;
+  if (choice === null || choice === "agree") {
+    return matches
+      ? `Confirm the written totals for ${section}.`
+      : `${section}: the written totals don't match the summed scores — ` +
+          "fix a score or mark the written totals as wrong.";
+  }
+  if (choice === "corrected" && !matches) {
     return (
       `${section}: the written totals still don't match the summed scores — ` +
       "fix a score or mark the written totals as wrong."
     );
   }
   if (choice === "wrong" && matches) {
-    return `${section}: the totals now match — mark them as agreeing instead.`;
+    return `${section}: the totals now match — mark “I corrected a score” instead.`;
   }
   return null;
+}
+
+// The review flow is stroke-and-typography sections, not nested cards: each
+// section opens with a heading and is divided from the previous one by a
+// top border (suppressed on the first child so the flow doesn't start with
+// a floating rule).
+function ReviewSection({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn("flex flex-col gap-4 border-t pt-6 first:border-t-0 first:pt-0", className)}
+    >
+      {(title !== undefined || description !== undefined) && (
+        <div className="flex flex-col gap-1">
+          {title !== undefined && <h2 className="font-heading text-base font-medium">{title}</h2>}
+          {description !== undefined && (
+            <p className="text-sm text-muted-foreground">{description}</p>
+          )}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+// The validation + action buttons stick to the bottom of the viewport (above
+// the mobile tab bar), top divider included, so submit is always reachable.
+// Negative horizontal margins mirror the main section's padding (px-5 /
+// md:px-10, same trick as the capture stepper header) so scrolling content
+// can't bleed through beside the bar.
+function StickyActions({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] -mx-5 flex flex-col gap-3 border-t bg-background px-5 pt-4 pb-3 md:bottom-0 md:-mx-10 md:px-10">
+      {children}
+    </div>
+  );
 }
 
 function TotalsCheck({
@@ -148,9 +205,17 @@ function TotalsCheck({
     return <p className="text-sm text-muted-foreground">No handwritten totals to check.</p>;
   }
 
+  const allMatch = checked.every((row) => row.computed === row.written);
+  // Totals that checked out at extraction (and still do) need no ruling —
+  // just the per-player checkmarks. Anything else needs the user to say
+  // whether the card is wrong or a score was corrected.
+  const agreed = allMatch && choice === "agree";
+
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-3">
-      <p className="text-sm font-medium">Check the written totals</p>
+    <div className="flex flex-col gap-3 border-t pt-4">
+      <p className="text-sm font-medium">
+        {agreed ? "Written totals" : "Check the written totals"}
+      </p>
       <div className="flex flex-col gap-1 text-sm">
         {checked.map((row) => {
           const matches = row.computed === row.written;
@@ -159,7 +224,7 @@ function TotalsCheck({
               <span className="min-w-0 truncate">{row.label}</span>
               <span className="flex shrink-0 items-center gap-2 tabular-nums">
                 <span className="text-muted-foreground">
-                  written {row.written} · summed {row.computed ?? "–"}
+                  scores sum to {row.computed ?? "–"} · written as {row.written}
                 </span>
                 {matches ? (
                   <Check aria-label="Totals match" className="size-4 text-primary" />
@@ -171,25 +236,26 @@ function TotalsCheck({
           );
         })}
       </div>
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ["agree", "Totals agree"],
-            ["wrong", "Written totals are wrong"],
-            ["corrected", "I corrected a score — now it's right"],
-          ] as const
-        ).map(([value, label]) => (
-          <Button
-            key={value}
-            type="button"
-            size="sm"
-            variant={choice === value ? "default" : "outline"}
-            onClick={() => onChoice(value)}
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
+      {!agreed && (
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ["wrong", "Written totals are wrong"],
+              ["corrected", "I corrected a score — now it's right"],
+            ] as const
+          ).map(([value, label]) => (
+            <Button
+              key={value}
+              type="button"
+              size="sm"
+              variant={choice === value ? "default" : "outline"}
+              onClick={() => onChoice(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -212,6 +278,7 @@ export function ReviewRound({
   const { client } = useAuth();
   const [golfers, setGolfers] = useState<Golfer[]>([]);
   const [courses, setCourses] = useState<CourseWithSets[]>([]);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
   const [step, setStep] = useState<"round" | "nines">("round");
 
   const [date, setDate] = useState(() => parseExtractedDate(extracted.date));
@@ -225,30 +292,64 @@ export function ReviewRound({
     }));
   });
   const [nines, setNines] = useState<NineReview[]>(() =>
-    extracted.nines.map((nine, index) => ({
-      nineName: nine.nineName,
-      playerNames: nine.players,
-      holes: nine.holes.map((hole) => ({ number: hole.hole, par: hole.par })),
-      scores: nine.holes.map((hole) => nine.players.map((_, pi) => hole.scores[pi] ?? null)),
-      writtenTotals: nine.players.map((_, pi) => nine.writtenTotals[pi] ?? null),
-      courseSetId: matched?.course.sets[index]?.courseSetId ?? null,
-      totalsChoice: null,
-    })),
+    extracted.nines.map((nine, index) => {
+      const writtenTotals = nine.players.map((_, pi) => nine.writtenTotals[pi] ?? null);
+      const computed = nine.players.map((_, pi) =>
+        sumOrNull(nine.holes.map((hole) => hole.scores[pi] ?? null)),
+      );
+      return {
+        nineName: nine.nineName,
+        playerNames: nine.players,
+        holes: nine.holes.map((hole) => ({ number: hole.hole, par: hole.par })),
+        scores: nine.holes.map((hole) => nine.players.map((_, pi) => hole.scores[pi] ?? null)),
+        writtenTotals,
+        courseSetId: matched?.course.sets[index]?.courseSetId ?? null,
+        totalsChoice: writtenTotalsMatch(writtenTotals, computed) ? ("agree" as const) : null,
+      };
+    }),
   );
-  const [roundChoice, setRoundChoice] = useState<TotalsChoice | null>(null);
+  const [roundChoice, setRoundChoice] = useState<TotalsChoice | null>(() => {
+    // Mirror roundRows below: the 18-hole written totals are index-aligned
+    // with the distinct player list, computed sums that player's extracted
+    // cells across every nine.
+    const names = [...new Set(extracted.nines.flatMap((nine) => nine.players))];
+    const written = names.map((_, index) => extracted.writtenTotals[index] ?? null);
+    const computed = names.map((name) =>
+      sumOrNull(
+        extracted.nines.flatMap((nine) =>
+          nine.players.flatMap((player, pi) =>
+            player === name ? nine.holes.map((hole) => hole.scores[pi] ?? null) : [],
+          ),
+        ),
+      ),
+    );
+    return writtenTotalsMatch(written, computed) ? "agree" : null;
+  });
 
   const [mergeCandidate, setMergeCandidate] = useState<OutingDetail | null>(null);
   const [mergeAccepted, setMergeAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Loaded on mount (the matched course needs a name to display) and
+  // re-fetched every time the course combobox opens, so a course added in
+  // another tab shows up without a reload.
+  const loadCourses = useCallback(async () => {
+    if (!client) return;
+    const response = await client.api.courses.$get();
+    if (!response.ok) return;
+    setCourses((await response.json()).courses);
+    setCoursesLoaded(true);
+  }, [client]);
+
+  useEffect(() => {
+    void loadCourses();
+  }, [loadCourses]);
+
   useEffect(() => {
     if (!client) return;
     void client.api.golfers.$get().then(async (response) => {
       if (response.ok) setGolfers((await response.json()).golfers);
-    });
-    void client.api.courses.$get().then(async (response) => {
-      if (response.ok) setCourses((await response.json()).courses);
     });
   }, [client]);
 
@@ -263,6 +364,54 @@ export function ReviewRound({
       }),
     );
   }, [golfers]);
+
+  // Scores already in the merge candidate that this capture would replace
+  // (submit upserts on outing+player+hole), summarized per golfer as
+  // "Blue 1–9"-style ranges so the user knows what "add to outing" costs.
+  const overwriteWarnings = useMemo(() => {
+    if (!mergeCandidate) return [];
+    const byPlayer = new Map<string, { name: string; labels: string[] }>();
+    for (const nine of nines) {
+      const targetSet = mergeCandidate.sets.find((set) => set.id === nine.courseSetId);
+      if (!targetSet) continue;
+      const holeIdByNumber = new Map(targetSet.holes.map((hole) => [hole.number, hole.id]));
+      nine.playerNames.forEach((writtenName, playerIndex) => {
+        const review = players.find((entry) => entry.name === writtenName);
+        if (!review?.playerId) return;
+        const existing = targetSet.scores[review.playerId];
+        if (!existing) return;
+        const numbers = nine.holes
+          .filter((hole, holeIndex) => {
+            const holeId = holeIdByNumber.get(hole.number);
+            return (
+              (nine.scores[holeIndex]?.[playerIndex] ?? null) !== null &&
+              holeId !== undefined &&
+              existing[holeId] !== undefined
+            );
+          })
+          .map((hole) => hole.number)
+          .sort((a, b) => a - b);
+        if (numbers.length === 0) return;
+        const contiguous = numbers.every(
+          (number, index) => index === 0 || number === numbers[index - 1] + 1,
+        );
+        const range =
+          numbers.length === 1
+            ? `${numbers[0]}`
+            : contiguous
+              ? `${numbers[0]}–${numbers[numbers.length - 1]}`
+              : numbers.join(", ");
+        const golfer = golfers.find((entry) => entry.id === review.playerId);
+        const entry = byPlayer.get(review.playerId) ?? {
+          name: golfer?.name ?? golfer?.email ?? writtenName,
+          labels: [],
+        };
+        entry.labels.push(`${targetSet.name} ${range}`);
+        byPlayer.set(review.playerId, entry);
+      });
+    }
+    return [...byPlayer.values()].map((entry) => `${entry.name}: ${entry.labels.join(", ")}`);
+  }, [mergeCandidate, nines, players, golfers]);
 
   const mergeTarget = mergeAccepted ? mergeCandidate : null;
   const merging = mergeTarget !== null;
@@ -345,6 +494,14 @@ export function ReviewRound({
     );
   }
 
+  // The nines step shows who each golfer IS (their profile name), not the
+  // scrawl on the card; names that aren't matched yet fall back to the scrawl.
+  function golferLabel(writtenName: string): string {
+    const review = players.find((entry) => entry.name === writtenName);
+    const golfer = golfers.find((entry) => entry.id === review?.playerId);
+    return golfer?.name ?? golfer?.email ?? writtenName;
+  }
+
   function nineComputedTotals(nine: NineReview): (number | null)[] {
     return nine.playerNames.map((_, playerIndex) =>
       sumOrNull(nine.scores.map((row) => row[playerIndex] ?? null)),
@@ -354,30 +511,41 @@ export function ReviewRound({
   function nineTotalsRows(nine: NineReview): TotalsRow[] {
     const computed = nineComputedTotals(nine);
     return nine.playerNames.map((name, playerIndex) => ({
-      label: name,
+      label: golferLabel(name),
       written: nine.writtenTotals[playerIndex] ?? null,
       computed: computed[playerIndex] ?? null,
     }));
   }
 
   // The card's 18-hole totals are index-aligned with the distinct player
-  // list; the computed side sums that player's cells across every nine.
+  // list; the computed side sums the ASSIGNED GOLFER's cells across every
+  // nine, so a card that writes one person under two names ("AJM"/"AJ")
+  // still sums their whole round once both names point at the same golfer.
   const roundRows: TotalsRow[] = players.map((player, index) => ({
-    label: player.name,
+    label: golferLabel(player.name),
     written: extracted.writtenTotals[index] ?? null,
     computed: sumOrNull(
       nines.flatMap((nine) =>
-        nine.playerNames.flatMap((name, playerIndex) =>
-          name === player.name ? nine.scores.map((row) => row[playerIndex] ?? null) : [],
-        ),
+        nine.playerNames.flatMap((name, playerIndex) => {
+          const sameGolfer =
+            player.playerId !== null
+              ? players.find((entry) => entry.name === name)?.playerId === player.playerId
+              : name === player.name;
+          return sameGolfer ? nine.scores.map((row) => row[playerIndex] ?? null) : [];
+        }),
       ),
     ),
   }));
   const roundNeedsCheck = roundRows.some((row) => row.written !== null);
 
+  const dateIsFuture = DATE_PATTERN.test(date) && date > localIsoDate(new Date());
+
   const roundProblems = useMemo(() => {
     const list: string[] = [];
     if (!DATE_PATTERN.test(date)) list.push("Pick a date for the round.");
+    if (dateIsFuture) {
+      list.push("The date is in the future — rounds can't be post-dated. Use the Today button.");
+    }
     if (courseId === null) list.push("Pick the course — nines can only come from a known course.");
     const unassigned = players.filter((player) => player.playerId === null);
     if (unassigned.length > 0) {
@@ -386,13 +554,23 @@ export function ReviewRound({
           "anyone missing from the Golfers tab first.",
       );
     }
-    const assigned = players.filter((player) => player.playerId !== null);
-    if (new Set(assigned.map((player) => player.playerId)).size !== assigned.length) {
-      list.push("Two written names point at the same golfer — fix the golfer assignments.");
+    // Two written names MAY point at one golfer (the card wrote "AJM" on one
+    // nine and "AJ" on the other) — but within a single nine, two score
+    // columns can't belong to the same person.
+    for (const nine of nines) {
+      const ids = nine.playerNames
+        .map((name) => players.find((entry) => entry.name === name)?.playerId)
+        .filter((id): id is string => id !== null && id !== undefined);
+      if (new Set(ids).size !== ids.length) {
+        list.push(
+          `On “${defaultNineName(nine)}”, two written names are assigned to the same golfer — ` +
+            "one nine can't have two score columns for one person.",
+        );
+      }
     }
     if (nines.length === 0) list.push("No holes were extracted — retake the photo.");
     return list;
-  }, [date, courseId, players, nines]);
+  }, [date, dateIsFuture, courseId, players, nines]);
 
   // Recomputed every render — it's a handful of comparisons, and it depends
   // on derived rows (roundRows) that change identity each render anyway.
@@ -484,142 +662,152 @@ export function ReviewRound({
           />
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Round</CardTitle>
-            <CardDescription>When and where this scorecard was played.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="round-date">
-                <CalendarDays aria-hidden="true" className="mr-1 inline size-4" />
-                Date
-              </Label>
+        <ReviewSection title="Round" description="When and where this scorecard was played.">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="round-date">
+              <CalendarDays aria-hidden="true" className="mr-1 inline size-4" />
+              Date
+            </Label>
+            <div className="flex gap-2">
               <Input
                 id="round-date"
                 type="date"
                 // iOS gives date inputs UA styling: extra intrinsic height and
                 // a centered value. Strip it and pin the value left so the
                 // field lines up with the selects around it.
-                className="h-9 appearance-none justify-start text-left [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:text-left"
+                className="h-9 flex-1 appearance-none justify-start text-left [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:text-left"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
+                aria-invalid={dateIsFuture}
               />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="round-course">Course</Label>
-              <Select
-                items={[
-                  { value: null, label: "— Choose course —" },
-                  ...courses.map((course) => ({ value: course.id, label: course.name })),
-                ]}
-                value={courseId}
-                onValueChange={(value) => changeCourse(value as string | null)}
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 shrink-0"
+                onClick={() => setDate(localIsoDate(new Date()))}
               >
-                <SelectTrigger id="round-course" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={null}>— Choose course —</SelectItem>
-                  {courses.map((course) => (
-                    <SelectItem key={course.id} value={course.id}>
-                      {course.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                Today
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="round-course">Course</Label>
+            <AsyncCombobox
+              id="round-course"
+              value={courseId}
+              onValueChange={(value) => changeCourse(value)}
+              options={
+                coursesLoaded
+                  ? courses.map((course) => ({ value: course.id, label: course.name }))
+                  : null
+              }
+              onOpen={() => void loadCourses()}
+              placeholder="— Choose course —"
+              searchPlaceholder="Search courses…"
+              emptyMessage="No courses match."
+              invalid={courseId === null}
+            />
+          </div>
+        </ReviewSection>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Golfers</CardTitle>
-            <CardDescription>
-              Match each name written on the card to a golfer and confirm their tee.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {players.map((player, index) => (
-              <div key={player.name} className="flex flex-col gap-2 rounded-xl border p-3">
-                <p className="text-sm">
-                  Written on card: <span className="font-medium">“{player.name}”</span>
-                </p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Select
-                    items={[
-                      { value: null, label: "— Choose golfer —" },
-                      ...golfers.map((golfer) => ({
-                        value: golfer.id,
-                        label: golfer.name ?? golfer.email ?? "Unnamed golfer",
-                      })),
-                    ]}
-                    value={player.playerId}
-                    onValueChange={(value) => assignGolfer(index, value as string | null)}
-                  >
-                    <SelectTrigger
-                      className="w-full"
-                      aria-label={`Golfer for ${player.name}`}
-                      aria-invalid={player.playerId === null}
+        <ReviewSection
+          title="Golfers"
+          description="Match each name written on the card to a golfer and confirm their tee."
+        >
+          <div className="flex flex-col divide-y">
+            {players.map((player, index) => {
+              const aliases = players
+                .filter(
+                  (other, otherIndex) =>
+                    otherIndex !== index &&
+                    other.playerId !== null &&
+                    other.playerId === player.playerId,
+                )
+                .map((other) => `“${other.name}”`);
+              return (
+                <div key={player.name} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0">
+                  <p className="text-sm">
+                    Written on card: <span className="font-medium">“{player.name}”</span>
+                  </p>
+                  {aliases.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Same golfer as {aliases.join(" and ")} — their nines are scored as one player.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <Select
+                      items={[
+                        { value: null, label: "— Choose golfer —" },
+                        ...golfers.map((golfer) => ({
+                          value: golfer.id,
+                          label: golfer.name ?? golfer.email ?? "Unnamed golfer",
+                        })),
+                      ]}
+                      value={player.playerId}
+                      onValueChange={(value) => assignGolfer(index, value as string | null)}
                     >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={null}>— Choose golfer —</SelectItem>
-                      {golfers.map((golfer) => (
-                        <SelectItem key={golfer.id} value={golfer.id}>
-                          {golfer.name ?? golfer.email ?? "Unnamed golfer"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    items={[
-                      { value: null, label: "Tee not recorded" },
-                      ...TEES.map((tee) => ({ value: tee, label: `${TEE_LABELS[tee]} tees` })),
-                    ]}
-                    value={player.tee}
-                    onValueChange={(value) => updatePlayer(index, { tee: value as Tee | null })}
-                  >
-                    <SelectTrigger className="w-full" aria-label={`Tee for ${player.name}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={null}>Tee not recorded</SelectItem>
-                      {TEES.map((tee) => (
-                        <SelectItem key={tee} value={tee}>
-                          {TEE_LABELS[tee]} tees
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                      <SelectTrigger
+                        className="w-full"
+                        aria-label={`Golfer for ${player.name}`}
+                        aria-invalid={player.playerId === null}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={null}>— Choose golfer —</SelectItem>
+                        {golfers.map((golfer) => (
+                          <SelectItem key={golfer.id} value={golfer.id}>
+                            {golfer.name ?? golfer.email ?? "Unnamed golfer"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      items={[
+                        { value: null, label: "Tee not recorded" },
+                        ...TEES.map((tee) => ({ value: tee, label: `${TEE_LABELS[tee]} tees` })),
+                      ]}
+                      value={player.tee}
+                      onValueChange={(value) => updatePlayer(index, { tee: value as Tee | null })}
+                    >
+                      <SelectTrigger className="w-full" aria-label={`Tee for ${player.name}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={null}>Tee not recorded</SelectItem>
+                        {TEES.map((tee) => (
+                          <SelectItem key={tee} value={tee}>
+                            {TEE_LABELS[tee]} tees
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              );
+            })}
+          </div>
+        </ReviewSection>
 
-        <Card>
-          <CardContent className="flex flex-col gap-3">
-            {roundProblems.length > 0 && (
-              <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-destructive">
-                {roundProblems.map((problem) => (
-                  <li key={problem}>{problem}</li>
-                ))}
-              </ul>
-            )}
-            <div className="flex flex-wrap justify-between gap-3">
-              <Button variant="outline" onClick={onRetake}>
-                <RefreshCcw data-icon="inline-start" />
-                Retake
-              </Button>
-              <Button onClick={() => setStep("nines")} disabled={roundProblems.length > 0}>
-                Review nines
-                <ArrowRight data-icon="inline-end" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <StickyActions>
+          {roundProblems.length > 0 && (
+            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-destructive">
+              {roundProblems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          )}
+          <div className="flex flex-wrap justify-between gap-3">
+            <Button variant="outline" onClick={onRetake}>
+              <RefreshCcw data-icon="inline-start" />
+              Retake
+            </Button>
+            <Button onClick={() => setStep("nines")} disabled={roundProblems.length > 0}>
+              Review nines
+              <ArrowRight data-icon="inline-end" />
+            </Button>
+          </div>
+        </StickyActions>
       </div>
     );
   }
@@ -631,147 +819,135 @@ export function ReviewRound({
         const setParByNumber = new Map(set?.holes.map((hole) => [hole.number, hole.par]) ?? []);
         const computedTotals = nineComputedTotals(nine);
         return (
-          <Card key={nineIndex}>
-            <CardHeader>
-              <CardTitle>{defaultNineName(nine)}</CardTitle>
-              <CardDescription>
-                Confirm which nine this is, fix any misread scores, then check the totals.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label>Nine at {selectedCourse?.name ?? "the course"}</Label>
-                <Select
-                  items={[
-                    { value: null, label: "— Choose nine —" },
-                    ...(selectedCourse?.sets ?? []).map((entry) => ({
-                      value: entry.id,
-                      label: entry.name,
-                    })),
-                  ]}
-                  value={nine.courseSetId}
-                  onValueChange={(value) =>
-                    updateNine(nineIndex, { courseSetId: value as string | null })
-                  }
+          <ReviewSection
+            key={nineIndex}
+            title={defaultNineName(nine)}
+            description="Confirm which nine this is, fix any misread scores, then check the totals."
+          >
+            <div className="flex flex-col gap-2">
+              <Label>Nine at {selectedCourse?.name ?? "the course"}</Label>
+              <Select
+                items={[
+                  { value: null, label: "— Choose nine —" },
+                  ...(selectedCourse?.sets ?? []).map((entry) => ({
+                    value: entry.id,
+                    label: entry.name,
+                  })),
+                ]}
+                value={nine.courseSetId}
+                onValueChange={(value) =>
+                  updateNine(nineIndex, { courseSetId: value as string | null })
+                }
+              >
+                <SelectTrigger
+                  className="w-full"
+                  aria-label={`Course nine for ${defaultNineName(nine)}`}
+                  aria-invalid={nine.courseSetId === null}
                 >
-                  <SelectTrigger
-                    className="w-full"
-                    aria-label={`Course nine for ${defaultNineName(nine)}`}
-                    aria-invalid={nine.courseSetId === null}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={null}>— Choose nine —</SelectItem>
-                    {(selectedCourse?.sets ?? []).map((entry) => {
-                      const numbers = entry.holes.map((hole) => hole.number);
-                      const range =
-                        numbers.length > 0
-                          ? ` · holes ${Math.min(...numbers)}–${Math.max(...numbers)}`
-                          : "";
-                      return (
-                        <SelectItem key={entry.id} value={entry.id}>
-                          {entry.name}
-                          {range}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={null}>— Choose nine —</SelectItem>
+                  {(selectedCourse?.sets ?? []).map((entry) => {
+                    const numbers = entry.holes.map((hole) => hole.number);
+                    const range =
+                      numbers.length > 0
+                        ? ` · holes ${Math.min(...numbers)}–${Math.max(...numbers)}`
+                        : "";
+                    return (
+                      <SelectItem key={entry.id} value={entry.id}>
+                        {entry.name}
+                        {range}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div className="-mx-6 overflow-x-auto px-6">
-                <table className="w-full min-w-max text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-xs text-muted-foreground">
-                      <th className="p-2 pl-0 font-medium">Hole</th>
-                      <th className="p-2 font-medium">Par</th>
-                      {nine.playerNames.map((name) => (
-                        <th key={name} className="p-2 text-center font-medium">
-                          {name}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {nine.holes.map((hole, holeIndex) => (
-                      <tr key={hole.number} className="border-b">
-                        <td className="p-2 pl-0 font-medium">{hole.number}</td>
-                        <td className="p-2 text-muted-foreground">
-                          {setParByNumber.get(hole.number) ?? hole.par}
-                        </td>
-                        {nine.playerNames.map((name, playerIndex) => (
-                          <td key={name} className="p-2 text-center">
-                            <Input
-                              aria-label={`${name}'s score on hole ${hole.number}`}
-                              className="h-9 w-14 text-center"
-                              type="number"
-                              inputMode="numeric"
-                              min={1}
-                              placeholder="–"
-                              value={nine.scores[holeIndex]?.[playerIndex] ?? ""}
-                              onChange={(event) =>
-                                setScore(nineIndex, holeIndex, playerIndex, event.target.value)
-                              }
-                            />
-                          </td>
-                        ))}
-                      </tr>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-max text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="p-2 pl-0 font-medium">Hole</th>
+                    <th className="p-2 font-medium">Par</th>
+                    {nine.playerNames.map((name) => (
+                      <th key={name} className="p-2 text-center font-medium">
+                        {golferLabel(name)}
+                      </th>
                     ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td className="p-2 pl-0 font-medium">Total</td>
-                      <td className="p-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {nine.holes.map((hole, holeIndex) => (
+                    <tr key={hole.number} className="border-b">
+                      <td className="p-2 pl-0 font-medium">{hole.number}</td>
+                      <td className="p-2 text-muted-foreground">
+                        {setParByNumber.get(hole.number) ?? hole.par}
+                      </td>
                       {nine.playerNames.map((name, playerIndex) => (
-                        <td key={name} className="p-2 text-center font-medium tabular-nums">
-                          {computedTotals[playerIndex] ?? "–"}
+                        <td key={name} className="p-2 text-center">
+                          <GolfScore
+                            aria-label={`${golferLabel(name)}'s score on hole ${hole.number}`}
+                            score={nine.scores[holeIndex]?.[playerIndex] ?? null}
+                            par={setParByNumber.get(hole.number) ?? hole.par}
+                            onChange={(raw) => setScore(nineIndex, holeIndex, playerIndex, raw)}
+                          />
                         </td>
                       ))}
                     </tr>
-                  </tfoot>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td className="p-2 pl-0 font-medium">Total</td>
+                    <td className="p-2" />
+                    {nine.playerNames.map((name, playerIndex) => (
+                      <td key={name} className="p-2 text-center font-medium tabular-nums">
+                        {computedTotals[playerIndex] ?? "–"}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
 
-              <TotalsCheck
-                rows={nineTotalsRows(nine)}
-                choice={nine.totalsChoice}
-                onChoice={(choice) => updateNine(nineIndex, { totalsChoice: choice })}
-              />
-            </CardContent>
-          </Card>
+            <TotalsCheck
+              rows={nineTotalsRows(nine)}
+              choice={nine.totalsChoice}
+              onChoice={(choice) => updateNine(nineIndex, { totalsChoice: choice })}
+            />
+          </ReviewSection>
         );
       })}
 
       {roundNeedsCheck && (
-        <Card>
-          <CardHeader>
-            <CardTitle>18-hole totals</CardTitle>
-            <CardDescription>
-              The card's grand totals, checked against every score above.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TotalsCheck rows={roundRows} choice={roundChoice} onChoice={setRoundChoice} />
-          </CardContent>
-        </Card>
+        <ReviewSection
+          title="18-hole totals"
+          description="The card's grand totals, checked against every score above."
+        >
+          <TotalsCheck rows={roundRows} choice={roundChoice} onChoice={setRoundChoice} />
+        </ReviewSection>
       )}
 
       {mergeCandidate && (
-        <Card className="border-primary/40 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <ReviewSection
+          title={
+            <span className="flex items-center gap-2">
               <GitMerge aria-hidden="true" className="size-4" />
               Add to an existing outing?
-            </CardTitle>
-            <CardDescription>
+            </span>
+          }
+          description={
+            <>
               There's already an outing at {mergeCandidate.course.name} on{" "}
               {formatOutingDate(mergeCandidate.date)} on the same nine
               {mergeCandidate.sets.length === 1 ? "" : "s"} — this happens when one group splits
               across two scorecards.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
+            </>
+          }
+        >
+          <div className="flex flex-col gap-2">
             {mergeCandidate.sets.map((set) => (
               <div key={set.id} className="text-sm">
                 <span className="font-medium">{set.name}:</span>{" "}
@@ -787,8 +963,21 @@ export function ReviewRound({
                 </span>
               </div>
             ))}
-          </CardContent>
-          <CardFooter className="gap-3">
+            {overwriteWarnings.length > 0 && (
+              <div className="mt-1 flex flex-col gap-1 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                <p className="flex items-center gap-1.5 font-medium text-destructive">
+                  <TriangleAlert aria-hidden="true" className="size-4" />
+                  Adding to this outing will overwrite existing scores
+                </p>
+                <ul className="flex flex-col gap-0.5 text-muted-foreground">
+                  {overwriteWarnings.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-3">
             <Button
               variant={mergeAccepted ? "default" : "outline"}
               onClick={() => setMergeAccepted(true)}
@@ -801,35 +990,33 @@ export function ReviewRound({
             >
               Keep separate
             </Button>
-          </CardFooter>
-        </Card>
+          </div>
+        </ReviewSection>
       )}
 
-      <Card>
-        <CardContent className="flex flex-col gap-3">
-          {nineProblems.length > 0 && (
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-destructive">
-              {nineProblems.map((problem) => (
-                <li key={problem}>{problem}</li>
-              ))}
-            </ul>
-          )}
-          {submitError && <p className="text-sm text-destructive">{submitError}</p>}
-          <div className="flex flex-wrap justify-between gap-3">
-            <Button variant="outline" onClick={() => setStep("round")}>
-              <ArrowLeft data-icon="inline-start" />
-              Back
-            </Button>
-            <Button
-              onClick={() => void submit()}
-              disabled={submitting || roundProblems.length > 0 || nineProblems.length > 0}
-            >
-              <Send data-icon="inline-start" />
-              {submitting ? "Saving…" : merging ? "Add to outing" : "Submit round"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <StickyActions>
+        {nineProblems.length > 0 && (
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-destructive">
+            {nineProblems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        )}
+        {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+        <div className="flex flex-wrap justify-between gap-3">
+          <Button variant="outline" onClick={() => setStep("round")}>
+            <ArrowLeft data-icon="inline-start" />
+            Back
+          </Button>
+          <Button
+            onClick={() => void submit()}
+            disabled={submitting || roundProblems.length > 0 || nineProblems.length > 0}
+          >
+            <Send data-icon="inline-start" />
+            {submitting ? "Saving…" : merging ? "Add to outing" : "Submit round"}
+          </Button>
+        </div>
+      </StickyActions>
     </div>
   );
 }

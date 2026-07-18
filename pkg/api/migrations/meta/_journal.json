@@ -43,6 +43,13 @@
       "when": 1784329322738,
       "tag": "0005_wooden_sue_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784343236420,
+      "tag": "0006_talented_cerise",
+      "breakpoints": true
     }
   ]
 }

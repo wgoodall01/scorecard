@@ -1,5 +1,5 @@
 import { hc } from "hono/client";
-import { redirect } from "@tanstack/react-router";
+import { redirect, type ParsedLocation } from "@tanstack/react-router";
 import type { AppType } from "api";
 
 const TOKEN_KEY = "scorecard.auth.token";
@@ -27,7 +27,7 @@ export function safeReturnTo(value: string | null) {
 // finer-grained permissions (e.g. admin-only controls) are checked in
 // components against the profile and enforced by the API.
 export function checkAuth() {
-  return ({ location }: { location: { href: string } }) => {
+  return ({ location }: { location: ParsedLocation }) => {
     const token = authService.getToken();
     if (!token) {
       throw redirect({

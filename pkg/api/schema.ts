@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { customType, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const varchar = customType<{ data: string }>({
@@ -47,14 +47,21 @@ export const user = sqliteTable(
   (table) => [uniqueIndex("user_email_unique").on(table.email)],
 );
 
-export const nickname = sqliteTable("nickname", {
-  id: text("id").primaryKey().$defaultFn(uuidv7),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id),
-  nickname: varchar("nickname").notNull(),
-  nicknameType: varchar("nickname_type").notNull(),
-});
+export const nickname = sqliteTable(
+  "nickname",
+  {
+    id: text("id").primaryKey().$defaultFn(uuidv7),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    nickname: varchar("nickname").notNull(),
+    nicknameType: varchar("nickname_type").notNull(),
+  },
+  (table) => [
+    // A golfer can't hold the same nickname twice in different cases.
+    uniqueIndex("nickname_user_nickname_unique").on(table.userId, sql`lower(${table.nickname})`),
+  ],
+);
 
 export const course = sqliteTable("course", {
   id: text("id").primaryKey().$defaultFn(uuidv7),

@@ -4,6 +4,7 @@ import { authRoutes } from "./routes/auth";
 import { captureRoutes } from "./routes/capture";
 import { golferRoutes } from "./routes/golfers";
 import { healthRoutes } from "./routes/health";
+import { honorRoutes } from "./routes/honors";
 import { outingRoutes } from "./routes/outings";
 import { userRoutes } from "./routes/users";
 import { handleCaptureQueue } from "./src/agent/card_extract/agent";
@@ -22,6 +23,7 @@ export {
   type UpdateGolferRequestSchema,
 } from "./routes/golfers";
 export { SubmitOutingRequest, type SubmitOutingRequestSchema } from "./routes/outings";
+export type { Honor, HonorHolder, HonorOutingRef, HonorSlug } from "./src/honors";
 export { Email, type EmailSchema } from "./routes/shared";
 export { TEES, type Tee } from "./schema";
 export type { MatchedData } from "./src/agent/card_extract/agent";
@@ -34,7 +36,8 @@ const app = new Hono<Env>()
   .route("/", authRoutes)
   .route("/", userRoutes)
   .route("/", golferRoutes)
-  .route("/", outingRoutes);
+  .route("/", outingRoutes)
+  .route("/", honorRoutes);
 
 export type AppType = typeof app;
 

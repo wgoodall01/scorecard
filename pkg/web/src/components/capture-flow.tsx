@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
+  Calculator,
   Camera,
   CircleAlert,
   CircleCheck,
   ClipboardCheck,
   ImageUp,
   NotebookText,
+  PenLine,
   RefreshCcw,
   ScanText,
   Send,
+  type LucideIcon,
 } from "lucide-react";
 import type { ExtractDataSchema, MatchedData } from "api";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -129,7 +132,7 @@ export function CaptureFlow() {
     <div className="flex flex-col gap-6">
       {/* Sticky progress bar: pt swallows the iOS safe area when stuck, and
           blends into the page background when at rest. */}
-      <div className="sticky top-0 z-10 -mx-5 bg-background/95 px-5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur md:-mx-10 md:px-10">
+      <div className="sticky top-0 z-10 -mx-5 border-b bg-background/95 px-5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-4 backdrop-blur md:-mx-10 md:px-10">
         <Stepper
           aria-label="Capture progress"
           className="max-w-md"
@@ -145,47 +148,59 @@ export function CaptureFlow() {
       </div>
 
       {step === "capture" && (
-        <Empty className="min-h-64 border bg-muted/30">
-          <EmptyHeader>
-            <EmptyMedia variant="icon" className="rounded-full bg-primary/10 text-primary">
-              <Camera />
-            </EmptyMedia>
-            <EmptyTitle>Capture a scorecard</EmptyTitle>
-            <EmptyDescription>
-              Take a photo of your scorecard or upload one from your library. We’ll read the round
-              details for you.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <div className="flex w-full max-w-60 flex-col gap-3">
-              {hasCamera && (
-                <Button onClick={() => setCameraOpen(true)}>
-                  <Camera data-icon="inline-start" />
-                  Take a photo
-                </Button>
-              )}
-              <label
-                className={buttonVariants({
-                  variant: hasCamera ? "outline" : "default",
-                  className: "cursor-pointer",
-                })}
-              >
-                <ImageUp data-icon="inline-start" />
-                Upload an image
-                <input
-                  className="sr-only"
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => {
-                    const [selected] = event.target.files ?? [];
-                    if (selected) startAnalyze(selected);
-                    event.target.value = "";
-                  }}
-                />
-              </label>
-            </div>
-          </EmptyContent>
-        </Empty>
+        <>
+          <Empty className="min-h-64 border bg-muted/30">
+            <EmptyHeader>
+              <EmptyMedia variant="icon" className="rounded-full bg-primary/10 text-primary">
+                <Camera />
+              </EmptyMedia>
+              <EmptyTitle>Capture a scorecard</EmptyTitle>
+              <EmptyDescription>
+                Take a photo of your scorecard or upload one from your library. We’ll read the round
+                details for you.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <div className="flex w-full max-w-60 flex-col gap-3">
+                {hasCamera && (
+                  <Button onClick={() => setCameraOpen(true)}>
+                    <Camera data-icon="inline-start" />
+                    Take a photo
+                  </Button>
+                )}
+                <label
+                  className={buttonVariants({
+                    variant: hasCamera ? "outline" : "default",
+                    className: "cursor-pointer",
+                  })}
+                >
+                  <ImageUp data-icon="inline-start" />
+                  Upload an image
+                  <input
+                    className="sr-only"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const [selected] = event.target.files ?? [];
+                      if (selected) startAnalyze(selected);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+            </EmptyContent>
+          </Empty>
+          <ul className="flex flex-col gap-4">
+            <CaptureTip icon={Calculator} title="Add up your scores">
+              Add up your scores and write your totals on the card before submitting. This helps us
+              check that we’ve read the numbers right.
+            </CaptureTip>
+            <CaptureTip icon={PenLine} title="Write names clearly">
+              Write each player’s name clearly somewhere on the card. This helps us match your
+              scores against known golfers in your party.
+            </CaptureTip>
+          </ul>
+        </>
       )}
 
       {step === "analyze" && (
@@ -274,5 +289,28 @@ export function CaptureFlow() {
         description="Line the scorecard up in the frame and hold steady."
       />
     </div>
+  );
+}
+
+// One row of advice under the capture card: icon chip, bolded gist, detail.
+function CaptureTip({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Icon aria-hidden="true" className="size-4" />
+      </span>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-sm text-muted-foreground">{children}</p>
+      </div>
+    </li>
   );
 }

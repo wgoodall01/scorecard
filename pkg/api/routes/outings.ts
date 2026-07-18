@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db";
@@ -239,12 +239,79 @@ export const outingRoutes = new Hono<Env>()
     if (!detail) return c.json({ error: "Outing not found" }, 404);
     return c.json({ outing: detail });
   })
+  // Merge another outing's rows into this one — the counterpart of the
+  // capture flow's "add to existing outing", for two rounds that were
+  // recorded separately (one foursome, two scorecards, both submitted as
+  // fresh outings). Everything moves to the target: where both outings have
+  // the same player+hole score or the same player, the target's row wins,
+  // and the emptied source outing is deleted.
+  .post(
+    "/outings/:id/merge",
+    requireAuth,
+    zodBody(z.object({ outingId: z.string().min(1) }), "A source outing id is required"),
+    async (c) => {
+      const targetId = c.req.param("id");
+      const { outingId: sourceId } = c.req.valid("json");
+      if (sourceId === targetId) {
+        return c.json({ error: "An outing can't be merged into itself" }, 400);
+      }
+
+      const db = getDb(c.env.DB);
+      const [target, source] = await Promise.all([
+        db.query.outing.findFirst({ where: eq(outing.id, targetId) }),
+        db.query.outing.findFirst({ where: eq(outing.id, sourceId) }),
+      ]);
+      if (!target || !source) return c.json({ error: "Outing not found" }, 404);
+      if (target.date !== source.date || target.courseId !== source.courseId) {
+        return c.json({ error: "Only outings on the same date and course can be merged" }, 400);
+      }
+
+      await db.batch([
+        // Drop source cells the target already has...
+        db.delete(score).where(
+          and(
+            eq(score.outingId, sourceId),
+            sql`(${score.playerId}, ${score.holeId}) IN
+                (SELECT player_id, hole_id FROM score WHERE outing_id = ${targetId})`,
+          ),
+        ),
+        // ...move the rest, and likewise for the per-outing player tees...
+        db.update(score).set({ outingId: targetId }).where(eq(score.outingId, sourceId)),
+        db.delete(outingPlayer).where(
+          and(
+            eq(outingPlayer.outingId, sourceId),
+            sql`${outingPlayer.playerId} IN
+                (SELECT player_id FROM outing_player WHERE outing_id = ${targetId})`,
+          ),
+        ),
+        db
+          .update(outingPlayer)
+          .set({ outingId: targetId })
+          .where(eq(outingPlayer.outingId, sourceId)),
+        // ...then retire the emptied source outing.
+        db.delete(outing).where(eq(outing.id, sourceId)),
+      ]);
+
+      return c.json({ outingId: targetId });
+    },
+  )
   .post(
     "/outings",
     requireAuth,
     zodBody(SubmitOutingRequest, "A valid outing submission is required"),
     async (c) => {
       const request = c.req.valid("json");
+
+      // Outings can't be post-dated. The date is naive and the client's
+      // local calendar may run ahead of UTC, so "today" is judged in the
+      // most-ahead timezone on Earth (UTC+14) — anything later is a date
+      // that hasn't happened anywhere yet. Merges skip this: the submitted
+      // date is ignored in favor of the existing outing's.
+      const maxToday = new Date(Date.now() + 14 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      if (!request.outingId && request.date > maxToday) {
+        return c.json({ error: "The outing date is in the future" }, 400);
+      }
+
       const db = getDb(c.env.DB);
 
       // Resolve the target outing and course. All generated rows get their
