@@ -22,6 +22,7 @@ bucket_name = "scorecard"
 
 [[kv_namespaces]]
 binding = "AUTH_CODES"
+id = "a6ef3987b8b34a869f2abf7fa0db7739"
 
 [[ratelimits]]
 name = "AUTH_RATE_LIMITER"

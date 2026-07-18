@@ -498,6 +498,10 @@ export function ReviewRound({
               <Input
                 id="round-date"
                 type="date"
+                // iOS gives date inputs UA styling: extra intrinsic height and
+                // a centered value. Strip it and pin the value left so the
+                // field lines up with the selects around it.
+                className="h-9 appearance-none justify-start text-left [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:text-left"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
               />
