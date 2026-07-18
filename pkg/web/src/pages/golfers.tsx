@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Mail, Pencil, Search, UserRoundPlus } from "lucide-react";
-import type { Tee } from "api";
+import type { PlayerHandicap, Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
+import { HandicapCard } from "@/components/handicap-card";
 import { MultiCombobox } from "@/components/multi-combobox";
 import { ResponsiveModal } from "@/components/responsive-modal";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth-context";
-import { OutingList, type OutingSummary } from "@/pages/outings";
+import { OutingList, type OutingListRound, type OutingSummary } from "@/pages/outings";
 import { TEE_LABELS, TEES } from "@/lib/tees";
 
 export type Golfer = {
@@ -34,6 +35,25 @@ export type Golfer = {
 async function requestError(response: { json: () => Promise<unknown> }, fallback: string) {
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   return body.error ?? fallback;
+}
+
+// Group the handicap record's USGA-standard rounds by outing, so the outing
+// list can show per-round scores (an 18 and a 9 for a 27-hole outing)
+// instead of one raw stroke total.
+function roundsByOuting(handicap: PlayerHandicap | null) {
+  if (!handicap) return undefined;
+  const rounds = new Map<string, OutingListRound[]>();
+  for (const point of handicap.timeseries) {
+    const list = rounds.get(point.outingId) ?? [];
+    list.push({
+      setNames: point.setNames,
+      strokes: point.strokes,
+      holes: point.holes,
+      counted: point.counted,
+    });
+    rounds.set(point.outingId, list);
+  }
+  return rounds;
 }
 
 export function GolfersPage() {
@@ -239,6 +259,7 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
   const { client, profile, isAdmin } = useAuth();
   const [golfer, setGolfer] = useState<Golfer | null>(null);
   const [outings, setOutings] = useState<OutingSummary[] | null>(null);
+  const [handicapRecord, setHandicapRecord] = useState<PlayerHandicap | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [editOpen, setEditOpen] = useState(false);
@@ -279,6 +300,21 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
       .$get({ query: { playerId: golferId } })
       .then(async (response) => {
         if (!cancelled && response.ok) setOutings((await response.json()).outings);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [client, golferId]);
+
+  // The golfer's Handicap Index and its history, recomputed by the API.
+  useEffect(() => {
+    if (!client) return;
+    let cancelled = false;
+    void client.api.golfers[":id"].handicap
+      .$get({ param: { id: golferId } })
+      .then(async (response) => {
+        if (!cancelled && response.ok) setHandicapRecord((await response.json()).handicap);
       })
       .catch(() => {});
     return () => {
@@ -453,6 +489,8 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
             )}
           </section>
 
+          <HandicapCard handicap={handicapRecord} />
+
           <div className="flex flex-col gap-3">
             <h2 className="font-medium">Outings</h2>
             {!outings && <p className="text-sm text-muted-foreground">Loading outings…</p>}
@@ -460,7 +498,18 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
               <p className="text-sm text-muted-foreground">No outings recorded yet.</p>
             )}
             {outings && outings.length > 0 && (
-              <OutingList outings={outings} highlightPlayerId={golferId} />
+              <>
+                <OutingList
+                  outings={outings}
+                  highlightPlayerId={golferId}
+                  roundsByOuting={roundsByOuting(handicapRecord)}
+                />
+                {handicapRecord?.timeseries.some((point) => point.counted) && (
+                  <p className="text-xs text-muted-foreground">
+                    * counts toward the current handicap
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>

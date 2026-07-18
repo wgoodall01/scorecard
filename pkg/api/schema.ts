@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { customType, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { customType, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const varchar = customType<{ data: string }>({
   dataType() {
@@ -28,7 +28,7 @@ export function uuidv7() {
 
 // The tees a player can play from. Stored as plain varchar (null = unknown);
 // this list is the app-level source of truth for validation and UI options.
-export const TEES = ["tips", "back", "standard", "front", "junior"] as const;
+export const TEES = ["tips", "back", "standard", "senior", "front", "junior"] as const;
 export type Tee = (typeof TEES)[number];
 
 export const user = sqliteTable(
@@ -67,6 +67,8 @@ export const course = sqliteTable("course", {
   id: text("id").primaryKey().$defaultFn(uuidv7),
   name: varchar("name").notNull(),
   location: varchar("location"),
+  // The USGA course rating database's id for this facility (ncrdb.usga.org).
+  ncrdbFacilityId: integer("ncrdb_facility_id"),
 });
 
 // A named set of holes (a "nine") within a course.
@@ -79,8 +81,32 @@ export const courseSet = sqliteTable(
       .references(() => course.id),
     name: varchar("name").notNull(),
     disposition: varchar("disposition").$type<"front" | "back">(),
+    // The NCRDB "course" behind this nine's ratings — the database rates
+    // 18-hole nine-combinations (ncrdb.usga.org/courseTeeInfo?CourseID=…), so
+    // this is the combo this nine fronts, whose Front(9) split rates the nine.
+    ncrdbCourseId: integer("ncrdb_course_id"),
   },
   (table) => [uniqueIndex("course_set_name_unique").on(table.courseId, table.name)],
+);
+
+// 9-hole USGA ratings for a nine, from a given app-level tee (the TEES
+// enum; each course's seed maps those onto the tee markers the USGA rated —
+// see seed/courses.yaml). courseRating is in strokes to one decimal,
+// slopeRating 55–155. An 18-hole combination is rated by summing two nines'
+// Course Ratings and averaging their Slopes. A (nine, tee) pair with no row
+// is unrated from that tee.
+export const courseSetRating = sqliteTable(
+  "course_set_rating",
+  {
+    id: text("id").primaryKey().$defaultFn(uuidv7),
+    courseSetId: text("course_set_id")
+      .notNull()
+      .references(() => courseSet.id),
+    tee: varchar("tee").$type<Tee>().notNull(),
+    courseRating: real("course_rating").notNull(),
+    slopeRating: integer("slope_rating").notNull(),
+  },
+  (table) => [uniqueIndex("course_set_rating_unique").on(table.courseSetId, table.tee)],
 );
 
 export const hole = sqliteTable(
@@ -168,6 +194,14 @@ export const courseRelations = relations(course, ({ many }) => ({
 export const courseSetRelations = relations(courseSet, ({ one, many }) => ({
   course: one(course, { fields: [courseSet.courseId], references: [course.id] }),
   holes: many(hole),
+  ratings: many(courseSetRating),
+}));
+
+export const courseSetRatingRelations = relations(courseSetRating, ({ one }) => ({
+  courseSet: one(courseSet, {
+    fields: [courseSetRating.courseSetId],
+    references: [courseSet.id],
+  }),
 }));
 
 export const holeRelations = relations(hole, ({ one, many }) => ({

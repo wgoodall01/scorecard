@@ -173,7 +173,7 @@ export const outingRoutes = new Hono<Env>()
     const db = getDb(c.env.DB);
     const courses = await db.query.course.findMany({
       orderBy: [asc(course.name)],
-      with: { sets: { orderBy: [asc(courseSet.name)], with: { holes: true } } },
+      with: { sets: { orderBy: [asc(courseSet.name)], with: { holes: true, ratings: true } } },
     });
     return c.json({ courses });
   })

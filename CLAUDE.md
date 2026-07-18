@@ -98,6 +98,40 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   POST `/outings/:id/merge` merges an already-recorded same-date-same-course
   outing into `:id` (rows move to the target, the target wins player+hole
   and player conflicts, the source outing is deleted).
+- `pkg/api/src/handicap.ts`: the WHS (2024 Rules of Handicapping) Handicap
+  Index. One raw-D1 query pulls every scored hole with its nine's ratings;
+  `handicapFromRounds` (pure, unit-tested) replays the record
+  chronologically — differentials (18-hole = two nines' ratings summed,
+  slopes averaged; 9-hole via the expected-differential formula
+  `0.52·HI + 1.2`), net double bogey (stroke allocation proxied by par-desc
+  since holes carry no stroke index), best-8-of-20 / fewer-scores table, ESR,
+  and soft/hard caps vs the 365-day Low Index. House rules: the table
+  extends down to 1–2 differentials flagged `provisional` (UI copy: "not
+  enough scores for a traditional handicap, provisional shown instead"), a
+  first-ever 9-hole score doubles its differential, PCC = 0.
+  `GET /golfers/:id/handicap` (in routes/golfers.ts) returns
+  `PlayerHandicap`: current index, provisional flag, and a timeseries of
+  USGA-standard ROUNDS (an outing posts one 18-hole round per pair of
+  complete rated nines plus a 9-hole round for a leftover — a 27-hole
+  outing is two points), each with its nines, gross strokes, differential,
+  the index after it, and `counted` (whether the current index averages
+  it). The golfer page charts the timeseries (recharts + `ui/chart.tsx`;
+  UI says "Handicap", never "Handicap Index") and its outing list shows
+  per-round scores with a star on counted rounds. Ratings are PER TEE in
+  `course_set_rating` (9-hole `course_rating`/`slope_rating` keyed by
+  (course_set, tee) — the app's `TEES` enum — unique-indexed; no row =
+  unrated from that tee); the engine resolves each player's tee as outing
+  tee → profile `preferredTee` → "standard", falling back to the standard
+  rating when the resolved tee is unrated. NB: SQLite forbids outer-table
+  references in a correlated subquery's ORDER BY (fine in WHERE) — the
+  rating pick ranks `(r.tee = 'standard') ASC` instead. USGA NCRDB
+  provenance ids live on `course.ncrdb_facility_id` and
+  `course_set.ncrdb_course_id` (the rated 18-hole combo the nine fronts;
+  linked from the course page, which shows each nine's per-tee ratings
+  table). Buck Hill Falls is seeded in `seed/courses.yaml` from NCRDB
+  CourseIDs 21162/21163/21164 (facility 20114), men's markers mapped as
+  back → Blue, standard → White, senior → Gold, front → Red,
+  junior → Green (BHF has no tips).
 - `pkg/api/routes/honors.ts` + `pkg/api/src/honors.ts`: the honors board.
   `computeHonors(db, since)` runs ONE SQLite query (CTEs + window functions;
   raw D1, deliberately not Drizzle) over the recent window

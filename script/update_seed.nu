@@ -40,13 +40,17 @@ def golfer-statements [root: string] {
 
 def course-statements [root: string] {
   open ($root | path join "seed" "courses.yaml") | get courses | each {|course|
-    let course_row = ("INSERT INTO course (id, name, location) VALUES ("
-      + ([(sq $course.id), (sq $course.name), (sq ($course.location? | default null))] | str join ", ")
-      + ") ON CONFLICT(id) DO UPDATE SET name=excluded.name, location=excluded.location;")
+    let facility_id = $course.ncrdb_facility_id? | default null | if $in == null { "NULL" } else { $in | into string }
+    let course_row = ("INSERT INTO course (id, name, location, ncrdb_facility_id) VALUES ("
+      + ([(sq $course.id), (sq $course.name), (sq ($course.location? | default null)), $facility_id] | str join ", ")
+      + ") ON CONFLICT(id) DO UPDATE SET name=excluded.name, location=excluded.location, "
+      + "ncrdb_facility_id=excluded.ncrdb_facility_id;")
     let sets = $course.sets? | default [] | each {|set|
-      let set_row = ("INSERT INTO course_set (id, course_id, name, disposition) VALUES ("
-        + ([(sq $set.id), (sq $course.id), (sq $set.name), (sq ($set.disposition? | default null))] | str join ", ")
-        + ") ON CONFLICT(course_id, name) DO UPDATE SET disposition=excluded.disposition;")
+      let ncrdb_course_id = $set.ncrdb_course_id? | default null | if $in == null { "NULL" } else { $in | into string }
+      let set_row = ("INSERT INTO course_set (id, course_id, name, disposition, ncrdb_course_id) VALUES ("
+        + ([(sq $set.id), (sq $course.id), (sq $set.name), (sq ($set.disposition? | default null)), $ncrdb_course_id] | str join ", ")
+        + ") ON CONFLICT(course_id, name) DO UPDATE SET disposition=excluded.disposition, "
+        + "ncrdb_course_id=excluded.ncrdb_course_id;")
       let set_ref = ("(SELECT id FROM course_set WHERE course_id=" + (sq $course.id)
         + " AND name=" + (sq $set.name) + ")")
       let holes = $set.holes? | default [] | each {|hole|
@@ -54,7 +58,15 @@ def course-statements [root: string] {
           + ([(sq $hole.id), $set_ref, ($hole.number | into string), (sq ($hole.name? | default null)), ($hole.par | into string)] | str join ", ")
           + ") ON CONFLICT(course_set_id, number) DO UPDATE SET name=excluded.name, par=excluded.par;")
       }
-      [$set_row] | append $holes
+      # Per-tee 9-hole USGA ratings, upserted by the (set, tee) natural key
+      # like holes are.
+      let ratings = $set.ratings? | default [] | each {|rating|
+        ("INSERT INTO course_set_rating (id, course_set_id, tee, course_rating, slope_rating) VALUES ("
+          + ([(sq $rating.id), $set_ref, (sq $rating.tee), ($rating.course_rating | into string), ($rating.slope_rating | into string)] | str join ", ")
+          + ") ON CONFLICT(course_set_id, tee) DO UPDATE SET "
+          + "course_rating=excluded.course_rating, slope_rating=excluded.slope_rating;")
+      }
+      [$set_row] | append $holes | append $ratings
     } | flatten
     [$course_row] | append $sets
   } | flatten

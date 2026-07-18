@@ -7,6 +7,7 @@ export const TEES = [
   "tips",
   "back",
   "standard",
+  "senior",
   "front",
   "junior",
 ] as const satisfies readonly Tee[];
@@ -15,6 +16,7 @@ export const TEE_LABELS: Record<Tee, string> = {
   tips: "Tips",
   back: "Back",
   standard: "Standard",
+  senior: "Senior",
   front: "Front",
   junior: "Junior",
 };

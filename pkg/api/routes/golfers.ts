@@ -6,6 +6,7 @@ import { getDb } from "../db";
 import type { Env } from "../env";
 import { nickname, TEES, user } from "../schema";
 import { inviteEmail } from "../src/email/templates/invite";
+import { computeHandicap } from "../src/handicap";
 import { Email, requireAuth, zodBody } from "./shared";
 
 export const Nickname = z.object({
@@ -90,6 +91,12 @@ export const golferRoutes = new Hono<Env>()
     if (!golfer) return c.json({ error: "Golfer not found" }, 404);
 
     return c.json({ golfer });
+  })
+  // The golfer's WHS Handicap Index, recomputed from the full scoring record
+  // on every request (honors-style: one league's data, nothing to cache).
+  .get("/golfers/:id/handicap", requireAuth, async (c) => {
+    const handicap = await computeHandicap(c.env.DB, c.req.param("id"));
+    return c.json({ handicap });
   })
   .patch(
     "/golfers/:id",

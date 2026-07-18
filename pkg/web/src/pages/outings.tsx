@@ -233,12 +233,26 @@ export function OutingsPage() {
 
 // With `highlightPlayerId`, each item leads with that player's round score
 // in the top right (the golfer-page view); otherwise the date sits there.
+// A USGA-standard round assembled from an outing (the golfer page derives
+// these from the handicap record): a 27-hole outing shows as an 18-hole and
+// a 9-hole round rather than one 126-style total.
+export type OutingListRound = {
+  setNames: string[];
+  strokes: number;
+  holes: 9 | 18;
+  counted: boolean;
+};
+
 export function OutingList({
   outings,
   highlightPlayerId,
+  roundsByOuting,
 }: {
   outings: OutingSummary[];
   highlightPlayerId?: string;
+  // Per-outing standard rounds for the highlighted player; rounds that count
+  // toward the current handicap are starred.
+  roundsByOuting?: ReadonlyMap<string, OutingListRound[]>;
 }) {
   return (
     <section className="rounded-xl border bg-card">
@@ -247,6 +261,7 @@ export function OutingList({
           const highlighted = highlightPlayerId
             ? (entry.players.find((player) => player.id === highlightPlayerId) ?? null)
             : null;
+          const rounds = roundsByOuting?.get(entry.id);
           return (
             <li key={entry.id} className="border-b last:border-b-0">
               <Link
@@ -264,9 +279,31 @@ export function OutingList({
                     )}
                   </div>
                   {highlighted ? (
-                    <p className="shrink-0 text-lg font-semibold tabular-nums">
-                      {highlighted.total ?? "–"}
-                    </p>
+                    rounds && rounds.length > 0 ? (
+                      <div className="flex shrink-0 flex-col items-end">
+                        {rounds.map((round, index) => (
+                          <p
+                            key={index}
+                            className="text-lg font-semibold tabular-nums"
+                            title={`${round.setNames.join(" + ")} · ${round.holes} holes`}
+                          >
+                            {round.counted && (
+                              <span
+                                className="mr-1 text-muted-foreground"
+                                title="Counts toward the current handicap"
+                              >
+                                *
+                              </span>
+                            )}
+                            {round.strokes}
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="shrink-0 text-lg font-semibold tabular-nums">
+                        {highlighted.total ?? "–"}
+                      </p>
+                    )
                   ) : (
                     <p className="text-sm text-muted-foreground">{formatOutingDate(entry.date)}</p>
                   )}

@@ -1,20 +1,25 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Flag } from "lucide-react";
+import { ChevronRight, ExternalLink, Flag } from "lucide-react";
+import type { Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
+import { TEE_LABELS, TEES } from "@/lib/tees";
 import { dispositionLabel } from "@/pages/outings";
 
 export type CourseWithNines = {
   id: string;
   name: string;
   location: string | null;
+  ncrdbFacilityId: number | null;
   sets: {
     id: string;
     name: string;
     disposition: "front" | "back" | null;
+    ncrdbCourseId: number | null;
     holes: { id: string; number: number; name: string | null; par: number }[];
+    ratings: { id: string; tee: Tee; courseRating: number; slopeRating: number }[];
   }[];
 };
 
@@ -118,6 +123,21 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
         {course?.location && (
           <p className="mt-1 truncate text-sm text-muted-foreground">{course.location}</p>
         )}
+        {course?.ncrdbFacilityId !== null && course?.ncrdbFacilityId !== undefined && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            {/* The NCRDB has no facility page — per-nine links below go to
+                the rated courses; this one lands on the database itself. */}
+            <a
+              href="https://ncrdb.usga.org/"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+            >
+              USGA NCRDB facility {course.ncrdbFacilityId}
+              <ExternalLink aria-hidden="true" className="size-3.5" />
+            </a>
+          </p>
+        )}
       </div>
       {!courses && !error && <p className="text-sm text-muted-foreground">Loading course…</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -139,10 +159,29 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
           )}
           {course.sets.map((set) => {
             const holes = [...set.holes].sort((a, b) => a.number - b.number);
+            // Present tees longest-first, in the app's canonical order.
+            const ratings = [...set.ratings].sort(
+              (a, b) => TEES.indexOf(a.tee) - TEES.indexOf(b.tee),
+            );
             return (
               <section key={set.id} className="rounded-xl border bg-card">
-                <div className="flex items-center justify-between gap-3 border-b p-5">
-                  <h2 className="font-medium">{set.name}</h2>
+                <div className="flex items-start justify-between gap-3 border-b p-5">
+                  <div className="min-w-0">
+                    <h2 className="font-medium">{set.name}</h2>
+                    {set.ncrdbCourseId !== null && (
+                      <p className="mt-0.5 text-sm text-muted-foreground">
+                        <a
+                          href={`https://ncrdb.usga.org/courseTeeInfo?CourseID=${set.ncrdbCourseId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                        >
+                          USGA {set.ncrdbCourseId}
+                          <ExternalLink aria-hidden="true" className="size-3.5" />
+                        </a>
+                      </p>
+                    )}
+                  </div>
                   <Badge variant="secondary">{dispositionLabel(set.disposition)}</Badge>
                 </div>
                 <div className="overflow-x-auto">
@@ -169,6 +208,20 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
                     </tbody>
                   </table>
                 </div>
+                {ratings.length > 0 && (
+                  <dl className="grid grid-cols-[7rem_1fr] items-baseline gap-x-4 gap-y-1.5 border-t p-5 text-sm">
+                    <dt className="text-xs font-medium text-muted-foreground">Tee</dt>
+                    <dd className="text-xs font-medium text-muted-foreground">Rating / Slope</dd>
+                    {ratings.map((rating) => (
+                      <Fragment key={rating.id}>
+                        <dt className="text-muted-foreground">{TEE_LABELS[rating.tee]}</dt>
+                        <dd className="tabular-nums">
+                          {rating.courseRating.toFixed(1)} / {rating.slopeRating}
+                        </dd>
+                      </Fragment>
+                    ))}
+                  </dl>
+                )}
               </section>
             );
           })}

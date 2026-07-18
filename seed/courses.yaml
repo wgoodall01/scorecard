@@ -7,10 +7,53 @@ courses:
   - id: 019f7224-8600-7a93-b371-af4ba7a96372
     name: Buck Hill Falls Golf Course
     location: Buck Hill Falls, PA
+    ncrdb_facility_id: 20114
+    # The NCRDB (ncrdb.usga.org) knows the facility as 20114 and rates it as
+    # three 18-hole nine-combinations: 21162 = White/Blue, 21163 = Blue/Red,
+    # 21164 = Red/White. Each nine carries the CourseID of the combo it
+    # fronts; its per-tee 9-hole ratings are that combo's Front(9) splits.
+    #
+    # App tees map onto BHF's rated markers (men's ratings) as:
+    #   back -> Blue markers (the longest set — BHF has no tips),
+    #   standard -> White (the everyday card the hole pars come from),
+    #   senior -> Gold, front -> Red, junior -> Green.
+    # Unmapped tees (tips, and any unrated pick) fall back to standard.
     sets:
       - id: 019f7224-8600-7909-9260-233d35044908
         name: White
         disposition: front
+        ncrdb_course_id: 21162
+        ratings:
+          - {
+              id: 019f73ae-72d6-7ac8-84a3-48a1e439692c,
+              tee: back,
+              course_rating: 35.7,
+              slope_rating: 127,
+            }
+          - {
+              id: 019f73ae-72d6-7ee6-890a-c9366aea8032,
+              tee: standard,
+              course_rating: 35.0,
+              slope_rating: 125,
+            }
+          - {
+              id: 019f73b6-7eb8-70cd-9fea-2e4d5a3b19a4,
+              tee: senior,
+              course_rating: 33.1,
+              slope_rating: 116,
+            }
+          - {
+              id: 019f73ae-72d6-7656-b190-3c03a4cb2691,
+              tee: front,
+              course_rating: 32.4,
+              slope_rating: 113,
+            }
+          - {
+              id: 019f73ae-72d6-74db-9011-d4f524035dc9,
+              tee: junior,
+              course_rating: 30.4,
+              slope_rating: 104,
+            }
         holes:
           - { id: 019f7224-8600-793d-b7ce-a444db130a32, number: 1, par: 4 }
           - { id: 019f7224-8600-7a2b-addf-ca8bb029ea22, number: 2, par: 5 }
@@ -24,6 +67,38 @@ courses:
       - id: 019f7224-8600-7f69-a0ae-12627b0a7b22
         name: Blue
         disposition: back
+        ncrdb_course_id: 21163
+        ratings:
+          - {
+              id: 019f73ae-72d6-7995-b175-0027b7552bdd,
+              tee: back,
+              course_rating: 35.6,
+              slope_rating: 131,
+            }
+          - {
+              id: 019f73ae-72d6-768c-8c9a-76fe482b9c12,
+              tee: standard,
+              course_rating: 34.8,
+              slope_rating: 126,
+            }
+          - {
+              id: 019f73b6-7eb8-706c-a8a4-91aaca68e95a,
+              tee: senior,
+              course_rating: 33.3,
+              slope_rating: 115,
+            }
+          - {
+              id: 019f73ae-72d6-75e8-bd1f-db30e5d69f53,
+              tee: front,
+              course_rating: 32.5,
+              slope_rating: 112,
+            }
+          - {
+              id: 019f73ae-72d6-7d7a-8be8-7f4fec5344c3,
+              tee: junior,
+              course_rating: 30.4,
+              slope_rating: 105,
+            }
         holes:
           - { id: 019f7224-8600-76a1-968c-12d95649060a, number: 10, par: 4 }
           - { id: 019f7224-8600-734d-bcd8-178790650fc4, number: 11, par: 4 }
@@ -37,6 +112,38 @@ courses:
       - id: 019f7224-8600-758e-91f1-a0206f01191d
         name: Red
         disposition: front
+        ncrdb_course_id: 21164
+        ratings:
+          - {
+              id: 019f73ae-72d6-7407-985d-ad6e65209718,
+              tee: back,
+              course_rating: 33.8,
+              slope_rating: 121,
+            }
+          - {
+              id: 019f73ae-72d6-7812-a0d8-6874c9e2b3d6,
+              tee: standard,
+              course_rating: 33.6,
+              slope_rating: 118,
+            }
+          - {
+              id: 019f73b6-7eb8-724c-84e2-e46a16f45c84,
+              tee: senior,
+              course_rating: 32.2,
+              slope_rating: 113,
+            }
+          - {
+              id: 019f73ae-72d6-7282-9caf-c8cd9dcc3e64,
+              tee: front,
+              course_rating: 31.7,
+              slope_rating: 110,
+            }
+          - {
+              id: 019f73ae-72d6-75be-b0c6-b5090060d496,
+              tee: junior,
+              course_rating: 30.3,
+              slope_rating: 105,
+            }
         holes:
           - { id: 019f7224-8600-7a33-93fe-df76aaed4745, number: 1, par: 3 }
           - { id: 019f7224-8600-7a60-ae8b-312847333713, number: 2, par: 4 }
