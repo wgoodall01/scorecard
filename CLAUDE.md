@@ -455,6 +455,14 @@ ORDER BY created_at DESC LIMIT 1"`.
   migrations only run on production deploys, never on preview builds. These
   three command strings live in the Workers Builds dashboard UI; Cloudflare
   does not read them from wrangler.toml.
+- IMPORTANT: **pushing to `main` auto-deploys** — Workers Builds runs
+  `deploy:ci` on every push, which applies remote D1 migrations and deploys the
+  Worker. Consequences: (a) any new Worker secret/var a change needs must be set
+  (`wrangler secret put …`, `[vars]`) BEFORE the push, or the deploy fails
+  `[secrets]` validation / runs without it; (b) never run `bun deploy` or
+  `bun db:migrate:remote` by hand for a change that's landing on `main` — the
+  push does it. Generated migrations must be committed in the same push as the
+  schema change that needs them.
 - `bun eval run` (or `./eval.ts run` from
   `pkg/api/src/agent/card_extract/eval/`): the extraction eval CLI (cmd-ts) —
   real vision-model calls against the reviewed fixtures in
