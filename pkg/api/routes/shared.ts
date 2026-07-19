@@ -19,22 +19,29 @@ export function normalizeEmail(email: string) {
 
 // The session JWT's subject is the user id — NOT the email. Passkey identity
 // is decoupled from email (a user may have a null email and still sign in),
-// and email can change without invalidating a session.
-export async function createToken(userId: string, secret: string) {
+// and email can change without invalidating a session. `cred` records WHICH
+// passkey minted this session (from sign-in or enrollment), so the UI can flag
+// the credential in use as "this device".
+export async function createToken(userId: string, secret: string, credentialId?: string) {
   return Jwt.sign(
-    { sub: userId, exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS },
+    {
+      sub: userId,
+      ...(credentialId ? { cred: credentialId } : {}),
+      exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
+    },
     secret,
     "HS256",
   );
 }
 
-async function getTokenSub(token: string, secret: string) {
+async function getTokenClaims(token: string, secret: string) {
   try {
     const payload = await Jwt.verify(token, secret, "HS256");
     // Jwt.verify only checks exp when the claim is present; every token we
     // mint expires, so one without exp is not ours.
     if (typeof payload.exp !== "number") return null;
-    return typeof payload.sub === "string" && payload.sub ? payload.sub : null;
+    if (typeof payload.sub !== "string" || !payload.sub) return null;
+    return { sub: payload.sub, cred: typeof payload.cred === "string" ? payload.cred : null };
   } catch {
     return null;
   }
@@ -47,15 +54,20 @@ async function getTokenSub(token: string, secret: string) {
 export async function getRequestUserId(c: Context<Env>): Promise<string | null> {
   const authorization = c.req.header("Authorization");
   const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : null;
-  return token ? await getTokenSub(token, c.env.JWT_SECRET) : null;
+  const claims = token ? await getTokenClaims(token, c.env.JWT_SECRET) : null;
+  return claims?.sub ?? null;
 }
 
 export const requireAuth = createMiddleware<Env>(async (c, next) => {
-  const userId = await getRequestUserId(c);
+  const authorization = c.req.header("Authorization");
+  const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : null;
+  const claims = token ? await getTokenClaims(token, c.env.JWT_SECRET) : null;
 
-  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+  if (!claims) return c.json({ error: "Unauthorized" }, 401);
 
-  c.set("authUserId", userId);
+  c.set("authUserId", claims.sub);
+  // Which passkey this session was minted from (null for tokens without it).
+  c.set("authCredentialId", claims.cred);
   await next();
 });
 

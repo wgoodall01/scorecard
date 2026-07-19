@@ -49,6 +49,11 @@ function post(path: string, body: unknown, headers: Record<string, string> = {})
   );
 }
 
+function jwtPayload(token: string) {
+  const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+  return JSON.parse(atob(b64)) as { sub?: string; cred?: string };
+}
+
 const now = () => new Date().toISOString();
 const future = () => new Date(Date.now() + 60_000).toISOString();
 const past = () => new Date(Date.now() - 60_000).toISOString();
@@ -113,7 +118,9 @@ describe("passkey sign-in", () => {
       { Origin: ORIGIN },
     );
     expect(res.status).toBe(200);
-    expect(typeof ((await res.json()) as { token: string }).token).toBe("string");
+    const { token } = (await res.json()) as { token: string };
+    // The session token records who signed in AND which passkey did it.
+    expect(jwtPayload(token)).toMatchObject({ sub: "alice", cred: "cred-1" });
 
     const row = await env.DB.prepare(`SELECT counter, last_used_at FROM credential WHERE id = ?`)
       .bind("cred-1")
@@ -266,11 +273,28 @@ describe("recovery & invites", () => {
 });
 
 describe("credential management", () => {
-  async function authHeaders(userId: string) {
-    return { Authorization: `Bearer ${await createToken(userId, env.JWT_SECRET)}` };
+  async function authHeaders(userId: string, credentialId?: string) {
+    return { Authorization: `Bearer ${await createToken(userId, env.JWT_SECRET, credentialId)}` };
   }
 
-  it("lists, renames, and removes the caller's own passkeys", async () => {
+  it("lists passkeys and flags the session's own as the current device", async () => {
+    await seedUser("frank", "frank@example.com", "Frank");
+    await seedCredential("f-1", "frank", "Phone");
+    await seedCredential("f-2", "frank", "Laptop");
+    // Signed in with f-1 → only that row is "current".
+    const headers = await authHeaders("frank", "f-1");
+
+    const listRes = await app.request("/auth/credentials", { headers }, env);
+    expect(listRes.status).toBe(200);
+    const { credentials } = (await listRes.json()) as {
+      credentials: { id: string; current: boolean }[];
+    };
+    expect(credentials).toHaveLength(2);
+    expect(credentials.find((c) => c.id === "f-1")?.current).toBe(true);
+    expect(credentials.find((c) => c.id === "f-2")?.current).toBe(false);
+  });
+
+  it("renames and removes the caller's own passkeys", async () => {
     await seedUser("frank", "frank@example.com", "Frank");
     await seedCredential("f-1", "frank", "Phone");
     const headers = await authHeaders("frank");

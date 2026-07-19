@@ -31,6 +31,9 @@ export type Env = {
   Variables: {
     // The signed-in user's id (the session JWT's `sub`).
     authUserId: string;
+    // The passkey that minted this session (JWT `cred`), or null if the token
+    // predates the claim. Set by requireAuth.
+    authCredentialId: string | null;
   };
 };
 

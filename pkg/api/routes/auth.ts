@@ -141,7 +141,7 @@ export function createAuthRoutes(deps: AuthDeps = defaultDeps) {
             .set({ counter: verification.authenticationInfo.newCounter, lastUsedAt: nowIso() })
             .where(eq(credential.id, cred.id));
 
-          return c.json({ token: await createToken(cred.userId, c.env.JWT_SECRET) });
+          return c.json({ token: await createToken(cred.userId, c.env.JWT_SECRET, cred.id) });
         },
       )
       // --- Enrollment (via invite token, or in-session on the current device) -
@@ -249,7 +249,9 @@ export function createAuthRoutes(deps: AuthDeps = defaultDeps) {
             await db.delete(invite).where(eq(invite.token, payload.inviteToken));
           }
 
-          return c.json({ token: await createToken(payload.userId, c.env.JWT_SECRET) });
+          return c.json({
+            token: await createToken(payload.userId, c.env.JWT_SECRET, info.credential.id),
+          });
         },
       )
       // --- Invites / recovery ------------------------------------------------
@@ -307,11 +309,14 @@ export function createAuthRoutes(deps: AuthDeps = defaultDeps) {
       // --- Credential management (self-owned) --------------------------------
       .get("/auth/credentials", requireAuth, async (c) => {
         const db = getDb(c.env.DB);
-        const credentials = await db.query.credential.findMany({
+        const rows = await db.query.credential.findMany({
           where: eq(credential.userId, c.get("authUserId")),
           columns: { id: true, name: true, createdAt: true, lastUsedAt: true },
           orderBy: [asc(credential.createdAt)],
         });
+        // Flag the passkey this session was minted from as the current device.
+        const currentId = c.get("authCredentialId");
+        const credentials = rows.map((row) => ({ ...row, current: row.id === currentId }));
         return c.json({ credentials });
       })
       .patch(

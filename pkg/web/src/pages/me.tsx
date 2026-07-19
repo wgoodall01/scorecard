@@ -11,6 +11,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { useAuth } from "@/lib/auth-context";
@@ -19,7 +20,13 @@ import { ScorecardList, type ScorecardSummary } from "@/pages/scorecards";
 
 const RECENT_SCORECARDS = 5;
 
-type Credential = { id: string; name: string; createdAt: string; lastUsedAt: string | null };
+type Credential = {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  current: boolean;
+};
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString(undefined, {
@@ -147,7 +154,14 @@ function PasskeysCard() {
               ) : (
                 <>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{cred.name}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">{cred.name}</span>
+                      {cred.current && (
+                        <Badge variant="secondary" className="shrink-0">
+                          This device
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Added {formatDate(cred.createdAt)}
                       {cred.lastUsedAt ? ` · Last used ${formatDate(cred.lastUsedAt)}` : ""}
