@@ -14,7 +14,7 @@ export function courseSearchFromDb(db: ReturnType<typeof getDb>): CourseSearch {
     const courseHits = await db
       .select({ id: course.id })
       .from(course)
-      .where(like(course.name, pattern))
+      .where(and(like(course.name, pattern), isNull(course.archivedAt)))
       .limit(MAX_RESULTS);
     const setHits = await db
       .select({ id: courseSet.courseId })
@@ -29,7 +29,7 @@ export function courseSearchFromDb(db: ReturnType<typeof getDb>): CourseSearch {
     if (ids.length === 0) return [];
 
     const rows = await db.query.course.findMany({
-      where: inArray(course.id, ids),
+      where: and(inArray(course.id, ids), isNull(course.archivedAt)),
       with: {
         sets: {
           where: isNull(courseSet.archivedAt),

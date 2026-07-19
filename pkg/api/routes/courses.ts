@@ -172,6 +172,8 @@ export const courseRoutes = new Hono<Env>()
             // Record the latest import source; leave it untouched on a plain
             // edit (no scorecard in play).
             importedScorecardId: importedScorecardId ?? undefined,
+            // Re-importing/editing a course revives it if it was archived.
+            archivedAt: null,
           })
           .where(eq(course.id, courseId)),
       );
@@ -298,4 +300,20 @@ export const courseRoutes = new Hono<Env>()
 
     await db.batch(batch as [(typeof batch)[number], ...typeof batch]);
     return c.json({ courseId }, existingCourse ? 200 : 201);
+  })
+  // Admin-only soft delete: archive a course and its nines. Never a hard
+  // delete — historical scores hang off these nines' holes by id — so the rows
+  // stay and just drop out of the registry and every new-score path.
+  .post("/courses/:id/archive", requireAuth, requireAdmin, async (c) => {
+    const db = getDb(c.env.DB);
+    const id = c.req.param("id");
+    const existing = await db.query.course.findFirst({ where: eq(course.id, id) });
+    if (!existing) return c.json({ error: "Course not found" }, 404);
+
+    const now = new Date().toISOString();
+    await db.batch([
+      db.update(course).set({ archivedAt: now }).where(eq(course.id, id)),
+      db.update(courseSet).set({ archivedAt: now }).where(eq(courseSet.courseId, id)),
+    ]);
+    return c.json({ ok: true });
   });

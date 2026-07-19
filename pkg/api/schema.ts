@@ -113,6 +113,10 @@ export const course = sqliteTable("course", {
   // The captured scorecard this course was imported/updated from (admin
   // create-course flow), or null for seeded/hand-entered courses.
   importedScorecardId: text("imported_scorecard_id").references(() => scorecard.id),
+  // Soft delete (admin archive): ISO-8601 timestamp, else null. Archived
+  // courses (and their nines, archived alongside) drop out of every new-score
+  // path and the registry, but historical outings/scores still resolve by id.
+  archivedAt: varchar("archived_at"),
   ...timestamps,
 });
 

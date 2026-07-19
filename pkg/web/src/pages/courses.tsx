@@ -1,6 +1,14 @@
 import { Fragment, useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { ChevronRight, EllipsisVertical, ExternalLink, Flag, Pencil, Plus } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import {
+  Archive,
+  ChevronRight,
+  EllipsisVertical,
+  ExternalLink,
+  Flag,
+  Pencil,
+  Plus,
+} from "lucide-react";
 import type { Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { Badge } from "@/components/ui/badge";
@@ -140,11 +148,30 @@ export function CoursesPage() {
 
 export function CourseDetailPage({ courseId }: { courseId: string }) {
   const { courses, error } = useCourses();
-  const { isAdmin } = useAuth();
+  const { client, isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const [archiving, setArchiving] = useState(false);
   const course = courses?.find((entry) => entry.id === courseId) ?? null;
   // Editing goes through the facility-merge path (preserves ids), so it's only
   // offered for courses linked to a USGA facility.
   const canEdit = isAdmin && course?.ncrdbFacilityId != null;
+
+  async function archiveCourse() {
+    if (!client || !course) return;
+    if (
+      !window.confirm(
+        `Archive “${course.name}”? It'll be hidden from new scores; past outings stay intact.`,
+      )
+    )
+      return;
+    setArchiving(true);
+    const response = await client.api.courses[":id"].archive.$post({ param: { id: course.id } });
+    if (response.ok) {
+      await navigate({ to: "/courses" });
+    } else {
+      setArchiving(false);
+    }
+  }
 
   return (
     <AppShell>
@@ -183,7 +210,7 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
             </p>
           )}
         </div>
-        {canEdit && course && (
+        {isAdmin && course && (
           <Popover>
             <PopoverTrigger
               render={
@@ -197,14 +224,25 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
               <EllipsisVertical aria-hidden="true" />
             </PopoverTrigger>
             <PopoverContent align="end" className="w-44 p-1">
-              <Link
-                to="/courses/create"
-                search={{ facilityId: course.ncrdbFacilityId ?? undefined }}
-                className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-muted"
+              {canEdit && (
+                <Link
+                  to="/courses/create"
+                  search={{ facilityId: course.ncrdbFacilityId ?? undefined }}
+                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-muted"
+                >
+                  <Pencil aria-hidden="true" className="size-4" />
+                  Edit course
+                </Link>
+              )}
+              <button
+                type="button"
+                disabled={archiving}
+                onClick={archiveCourse}
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
               >
-                <Pencil aria-hidden="true" className="size-4" />
-                Edit course
-              </Link>
+                <Archive aria-hidden="true" className="size-4" />
+                {archiving ? "Archiving…" : "Archive course"}
+              </button>
             </PopoverContent>
           </Popover>
         )}

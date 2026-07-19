@@ -208,10 +208,11 @@ export const outingRoutes = new Hono<Env>()
   .get("/courses", requireAuth, async (c) => {
     const db = getDb(c.env.DB);
     const courses = await db.query.course.findMany({
+      // Archived courses (and archived nines) are hidden everywhere new scores
+      // are recorded — the registry, the capture review picker — and here.
+      where: isNull(course.archivedAt),
       orderBy: [asc(course.name)],
       with: {
-        // Archived nines are hidden everywhere new scores are recorded — the
-        // registry, the capture review picker — and here.
         sets: {
           where: isNull(courseSet.archivedAt),
           orderBy: [asc(courseSet.name)],
@@ -428,6 +429,9 @@ export const outingRoutes = new Hono<Env>()
           where: eq(course.id, request.courseId ?? ""),
         });
         if (!existingCourse) return c.json({ error: "Course not found" }, 404);
+        if (existingCourse.archivedAt) {
+          return c.json({ error: "That course has been archived" }, 400);
+        }
         courseId = existingCourse.id;
         outingId = uuidv7();
         batch.push(db.insert(outing).values({ id: outingId, date: request.date, courseId }));

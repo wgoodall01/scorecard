@@ -1,0 +1,1 @@
+ALTER TABLE `course` ADD `archived_at` varchar;
