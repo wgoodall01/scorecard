@@ -1,10 +1,19 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { Camera, ChevronRight, GitMerge, NotebookText, Trophy } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import {
+  Camera,
+  ChevronRight,
+  EllipsisVertical,
+  GitMerge,
+  NotebookText,
+  Trash2,
+  Trophy,
+} from "lucide-react";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -374,12 +383,14 @@ function computeRoundTotals(outing: OutingDetail) {
 }
 
 export function OutingDetailPage({ outingId }: { outingId: string }) {
-  const { client } = useAuth();
+  const { client, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [outing, setOuting] = useState<OutingDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mergeCandidates, setMergeCandidates] = useState<OutingSummary[]>([]);
   const [merging, setMerging] = useState<string | null>(null);
   const [mergeError, setMergeError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadOuting = useCallback(async () => {
     if (!client) return;
@@ -444,6 +455,23 @@ export function OutingDetailPage({ outingId }: { outingId: string }) {
     }
   }
 
+  async function deleteOuting() {
+    if (!client) return;
+    if (!window.confirm("Delete this outing and all its scores? This can't be undone.")) return;
+    setDeleting(true);
+    try {
+      const response = await client.api.outings[":id"].$delete({ param: { id: outingId } });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Unable to delete this outing.");
+      }
+      await navigate({ to: "/outings" });
+    } catch (deleteFailure) {
+      setError(deleteFailure instanceof Error ? deleteFailure.message : "Unable to delete.");
+      setDeleting(false);
+    }
+  }
+
   return (
     <AppShell>
       <PageTitle>
@@ -465,14 +493,42 @@ export function OutingDetailPage({ outingId }: { outingId: string }) {
       {error && <p className="text-sm text-destructive">{error}</p>}
       {outing && (
         <div className="flex flex-col gap-6">
-          <header>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {formatOutingDate(outing.date)}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {outing.course.name}
-              {outing.course.location && ` · ${outing.course.location}`}
-            </p>
+          <header className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {formatOutingDate(outing.date)}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {outing.course.name}
+                {outing.course.location && ` · ${outing.course.location}`}
+              </p>
+            </div>
+            {isAdmin && (
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      aria-label="Outing actions"
+                      className="size-9 shrink-0 p-0"
+                    />
+                  }
+                >
+                  <EllipsisVertical aria-hidden="true" />
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-48 p-1">
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={deleteOuting}
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                  >
+                    <Trash2 aria-hidden="true" className="size-4" />
+                    {deleting ? "Deleting…" : "Delete outing"}
+                  </button>
+                </PopoverContent>
+              </Popover>
+            )}
           </header>
 
           {mergeCandidates.length > 0 && (
@@ -650,8 +706,8 @@ function ScorecardTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-muted-foreground">
-              <th className="p-3 pl-5 font-medium">Hole</th>
-              <th className="p-3 font-medium">Par</th>
+              <th className="w-14 py-3 pr-2 pl-5 font-medium">Hole</th>
+              <th className="w-10 px-2 py-3 font-medium">Par</th>
               {setPlayers.map((player) => (
                 <th key={player.id} className="p-3 pr-5 text-right font-medium">
                   {playerLabel(player)}
@@ -662,8 +718,8 @@ function ScorecardTable({
           <tbody>
             {set.holes.map((hole) => (
               <tr key={hole.number} className="border-b">
-                <td className="p-3 pl-5 font-medium">{hole.number}</td>
-                <td className="p-3 text-muted-foreground">{hole.par}</td>
+                <td className="w-14 py-3 pr-2 pl-5 font-medium">{hole.number}</td>
+                <td className="w-10 px-2 py-3 text-muted-foreground">{hole.par}</td>
                 {setPlayers.map((player) => {
                   const value = set.scores[player.id]?.[hole.number];
                   // Notation (birdie circles, bogey squares) is judged
@@ -680,8 +736,8 @@ function ScorecardTable({
           </tbody>
           <tfoot>
             <tr>
-              <td className="p-3 pl-5 font-medium">Total</td>
-              <td className="p-3" />
+              <td className="w-14 py-3 pr-2 pl-5 font-medium">Total</td>
+              <td className="w-10 px-2 py-3" />
               {setPlayers.map((player) => (
                 <td key={player.id} className="p-3 pr-5 text-right font-medium">
                   <Score value={totalFor(player.id)} />

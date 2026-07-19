@@ -4,7 +4,8 @@ import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
 import { job, score, scorecard, user, uuidv7 } from "../schema";
-import type { ScoresExtractData } from "../src/agent/card_extract/schema";
+import type { CardMetadataSchema } from "../src/agent/card_metadata/schema";
+import type { ScoresExtractData } from "../src/agent/card_scores/schema";
 import type { JobErrorSchema } from "../src/jobs/common";
 import { submit } from "../src/jobs/client";
 import { requireAuth, zodQuery } from "./shared";
@@ -18,10 +19,13 @@ export function scorecardImageKey(scorecardId: string) {
 }
 
 // The `extract` multipart field of POST /scorecard: which extraction agents
-// to run on the upload. `scores` is the round extraction; a course-metadata
-// (pars/yardages) extraction will join it here.
+// to run on the upload. `scores` reads the handwritten round (poll
+// /scorecard/:id/scores); `metadata` reads the printed course layout — nine
+// names, tees, pars, yardages (poll /scorecard/:id/metadata). One upload can
+// request both; the admin course-creation flow uses `metadata`.
 export const ScorecardExtractRequest = z.object({
   scores: z.boolean().optional().default(false),
+  metadata: z.boolean().optional().default(false),
 });
 export type ScorecardExtractRequestSchema = z.infer<typeof ScorecardExtractRequest>;
 
@@ -82,14 +86,21 @@ export const scorecardRoutes = new Hono<Env>()
       httpMetadata: { contentType: image.type },
     });
 
-    // Submit the extraction job first so its row exists before the scorecard's
-    // foreign key points at it.
+    // Submit the extraction jobs first so their rows exist before the
+    // scorecard's foreign keys point at them.
     let extractScoreJobId: string | null = null;
     if (extract.scores) {
       const handle = await submit(c.env, { _job: "extract_score", scorecardId });
       extractScoreJobId = handle.id;
     }
-    await db.insert(scorecard).values({ id: scorecardId, userId: authUser.id, extractScoreJobId });
+    let extractMetadataJobId: string | null = null;
+    if (extract.metadata) {
+      const handle = await submit(c.env, { _job: "extract_metadata", scorecardId });
+      extractMetadataJobId = handle.id;
+    }
+    await db
+      .insert(scorecard)
+      .values({ id: scorecardId, userId: authUser.id, extractScoreJobId, extractMetadataJobId });
 
     return c.json({ id: scorecardId }, 202);
   })
@@ -176,9 +187,36 @@ export const scorecardRoutes = new Hono<Env>()
     const jobRow = await db.query.job.findFirst({ where: eq(job.id, row.extractScoreJobId) });
     if (!jobRow || jobRow.state === "running") return c.json({ status: "pending" as const }, 202);
     if (jobRow.state === "error") {
-      return c.json({ error: scorecardErrorMessage((jobRow.error as JobErrorSchema | null) ?? null) }, 500);
+      return c.json(
+        { error: scorecardErrorMessage((jobRow.error as JobErrorSchema | null) ?? null) },
+        500,
+      );
     }
     return c.json(jobRow.result as ScoresExtractData);
+  })
+  // Status/result of the course-layout (metadata) extraction — same contract
+  // as /scores. Owner-only; the admin course-creation flow polls this while
+  // the admin searches for the facility.
+  .get("/scorecard/:id/metadata", requireAuth, async (c) => {
+    const db = getDb(c.env.DB);
+    const authUser = await getAuthUser(db, c.get("authEmail"));
+    const row = await db.query.scorecard.findFirst({
+      where: eq(scorecard.id, c.req.param("id")),
+    });
+    if (!row || !authUser || row.userId !== authUser.id) {
+      return c.json({ error: "Scorecard not found" }, 404);
+    }
+    if (!row.extractMetadataJobId) return c.json({ status: "pending" as const }, 202);
+
+    const jobRow = await db.query.job.findFirst({ where: eq(job.id, row.extractMetadataJobId) });
+    if (!jobRow || jobRow.state === "running") return c.json({ status: "pending" as const }, 202);
+    if (jobRow.state === "error") {
+      return c.json(
+        { error: scorecardErrorMessage((jobRow.error as JobErrorSchema | null) ?? null) },
+        500,
+      );
+    }
+    return c.json(jobRow.result as CardMetadataSchema);
   })
   // The original photo, for the outing page's gallery and the scorecard
   // pages. Any signed-in league member can view it (fetched with the bearer

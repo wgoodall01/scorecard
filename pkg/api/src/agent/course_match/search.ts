@@ -1,4 +1,4 @@
-import { asc, inArray, like } from "drizzle-orm";
+import { and, asc, inArray, isNull, like } from "drizzle-orm";
 import type { getDb } from "../../../db";
 import { course, courseSet } from "../../../schema";
 import type { CourseSearch, CourseSearchResult, CourseSetPars, CourseSetParsList } from "./agent";
@@ -19,7 +19,7 @@ export function courseSearchFromDb(db: ReturnType<typeof getDb>): CourseSearch {
     const setHits = await db
       .select({ id: courseSet.courseId })
       .from(courseSet)
-      .where(like(courseSet.name, pattern))
+      .where(and(like(courseSet.name, pattern), isNull(courseSet.archivedAt)))
       .limit(MAX_RESULTS);
 
     const ids = [...new Set([...courseHits, ...setHits].map((hit) => hit.id))].slice(
@@ -32,6 +32,7 @@ export function courseSearchFromDb(db: ReturnType<typeof getDb>): CourseSearch {
       where: inArray(course.id, ids),
       with: {
         sets: {
+          where: isNull(courseSet.archivedAt),
           orderBy: [asc(courseSet.name)],
           with: { tees: { with: { holes: { columns: { number: true } } } } },
         },
@@ -63,7 +64,10 @@ export function holeRange(numbers: number[]): string | null {
 // candidates). One query over the whole table — the course catalog is small.
 export function courseSetParsFromDb(db: ReturnType<typeof getDb>): CourseSetParsList {
   return async () => {
-    const sets = await db.query.courseSet.findMany({ with: { tees: { with: { holes: true } } } });
+    const sets = await db.query.courseSet.findMany({
+      where: isNull(courseSet.archivedAt),
+      with: { tees: { with: { holes: true } } },
+    });
     return sets.flatMap((set) => {
       const layouts = new Map<string, CourseSetPars>();
       for (const tee of set.tees) {

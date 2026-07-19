@@ -1,5 +1,5 @@
 // Shared harness for the matching-agent evals (player_match, course_match),
-// in the same style as card_extract/eval/eval.ts: a plain-Bun cmd-ts CLI with
+// in the same style as card_scores/eval/eval.ts: a plain-Bun cmd-ts CLI with
 // `run` (real model calls through evalModel) and `score` (re-grade a past run
 // without re-spending model calls), writing results/<stamp>/… with a
 // results/latest symlink.

@@ -25,9 +25,12 @@
     "db:generate": "bun --filter api db:generate",
     "db:migrate:local": "bun --filter api db:migrate:local",
     "db:migrate:remote": "bun --filter api db:migrate:remote",
-    "db:file": "nu script/db_file.nu"
+    "db:file": "nu script/db_file.nu",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.1.0",
     "oxfmt": "^0.59.0",
     "oxlint": "^1.74.0",
     "oxlint-tsgolint": "^0.24.0",

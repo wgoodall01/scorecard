@@ -78,14 +78,20 @@ export class JobHandle<Result = unknown> {
   // Poll every second until the job leaves `running`, then resolve with its
   // result (state='ok') or throw JobFailedError (state='error'). Throws on
   // timeout or if the row vanishes.
-  async result({ timeoutMs = DEFAULT_RESULT_TIMEOUT_MS }: { timeoutMs?: number } = {}): Promise<Result> {
+  async result({
+    timeoutMs = DEFAULT_RESULT_TIMEOUT_MS,
+  }: { timeoutMs?: number } = {}): Promise<Result> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       const row = await getDb(this.env.DB).query.job.findFirst({ where: eq(job.id, this.id) });
       if (!row) throw new Error(`Job ${this.id} not found`);
       if (row.state === "ok") return row.result as Result;
       if (row.state === "error") {
-        throw new JobFailedError(this.jobType, this.id, (row.error as JobErrorSchema | null) ?? null);
+        throw new JobFailedError(
+          this.jobType,
+          this.id,
+          (row.error as JobErrorSchema | null) ?? null,
+        );
       }
       if (Date.now() >= deadline) {
         throw new Error(`Job ${this.id} did not finish within ${timeoutMs}ms`);

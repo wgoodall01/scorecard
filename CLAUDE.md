@@ -322,6 +322,25 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   front end.
 - `bun dev:web`: run only Vite locally; its `/api` requests proxy to the Worker
   (which must already be running separately in another terminal).
+- Mint a local sign-in magic link (for phone/tunnel testing without email
+  delivery): `POST /api/auth/code` stores a 6-digit code in the `AUTH_CODES` KV
+  but only emails it, so read it back out of KV rather than an inbox. The KV key
+  is `auth:code:<base64url(sha256(email))>`. Steps (Worker on :8787):
+  1. Pick an admin email:
+     `wrangler d1 execute scorecard --local --config ../../wrangler.toml --json
+--command "SELECT email FROM user WHERE admin=1 AND email IS NOT NULL"`.
+  2. Trigger the code: `curl -X POST localhost:8787/api/auth/code -H
+'content-type: application/json' -d '{"email":"<email>"}'` (the code is
+     stored before the email send, so a failed/no-op send doesn't matter).
+  3. Read it back:
+     `KEY="auth:code:$(printf %s "<email>" | openssl dgst -binary -sha256 |
+openssl base64 -A | tr '+/' '-_' | tr -d '=')"` then
+     `wrangler kv key get "$KEY" --binding AUTH_CODES --local --config ../../wrangler.toml`.
+  4. Build the link (single-use, 10-min TTL):
+     `<origin>/login/magic?email=<urlencoded-email>&code=<code>` — where
+     `<origin>` is the Vite/ngrok URL. The `/login/magic` page redeems it
+     automatically. Reading the code from KV does NOT consume it (only
+     `POST /api/auth/token` does), so the link stays valid.
 - `bun build`: build the Vite app.
 - `bun lint`: lint and type-check the repository with Oxlint.
 - `bun fmt`: format the repository with Oxfmt.

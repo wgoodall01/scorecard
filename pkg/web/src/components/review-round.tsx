@@ -13,6 +13,7 @@ import {
 import type { ExtractDataSchema, MatchedData, SubmitOutingRequestSchema } from "api";
 import { AsyncCombobox } from "@/components/async-combobox";
 import { GolfScore } from "@/components/golf-score";
+import { ImageExpand } from "@/components/image-expand";
 import { Score } from "@/components/score";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,8 +68,9 @@ type NineReview = {
 };
 
 // The default tee for a golfer on a set: the tee already recorded for them
-// on the merge candidate's same nine, else the one matching their profile's
-// preferred type, else the standard-type tee, else the longest listed.
+// on the merge candidate's same nine, else — among the tees of the golfer's
+// gender (null gender falls back to the men's tees) — the one matching their
+// profile's preferred type, else the standard-type tee, else the longest.
 function defaultTeeFor(
   set: CourseSetOption,
   golfer: Golfer | undefined,
@@ -77,12 +79,17 @@ function defaultTeeFor(
   const merged = golfer ? mergeSet?.tees[golfer.id] : undefined;
   const fromMerge = merged ? set.tees.find((tee) => tee.id === merged.id) : undefined;
   if (fromMerge) return fromMerge;
+
+  // Restrict to the golfer's gender (defaulting to men's); if the course lists
+  // no tees for that gender, consider them all.
+  const wantGender = golfer?.gender ?? "m";
+  const genderTees = set.tees.filter((tee) => tee.gender === wantGender);
+  const pool = genderTees.length > 0 ? genderTees : set.tees;
+
   const preferred = golfer?.preferredTee
-    ? set.tees.find((tee) => tee.type === golfer.preferredTee)
+    ? pool.find((tee) => tee.type === golfer.preferredTee)
     : undefined;
-  return (
-    preferred ?? set.tees.find((tee) => tee.type === "standard") ?? sortTees(set.tees)[0] ?? null
-  );
+  return preferred ?? pool.find((tee) => tee.type === "standard") ?? sortTees(pool)[0] ?? null;
 }
 
 function localIsoDate(date: Date): string {
@@ -730,7 +737,7 @@ export function ReviewRound({
     return (
       <div className="flex flex-col gap-5">
         {previewUrl && (
-          <img
+          <ImageExpand
             src={previewUrl}
             alt="Captured scorecard"
             className="max-h-56 w-full rounded-2xl border bg-muted object-contain"

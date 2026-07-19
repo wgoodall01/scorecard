@@ -112,10 +112,7 @@
       "indexes": {
         "course_set_name_unique": {
           "name": "course_set_name_unique",
-          "columns": [
-            "course_id",
-            "name"
-          ],
+          "columns": ["course_id", "name"],
           "isUnique": true
         }
       },
@@ -124,12 +121,8 @@
           "name": "course_set_course_id_course_id_fk",
           "tableFrom": "course_set",
           "tableTo": "course",
-          "columnsFrom": [
-            "course_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["course_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -215,18 +208,12 @@
       "indexes": {
         "course_set_tee_usga_tee_id_idx": {
           "name": "course_set_tee_usga_tee_id_idx",
-          "columns": [
-            "usga_tee_id"
-          ],
+          "columns": ["usga_tee_id"],
           "isUnique": false
         },
         "course_set_tee_unique": {
           "name": "course_set_tee_unique",
-          "columns": [
-            "course_set_id",
-            "lower(\"name\")",
-            "coalesce(\"gender\", '')"
-          ],
+          "columns": ["course_set_id", "lower(\"name\")", "coalesce(\"gender\", '')"],
           "isUnique": true
         }
       },
@@ -235,12 +222,8 @@
           "name": "course_set_tee_course_set_id_course_set_id_fk",
           "tableFrom": "course_set_tee",
           "tableTo": "course_set",
-          "columnsFrom": [
-            "course_set_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["course_set_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -298,10 +281,7 @@
       "indexes": {
         "hole_number_unique": {
           "name": "hole_number_unique",
-          "columns": [
-            "course_set_tee_id",
-            "number"
-          ],
+          "columns": ["course_set_tee_id", "number"],
           "isUnique": true
         }
       },
@@ -310,12 +290,8 @@
           "name": "hole_course_set_tee_id_course_set_tee_id_fk",
           "tableFrom": "hole",
           "tableTo": "course_set_tee",
-          "columnsFrom": [
-            "course_set_tee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["course_set_tee_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -394,9 +370,7 @@
       "indexes": {
         "job_type_idx": {
           "name": "job_type_idx",
-          "columns": [
-            "job_type"
-          ],
+          "columns": ["job_type"],
           "isUnique": false
         }
       },
@@ -463,10 +437,7 @@
       "indexes": {
         "nickname_user_nickname_unique": {
           "name": "nickname_user_nickname_unique",
-          "columns": [
-            "user_id",
-            "lower(\"nickname\")"
-          ],
+          "columns": ["user_id", "lower(\"nickname\")"],
           "isUnique": true
         }
       },
@@ -475,12 +446,8 @@
           "name": "nickname_user_id_user_id_fk",
           "tableFrom": "nickname",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -534,12 +501,8 @@
           "name": "outing_course_id_course_id_fk",
           "tableFrom": "outing",
           "tableTo": "course",
-          "columnsFrom": [
-            "course_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["course_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -604,10 +567,7 @@
       "indexes": {
         "score_cell_unique": {
           "name": "score_cell_unique",
-          "columns": [
-            "score_set_id",
-            "hole_id"
-          ],
+          "columns": ["score_set_id", "hole_id"],
           "isUnique": true
         }
       },
@@ -616,12 +576,8 @@
           "name": "score_score_set_id_score_set_id_fk",
           "tableFrom": "score",
           "tableTo": "score_set",
-          "columnsFrom": [
-            "score_set_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["score_set_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -629,12 +585,8 @@
           "name": "score_hole_id_hole_id_fk",
           "tableFrom": "score",
           "tableTo": "hole",
-          "columnsFrom": [
-            "hole_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["hole_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -642,12 +594,8 @@
           "name": "score_scorecard_id_scorecard_id_fk",
           "tableFrom": "score",
           "tableTo": "scorecard",
-          "columnsFrom": [
-            "scorecard_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scorecard_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -705,11 +653,7 @@
       "indexes": {
         "score_set_unique": {
           "name": "score_set_unique",
-          "columns": [
-            "outing_id",
-            "player_id",
-            "course_set_tee_id"
-          ],
+          "columns": ["outing_id", "player_id", "course_set_tee_id"],
           "isUnique": true
         }
       },
@@ -718,12 +662,8 @@
           "name": "score_set_outing_id_outing_id_fk",
           "tableFrom": "score_set",
           "tableTo": "outing",
-          "columnsFrom": [
-            "outing_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["outing_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -731,12 +671,8 @@
           "name": "score_set_player_id_user_id_fk",
           "tableFrom": "score_set",
           "tableTo": "user",
-          "columnsFrom": [
-            "player_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["player_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -744,12 +680,8 @@
           "name": "score_set_course_set_tee_id_course_set_tee_id_fk",
           "tableFrom": "score_set",
           "tableTo": "course_set_tee",
-          "columnsFrom": [
-            "course_set_tee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["course_set_tee_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -803,12 +735,8 @@
           "name": "scorecard_user_id_user_id_fk",
           "tableFrom": "scorecard",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -816,12 +744,8 @@
           "name": "scorecard_extract_score_job_id_job_id_fk",
           "tableFrom": "scorecard",
           "tableTo": "job",
-          "columnsFrom": [
-            "extract_score_job_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["extract_score_job_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -894,9 +818,7 @@
       "indexes": {
         "user_email_unique": {
           "name": "user_email_unique",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "isUnique": true
         }
       },
@@ -982,9 +904,7 @@
       "indexes": {
         "usga_course_facility_id_idx": {
           "name": "usga_course_facility_id_idx",
-          "columns": [
-            "facility_id"
-          ],
+          "columns": ["facility_id"],
           "isUnique": false
         }
       },
@@ -1192,9 +1112,7 @@
       "indexes": {
         "usga_tee_course_id_idx": {
           "name": "usga_tee_course_id_idx",
-          "columns": [
-            "course_id"
-          ],
+          "columns": ["course_id"],
           "isUnique": false
         }
       },

@@ -16,7 +16,7 @@ const DEFAULT_MAX_STEPS = 16;
 // provided tools as many times as needed, then submit a structured answer.
 //
 // The answer schema lives in a tool inputSchema, so the same provider
-// structured-output constraints as card_extract/schema.ts apply: index-aligned
+// structured-output constraints as card_scores/schema.ts apply: index-aligned
 // arrays, every field required, null (never absent keys) for "no value".
 export async function runAnswerAgent<TSchema extends z.ZodType>({
   resolver,

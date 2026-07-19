@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ChevronRight, Images, NotebookText } from "lucide-react";
 import type { ScorecardStatus } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
+import { ImageExpand } from "@/components/image-expand";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { formatOutingDate, playerLabel } from "@/pages/outings";
@@ -218,7 +219,7 @@ export function ScorecardDetailPage({ scorecardId }: { scorecardId: string }) {
           {scorecard.error && <p className="text-sm text-destructive">{scorecard.error}</p>}
 
           {imageUrl ? (
-            <img
+            <ImageExpand
               src={imageUrl}
               alt="Scorecard photo"
               className="max-h-[70dvh] w-full rounded-2xl border bg-muted object-contain"

@@ -124,8 +124,7 @@ async function fetchListing(): Promise<{ session: Session; html: string }> {
   const res = await fetch(`${BASE}/NCRListing`, {
     headers: {
       ...BROWSER_HEADERS,
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Upgrade-Insecure-Requests": "1",
       "Sec-Fetch-Dest": "document",
       "Sec-Fetch-Mode": "navigate",
@@ -138,9 +137,7 @@ async function fetchListing(): Promise<{ session: Session; html: string }> {
   const html = await res.text();
   const cookie = collectCookies(res);
 
-  const match = html.match(
-    /name="__RequestVerificationToken"[^>]*\bvalue="([^"]+)"/,
-  );
+  const match = html.match(/name="__RequestVerificationToken"[^>]*\bvalue="([^"]+)"/);
   if (!match) {
     throw new Error("Could not find __RequestVerificationToken on NCRListing page");
   }
@@ -294,15 +291,17 @@ export async function describeCourse(
   // The bulk scraper passes a shared session to avoid re-priming per course.
   session ??= await primeSession();
 
-  const res = await fetch(`${BASE}/courseTeeInfo?CourseID=${encodeURIComponent(String(courseId))}`, {
-    headers: {
-      ...BROWSER_HEADERS,
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      Referer: `${BASE}/NCRListing`,
-      Cookie: session.cookie,
+  const res = await fetch(
+    `${BASE}/courseTeeInfo?CourseID=${encodeURIComponent(String(courseId))}`,
+    {
+      headers: {
+        ...BROWSER_HEADERS,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Referer: `${BASE}/NCRListing`,
+        Cookie: session.cookie,
+      },
     },
-  });
+  );
   if (!res.ok) {
     throw new Error(`courseTeeInfo failed: HTTP ${res.status}`);
   }
@@ -576,9 +575,7 @@ export async function scrape({
           }
         }
       }
-      throw new Error(
-        `${MAX_ATTEMPTS} attempts failed: ${(lastErr as Error)?.message ?? lastErr}`,
-      );
+      throw new Error(`${MAX_ATTEMPTS} attempts failed: ${(lastErr as Error)?.message ?? lastErr}`);
     };
 
     // Sliding window: `inflight[i]` is the pending fetch for course index i.
@@ -715,18 +712,10 @@ if (import.meta.main) {
     console.error("  bun ncrdb.ts search <club name>");
     console.error("  bun ncrdb.ts describe <courseId>");
     console.error("  bun ncrdb.ts scrape [--rps N] [--concurrency N] [--resume]");
-    console.error(
-      "      Two passes into ./output/: course.jsonl (per state), then",
-    );
-    console.error(
-      "      tee.jsonl (per course). checkpoint.json makes it resumable.",
-    );
-    console.error(
-      "      Pass 2 runs up to --concurrency requests in flight (default",
-    );
-    console.error(
-      "      derives from --rps), committing results in order.",
-    );
+    console.error("      Two passes into ./output/: course.jsonl (per state), then");
+    console.error("      tee.jsonl (per course). checkpoint.json makes it resumable.");
+    console.error("      Pass 2 runs up to --concurrency requests in flight (default");
+    console.error("      derives from --rps), committing results in order.");
     process.exit(1);
   }
 }

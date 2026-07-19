@@ -22,6 +22,7 @@ import { Route as ScorecardsIdRouteImport } from './routes/scorecards_.$id'
 import { Route as OutingsIdRouteImport } from './routes/outings_.$id'
 import { Route as LoginMagicRouteImport } from './routes/login_.magic'
 import { Route as GolfersIdRouteImport } from './routes/golfers_.$id'
+import { Route as CoursesCreateRouteImport } from './routes/courses_.create'
 import { Route as CoursesIdRouteImport } from './routes/courses_.$id'
 
 const ScorecardsRoute = ScorecardsRouteImport.update({
@@ -89,6 +90,11 @@ const GolfersIdRoute = GolfersIdRouteImport.update({
   path: '/golfers/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CoursesCreateRoute = CoursesCreateRouteImport.update({
+  id: '/courses_/create',
+  path: '/courses/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CoursesIdRoute = CoursesIdRouteImport.update({
   id: '/courses_/$id',
   path: '/courses/$id',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/outings': typeof OutingsRoute
   '/scorecards': typeof ScorecardsRoute
   '/courses/$id': typeof CoursesIdRoute
+  '/courses/create': typeof CoursesCreateRoute
   '/golfers/$id': typeof GolfersIdRoute
   '/login/magic': typeof LoginMagicRoute
   '/outings/$id': typeof OutingsIdRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/outings': typeof OutingsRoute
   '/scorecards': typeof ScorecardsRoute
   '/courses/$id': typeof CoursesIdRoute
+  '/courses/create': typeof CoursesCreateRoute
   '/golfers/$id': typeof GolfersIdRoute
   '/login/magic': typeof LoginMagicRoute
   '/outings/$id': typeof OutingsIdRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/outings': typeof OutingsRoute
   '/scorecards': typeof ScorecardsRoute
   '/courses_/$id': typeof CoursesIdRoute
+  '/courses_/create': typeof CoursesCreateRoute
   '/golfers_/$id': typeof GolfersIdRoute
   '/login_/magic': typeof LoginMagicRoute
   '/outings_/$id': typeof OutingsIdRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/outings'
     | '/scorecards'
     | '/courses/$id'
+    | '/courses/create'
     | '/golfers/$id'
     | '/login/magic'
     | '/outings/$id'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/outings'
     | '/scorecards'
     | '/courses/$id'
+    | '/courses/create'
     | '/golfers/$id'
     | '/login/magic'
     | '/outings/$id'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/outings'
     | '/scorecards'
     | '/courses_/$id'
+    | '/courses_/create'
     | '/golfers_/$id'
     | '/login_/magic'
     | '/outings_/$id'
@@ -206,6 +218,7 @@ export interface RootRouteChildren {
   OutingsRoute: typeof OutingsRoute
   ScorecardsRoute: typeof ScorecardsRoute
   CoursesIdRoute: typeof CoursesIdRoute
+  CoursesCreateRoute: typeof CoursesCreateRoute
   GolfersIdRoute: typeof GolfersIdRoute
   LoginMagicRoute: typeof LoginMagicRoute
   OutingsIdRoute: typeof OutingsIdRoute
@@ -305,6 +318,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GolfersIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/courses_/create': {
+      id: '/courses_/create'
+      path: '/courses/create'
+      fullPath: '/courses/create'
+      preLoaderRoute: typeof CoursesCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/courses_/$id': {
       id: '/courses_/$id'
       path: '/courses/$id'
@@ -326,6 +346,7 @@ const rootRouteChildren: RootRouteChildren = {
   OutingsRoute: OutingsRoute,
   ScorecardsRoute: ScorecardsRoute,
   CoursesIdRoute: CoursesIdRoute,
+  CoursesCreateRoute: CoursesCreateRoute,
   GolfersIdRoute: GolfersIdRoute,
   LoginMagicRoute: LoginMagicRoute,
   OutingsIdRoute: OutingsIdRoute,

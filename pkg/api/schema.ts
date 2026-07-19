@@ -1,5 +1,14 @@
 import { relations, sql } from "drizzle-orm";
-import { check, customType, index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  check,
+  customType,
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 const varchar = customType<{ data: string }>({
   dataType() {
@@ -68,6 +77,10 @@ export const user = sqliteTable(
     name: varchar("name"),
     admin: integer("admin", { mode: "boolean" }).notNull().default(false),
     handicap: integer("handicap"),
+    // The golfer's gender ("m"/"f"), or null. Drives which gendered tee
+    // (course_set_tee.gender) a round defaults to — null falls back to the
+    // men's tees. Not tied to account/login, just scorekeeping.
+    gender: varchar("gender").$type<"m" | "f">(),
     preferredTee: varchar("preferred_tee").$type<Tee>(),
     ...timestamps,
   },
@@ -97,6 +110,9 @@ export const course = sqliteTable("course", {
   location: varchar("location"),
   // The USGA course rating database's id for this facility (ncrdb.usga.org).
   ncrdbFacilityId: integer("ncrdb_facility_id"),
+  // The captured scorecard this course was imported/updated from (admin
+  // create-course flow), or null for seeded/hand-entered courses.
+  importedScorecardId: text("imported_scorecard_id").references(() => scorecard.id),
   ...timestamps,
 });
 
@@ -117,6 +133,12 @@ export const courseSet = sqliteTable(
     // ratings are that course's Front(9)/Back(9) splits per usgaCourseNine.
     usgaCourseId: integer("usga_course_id"),
     usgaCourseNine: varchar("usga_course_nine").$type<"front" | "back">(),
+    // Soft-delete: an ISO-8601 timestamp when this nine was archived (removed
+    // during a course edit), else null. Archived nines are filtered out of every
+    // NEW-score path (the /courses registry+capture list, course matching, outing
+    // submission) but kept intact for HISTORICAL reads — old score_sets still
+    // resolve their tee/holes by id, so past outings and handicaps stand.
+    archivedAt: varchar("archived_at"),
     ...timestamps,
   },
   (table) => [uniqueIndex("course_set_name_unique").on(table.courseId, table.name)],
@@ -177,6 +199,9 @@ export const hole = sqliteTable(
       .references(() => courseSetTee.id),
     number: integer("number").notNull(),
     par: integer("par").notNull(),
+    // Printed yardage from this tee, if known (null = not recorded). Like par,
+    // yardage legitimately differs between tee positions on the same nine.
+    yardage: integer("yardage"),
     ...timestamps,
   },
   (table) => [uniqueIndex("hole_number_unique").on(table.courseSetTeeId, table.number)],
@@ -282,6 +307,13 @@ export const scorecard = sqliteTable("scorecard", {
     .notNull()
     .references(() => user.id),
   extractScoreJobId: text("extract_score_job_id").references(() => job.id),
+  // Course-creation pipeline (admin flow): a card uploaded to create/update a
+  // course points at its extract_metadata job (reads nine names + per-tee
+  // pars/yardages) and the research_course job it feeds (reconciles that plus
+  // the usga_* mirror into a CourseProposal). Both null for ordinary score
+  // captures.
+  extractMetadataJobId: text("extract_metadata_job_id").references(() => job.id),
+  researchCourseJobId: text("research_course_job_id").references(() => job.id),
   ...timestamps,
 });
 
@@ -443,6 +475,17 @@ export const scorecardRelations = relations(scorecard, ({ one, many }) => ({
   extractScoreJob: one(job, {
     fields: [scorecard.extractScoreJobId],
     references: [job.id],
+    relationName: "extractScoreJob",
+  }),
+  extractMetadataJob: one(job, {
+    fields: [scorecard.extractMetadataJobId],
+    references: [job.id],
+    relationName: "extractMetadataJob",
+  }),
+  researchCourseJob: one(job, {
+    fields: [scorecard.researchCourseJobId],
+    references: [job.id],
+    relationName: "researchCourseJob",
   }),
   scores: many(score),
 }));

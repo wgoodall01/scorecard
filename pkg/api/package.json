@@ -10,7 +10,9 @@
   "scripts": {
     "dev": "wrangler dev --config ../../wrangler.toml",
     "test": "vitest run",
-    "eval": "bun src/agent/card_extract/eval/eval.ts",
+    "eval": "bun src/agent/card_scores/eval/eval.ts",
+    "eval:metadata": "bun src/agent/card_metadata/eval/eval.ts",
+    "eval:research": "bun src/agent/research_course/eval/eval.ts",
     "eval:players": "bun src/agent/player_match/eval/eval.ts",
     "eval:courses": "bun src/agent/course_match/eval/eval.ts",
     "db:generate": "drizzle-kit generate",

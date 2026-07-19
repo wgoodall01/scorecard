@@ -23,11 +23,12 @@ export function safeReturnTo(value: string | null) {
   return path === "/login" || path.startsWith("/login/") || path === "/register" ? "/" : value;
 }
 
-// Route-level auth guard: requires a signed-in user. Always gate routes here;
-// finer-grained permissions (e.g. admin-only controls) are checked in
-// components against the profile and enforced by the API.
-export function checkAuth() {
-  return ({ location }: { location: ParsedLocation }) => {
+// Route-level auth guard: requires a signed-in user, and — with
+// `{ admin: true }` — an admin one, resolved from /me in beforeLoad (admin
+// status isn't in the token). Non-admins are bounced to the courses list.
+// Within-page controls are still enforced by the API regardless.
+export function checkAuth(options?: { admin?: boolean }) {
+  return async ({ location }: { location: ParsedLocation }) => {
     const token = authService.getToken();
     if (!token) {
       throw redirect({
@@ -35,6 +36,13 @@ export function checkAuth() {
         search: { returnTo: safeReturnTo(location.href) },
         replace: true,
       });
+    }
+    if (options?.admin) {
+      const response = await createApiClient(token)
+        .api.me.$get()
+        .catch(() => null);
+      const body = response && response.ok ? await response.json() : null;
+      if (!body?.user?.admin) throw redirect({ to: "/courses", replace: true });
     }
   };
 }

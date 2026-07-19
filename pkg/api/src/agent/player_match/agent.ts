@@ -34,7 +34,7 @@ When you are done, call the answer tool with exactly one entry per input name, i
 // Chosen by the eval sweep (2026-07-17, 5 models × 13 cases): the only model
 // with perfect recall — every gpt-5.4-mini/nano variant (low+medium) missed
 // the bare-initials "DH" case, though all held precision at 1.0. Also the
-// cheapest of the field, and the same model card_extract already uses.
+// cheapest of the field, and the same model card_scores already uses.
 const DEFAULT_MODEL: ModelSpec = "google/gemini-3.5-flash@low";
 
 export async function matchPlayers({

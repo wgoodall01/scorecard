@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Mail, Pencil, Search, UserRoundPlus } from "lucide-react";
+import { Ban, ChevronRight, Mail, Mars, Pencil, Search, UserRoundPlus, Venus } from "lucide-react";
 import type { PlayerHandicap, Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { HandicapCard } from "@/components/handicap-card";
@@ -8,6 +8,7 @@ import { MultiCombobox } from "@/components/multi-combobox";
 import { ResponsiveModal } from "@/components/responsive-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,6 +30,7 @@ export type Golfer = {
   admin: boolean;
   handicap: number | null;
   preferredTee: Tee | null;
+  gender: "m" | "f" | null;
   nicknames: { id: string; userId: string; nickname: string; nicknameType: string }[];
 };
 
@@ -267,6 +269,7 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
   const [email, setEmail] = useState("");
   const [handicap, setHandicap] = useState("");
   const [preferredTee, setPreferredTee] = useState<Tee | null>(null);
+  const [gender, setGender] = useState<"m" | "f" | null>(null);
   const [nicknames, setNicknames] = useState<string[]>([]);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -330,6 +333,7 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
     setEmail(golfer.email ?? "");
     setHandicap(golfer.handicap === null ? "" : String(golfer.handicap));
     setPreferredTee(golfer.preferredTee);
+    setGender(golfer.gender);
     setNicknames(golfer.nicknames.map((entry) => entry.nickname));
     setProfileError(null);
     setInviteStatus(null);
@@ -378,6 +382,7 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
           email: email.trim() === "" ? null : email,
           handicap: parsedHandicap,
           preferredTee,
+          gender,
           nicknames: nicknames.map((nickname) => ({ nickname, nicknameType: "nickname" })),
         },
       });
@@ -483,6 +488,10 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
               <dd>{golfer.handicap ?? "Not set"}</dd>
               <dt className="text-muted-foreground">Preferred tee</dt>
               <dd>{golfer.preferredTee ? TEE_LABELS[golfer.preferredTee] : "Not set"}</dd>
+              <dt className="text-muted-foreground">Gender</dt>
+              <dd>
+                {golfer.gender === "m" ? "Men's" : golfer.gender === "f" ? "Women's" : "Not set"}
+              </dd>
             </dl>
             {profileError && !editOpen && (
               <p className="border-t p-5 py-3 text-sm text-destructive">{profileError}</p>
@@ -589,6 +598,30 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Gender</Label>
+              <ButtonGroup>
+                {(
+                  [
+                    { value: "m", label: "Men's", icon: Mars },
+                    { value: "f", label: "Women's", icon: Venus },
+                    { value: null, label: "Not set", icon: Ban },
+                  ] as const
+                ).map((option) => (
+                  <Button
+                    key={option.label}
+                    type="button"
+                    size="icon"
+                    variant={gender === option.value ? "default" : "outline"}
+                    aria-label={option.label}
+                    aria-pressed={gender === option.value}
+                    onClick={() => setGender(option.value)}
+                  >
+                    <option.icon aria-hidden="true" />
+                  </Button>
+                ))}
+              </ButtonGroup>
             </div>
           </div>
           {isAdmin && !isSelf && golfer && (

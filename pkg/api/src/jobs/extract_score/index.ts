@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { extractScorecard, matchCapture, normalizeImage } from "../../agent/card_extract/agent";
-import { ScoresExtractData } from "../../agent/card_extract/schema";
+import { extractScorecard, matchCapture } from "../../agent/card_scores/agent";
+import { ScoresExtractData } from "../../agent/card_scores/schema";
+import { normalizeImage } from "../../agent/image";
 import { RateLimitError } from "../../extraction_errors";
 import { resolveModel } from "../../model";
 import { scorecardImageKey } from "../../../routes/scorecard";

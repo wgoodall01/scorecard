@@ -1,11 +1,15 @@
 import type { z } from "zod";
+import { extractMetadata } from "./extract_metadata";
 import { extractScore } from "./extract_score";
+import { researchCourseJob } from "./research_course";
 
 // Every job type, keyed by name. To add a job: create it with createJobType in
 // its own module (importing from ./common, never from here) and add it below.
 // Each value's `name` must equal its key.
 export const JOB_TYPES = {
   extract_score: extractScore,
+  extract_metadata: extractMetadata,
+  research_course: researchCourseJob,
 } as const;
 
 export type JobTypes = typeof JOB_TYPES;

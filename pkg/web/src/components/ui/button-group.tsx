@@ -1,0 +1,24 @@
+import * as React from "react";
+
+import { cn } from "@/lib/utils";
+
+// Joins a row of buttons into one segmented control: inner corners squared and
+// inner borders collapsed so they read as a single unit. Put <Button>s inside.
+function ButtonGroup({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      role="group"
+      data-slot="button-group"
+      className={cn(
+        "flex w-fit items-stretch",
+        "[&>*:focus-visible]:z-10",
+        "[&>*:not(:first-child)]:rounded-l-none [&>*:not(:first-child)]:border-l-0",
+        "[&>*:not(:last-child)]:rounded-r-none",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export { ButtonGroup };

@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, ExternalLink, Flag } from "lucide-react";
+import { ChevronRight, EllipsisVertical, ExternalLink, Flag, Pencil, Plus } from "lucide-react";
 import type { Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth-context";
 import { TEE_LABELS, TEES } from "@/lib/tees";
 import { nineLabel } from "@/pages/outings";
@@ -43,6 +45,11 @@ export function teeLabel(tee: { name: string; gender: "m" | "f" | null }) {
   return tee.gender === null ? tee.name : `${tee.name} (${tee.gender.toUpperCase()})`;
 }
 
+// Sort/group order for gender: men's, then women's, then ungendered.
+function genderOrder(gender: "m" | "f" | null): number {
+  return gender === "m" ? 0 : gender === "f" ? 1 : 2;
+}
+
 function useCourses() {
   const { client } = useAuth();
   const [courses, setCourses] = useState<CourseWithNines[] | null>(null);
@@ -74,11 +81,23 @@ function useCourses() {
 
 export function CoursesPage() {
   const { courses, error } = useCourses();
+  const { isAdmin } = useAuth();
 
   return (
     <AppShell>
       <PageTitle>Courses · Scorecard</PageTitle>
-      <PageHeading title="Courses" description="Every course your group plays, and its nines." />
+      <PageHeading
+        title="Courses"
+        description="Every course your group plays, and its nines."
+        actions={
+          isAdmin ? (
+            <Link to="/courses/create" className={buttonVariants({ className: "shrink-0" })}>
+              <Plus data-icon="inline-start" />
+              Add Course
+            </Link>
+          ) : undefined
+        }
+      />
       <section className="rounded-xl border bg-card">
         {!courses && !error && (
           <p className="p-5 text-sm text-muted-foreground">Loading courses…</p>
@@ -121,7 +140,11 @@ export function CoursesPage() {
 
 export function CourseDetailPage({ courseId }: { courseId: string }) {
   const { courses, error } = useCourses();
+  const { isAdmin } = useAuth();
   const course = courses?.find((entry) => entry.id === courseId) ?? null;
+  // Editing goes through the facility-merge path (preserves ids), so it's only
+  // offered for courses linked to a USGA facility.
+  const canEdit = isAdmin && course?.ncrdbFacilityId != null;
 
   return (
     <AppShell>
@@ -136,27 +159,54 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
         <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground" />
         <span className="truncate font-medium">{course?.name ?? "Course"}</span>
       </nav>
-      <div className="mb-8 min-w-0">
-        <h1 className="truncate text-2xl font-semibold tracking-tight">
-          {course?.name ?? "Course"}
-        </h1>
-        {course?.location && (
-          <p className="mt-1 truncate text-sm text-muted-foreground">{course.location}</p>
-        )}
-        {course?.ncrdbFacilityId !== null && course?.ncrdbFacilityId !== undefined && (
-          <p className="mt-1 text-sm text-muted-foreground">
-            {/* The NCRDB has no facility page — per-nine links below go to
-                the rated courses; this one lands on the database itself. */}
-            <a
-              href="https://ncrdb.usga.org/"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+      <div className="mb-8 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-semibold tracking-tight">
+            {course?.name ?? "Course"}
+          </h1>
+          {course?.location && (
+            <p className="mt-1 truncate text-sm text-muted-foreground">{course.location}</p>
+          )}
+          {course?.ncrdbFacilityId !== null && course?.ncrdbFacilityId !== undefined && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {/* The NCRDB has no facility page — per-nine links below go to
+                  the rated courses; this one lands on the database itself. */}
+              <a
+                href="https://ncrdb.usga.org/"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+              >
+                USGA NCRDB facility {course.ncrdbFacilityId}
+                <ExternalLink aria-hidden="true" className="size-3.5" />
+              </a>
+            </p>
+          )}
+        </div>
+        {canEdit && course && (
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  aria-label="Course actions"
+                  className="size-9 shrink-0 p-0"
+                />
+              }
             >
-              USGA NCRDB facility {course.ncrdbFacilityId}
-              <ExternalLink aria-hidden="true" className="size-3.5" />
-            </a>
-          </p>
+              <EllipsisVertical aria-hidden="true" />
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-44 p-1">
+              <Link
+                to="/courses/create"
+                search={{ facilityId: course.ncrdbFacilityId ?? undefined }}
+                className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-muted"
+              >
+                <Pencil aria-hidden="true" className="size-4" />
+                Edit course
+              </Link>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
       {!courses && !error && <p className="text-sm text-muted-foreground">Loading course…</p>}
@@ -173,12 +223,16 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
               </div>
               <h2 className="mt-4 font-medium">No nines yet</h2>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                Importing nines from a scorecard is coming soon.
+                An admin can add nines by importing a scorecard from the Courses page.
               </p>
             </section>
           )}
           {course.sets.map((set) => {
-            const tees = sortTees(set.tees);
+            // Group by gender first (men's, then women's, then ungendered),
+            // keeping the length order within each group.
+            const tees = [...sortTees(set.tees)].sort(
+              (a, b) => genderOrder(a.gender) - genderOrder(b.gender),
+            );
             // Hole numbers across every tee (they should agree; union so a
             // partly seeded tee can't hide columns).
             const holeNumbers = [
@@ -213,8 +267,9 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
                         >
-                          USGA {set.usgaCourseId}
-                          {set.usgaCourseNine !== null && ` · ${set.usgaCourseNine} 9`}
+                          {set.usgaCourseNine !== null
+                            ? `${set.usgaCourseNine === "front" ? "Front" : "Back"} 9 of USGA ${set.usgaCourseId}`
+                            : `USGA ${set.usgaCourseId}`}
                           <ExternalLink aria-hidden="true" className="size-3.5" />
                         </a>
                       </p>
@@ -247,30 +302,40 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
                   </table>
                 </div>
                 {tees.length > 0 && (
-                  // Four columns: tee, its app-level type (unlabeled, so the
-                  // types line up in their own column), rating/slope, and
-                  // any par deviations from the baseline layout above.
-                  <dl className="grid grid-cols-[auto_auto_auto_1fr] items-baseline gap-x-6 gap-y-1.5 border-t p-5 text-sm">
+                  // Columns: gender (M/F, printed once per group), tee, its
+                  // app-level type (unlabeled), rating, slope, and any par
+                  // deviations from the baseline layout above.
+                  <dl className="grid grid-cols-[auto_auto_auto_auto_auto_1fr] items-baseline gap-x-6 gap-y-1.5 border-t p-5 text-sm">
+                    <dd aria-hidden="true" />
                     <dt className="text-xs font-medium text-muted-foreground">Tee</dt>
                     <dd aria-hidden="true" />
-                    <dd className="text-xs font-medium text-muted-foreground">Rating / Slope</dd>
+                    <dd className="text-xs font-medium text-muted-foreground">Rating</dd>
+                    <dd className="text-xs font-medium text-muted-foreground">Slope</dd>
                     <dd aria-hidden="true" />
-                    {tees.map((tee) => (
-                      <Fragment key={tee.id}>
-                        <dt className="whitespace-nowrap text-muted-foreground">{teeLabel(tee)}</dt>
-                        <dd className="whitespace-nowrap text-xs text-muted-foreground">
-                          {tee.type !== null && TEE_LABELS[tee.type]}
-                        </dd>
-                        <dd className="tabular-nums">
-                          {tee.courseRating !== null && tee.slopeRating !== null
-                            ? `${tee.courseRating.toFixed(1)} / ${tee.slopeRating}`
-                            : "Unrated"}
-                        </dd>
-                        <dd className="min-w-0 text-xs text-muted-foreground">
-                          {parExceptions(tee)}
-                        </dd>
-                      </Fragment>
-                    ))}
+                    {tees.map((tee, index) => {
+                      // Only the first tee of each gender group prints the label.
+                      const firstOfGender = index === 0 || tees[index - 1].gender !== tee.gender;
+                      return (
+                        <Fragment key={tee.id}>
+                          <dd className="text-xs font-medium whitespace-nowrap text-muted-foreground">
+                            {firstOfGender && tee.gender !== null ? tee.gender.toUpperCase() : ""}
+                          </dd>
+                          <dt className="whitespace-nowrap text-muted-foreground">{tee.name}</dt>
+                          <dd className="whitespace-nowrap text-xs text-muted-foreground">
+                            {tee.type !== null && TEE_LABELS[tee.type]}
+                          </dd>
+                          <dd className="tabular-nums">
+                            {tee.courseRating !== null ? tee.courseRating.toFixed(1) : "Unrated"}
+                          </dd>
+                          <dd className="tabular-nums text-muted-foreground">
+                            {tee.slopeRating !== null ? tee.slopeRating : ""}
+                          </dd>
+                          <dd className="min-w-0 text-xs text-muted-foreground">
+                            {parExceptions(tee)}
+                          </dd>
+                        </Fragment>
+                      );
+                    })}
                   </dl>
                 )}
               </section>

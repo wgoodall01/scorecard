@@ -39,6 +39,7 @@ export const UpdateGolferRequest = z
     admin: z.boolean().optional(),
     handicap: z.number().int().min(-10).max(54).nullable().optional(),
     preferredTee: z.enum(TEES).nullable().optional(),
+    gender: z.enum(["m", "f"]).nullable().optional(),
     // Replace-all semantics: the full nickname list the golfer should end up with.
     nicknames: Nicknames.optional(),
   })

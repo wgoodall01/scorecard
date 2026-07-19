@@ -1,10 +1,10 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
 import { course, courseSet, courseSetTee, outing, score, scoreSet, uuidv7 } from "../schema";
-import { requireAuth, zodBody, zodQuery } from "./shared";
+import { requireAdmin, requireAuth, zodBody, zodQuery } from "./shared";
 
 const NaiveDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -210,7 +210,10 @@ export const outingRoutes = new Hono<Env>()
     const courses = await db.query.course.findMany({
       orderBy: [asc(course.name)],
       with: {
+        // Archived nines are hidden everywhere new scores are recorded — the
+        // registry, the capture review picker — and here.
         sets: {
+          where: isNull(courseSet.archivedAt),
           orderBy: [asc(courseSet.name)],
           with: { tees: { orderBy: [asc(courseSetTee.name)], with: { holes: true } } },
         },
@@ -440,6 +443,9 @@ export const outingRoutes = new Hono<Env>()
         if (!existingSet || existingSet.courseId !== courseId) {
           return c.json({ error: "Course set not found on this course" }, 404);
         }
+        if (existingSet.archivedAt) {
+          return c.json({ error: "That nine has been archived" }, 400);
+        }
         // holeIdByNumber per tee id.
         const holesByTee = new Map<string, Map<number, string>>(
           existingSet.tees.map((tee) => [
@@ -503,4 +509,25 @@ export const outingRoutes = new Hono<Env>()
 
       return c.json({ outingId }, 201);
     },
-  );
+  )
+  // Admin-only: delete an outing and every score recorded in it. Children go
+  // before parents so foreign keys hold (scores → score_sets → outing). The
+  // captured scorecards themselves are left alone.
+  .delete("/outings/:id", requireAuth, requireAdmin, async (c) => {
+    const db = getDb(c.env.DB);
+    const id = c.req.param("id");
+    const existing = await db.query.outing.findFirst({
+      where: eq(outing.id, id),
+      with: { scoreSets: { columns: { id: true } } },
+    });
+    if (!existing) return c.json({ error: "Outing not found" }, 404);
+
+    const setIds = existing.scoreSets.map((set) => set.id);
+    const batch: Parameters<typeof db.batch>[0][number][] = [];
+    if (setIds.length > 0) batch.push(db.delete(score).where(inArray(score.scoreSetId, setIds)));
+    batch.push(db.delete(scoreSet).where(eq(scoreSet.outingId, id)));
+    batch.push(db.delete(outing).where(eq(outing.id, id)));
+    await db.batch(batch as [(typeof batch)[number], ...typeof batch]);
+
+    return c.json({ ok: true });
+  });

@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
-import { ResponsiveModal } from "@/components/responsive-modal";
+import { ImageExpand } from "@/components/image-expand";
 import { useAuth } from "@/lib/auth-context";
 
 // Horizontal-scroll gallery of scorecard photo thumbnails; tapping one opens
-// it full-size. Images are fetched with the bearer token and shown from blob
-// URLs (a plain <img src> can't send the Authorization header).
+// the zoomable lightbox. Images are fetched with the bearer token and shown
+// from blob URLs (a plain <img src> can't send the Authorization header).
 export function ScorecardGallery({ scorecards }: { scorecards: { id: string }[] }) {
   const { client } = useAuth();
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!client || scorecards.length === 0) return;
@@ -36,45 +35,22 @@ export function ScorecardGallery({ scorecards }: { scorecards: { id: string }[] 
   }, [client, scorecards]);
 
   return (
-    <>
-      <div className="flex gap-3 overflow-x-auto p-5">
-        {scorecards.map((card, index) => (
-          <button
+    <div className="flex gap-3 overflow-x-auto p-5">
+      {scorecards.map((card, index) =>
+        urls[card.id] ? (
+          <ImageExpand
             key={card.id}
-            type="button"
-            aria-label={`View scorecard ${index + 1}`}
-            className="shrink-0 rounded-xl outline-none transition-opacity hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
-            onClick={() => setOpenId(card.id)}
-          >
-            {urls[card.id] ? (
-              <img
-                src={urls[card.id]}
-                alt={`Scorecard ${index + 1}`}
-                className="h-28 w-auto max-w-48 rounded-xl border bg-muted object-cover"
-              />
-            ) : (
-              <div className="h-28 w-40 animate-pulse rounded-xl border bg-muted" />
-            )}
-          </button>
-        ))}
-      </div>
-      <ResponsiveModal
-        open={openId !== null}
-        onOpenChange={(open) => {
-          if (!open) setOpenId(null);
-        }}
-        title="Scorecard photo"
-        hideHeader
-        contentClassName="gap-0 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:max-w-3xl sm:p-2"
-      >
-        {openId && urls[openId] && (
-          <img
-            src={urls[openId]}
-            alt="Scorecard photo"
-            className="max-h-[75dvh] w-full rounded-3xl object-contain"
+            src={urls[card.id]}
+            alt={`Scorecard ${index + 1}`}
+            className="h-28 w-auto max-w-48 shrink-0 rounded-xl border bg-muted object-cover outline-none transition-opacity hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50"
           />
-        )}
-      </ResponsiveModal>
-    </>
+        ) : (
+          <div
+            key={card.id}
+            className="h-28 w-40 shrink-0 animate-pulse rounded-xl border bg-muted"
+          />
+        ),
+      )}
+    </div>
   );
 }

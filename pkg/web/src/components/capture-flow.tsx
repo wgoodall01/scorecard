@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { CameraDialog, useLikelyHasCamera } from "@/components/camera-dialog";
+import { ImageExpand } from "@/components/image-expand";
 import { ReviewRound } from "@/components/review-round";
 import { Stepper } from "@/components/stepper";
 import { useAuth } from "@/lib/auth-context";
@@ -232,7 +233,7 @@ export function CaptureFlow() {
               </div>
             ) : (
               previewUrl && (
-                <img
+                <ImageExpand
                   src={previewUrl}
                   alt="Scorecard being analyzed"
                   className="max-h-40 rounded-xl border object-contain opacity-80"

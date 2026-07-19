@@ -2,8 +2,8 @@
   "name": "usga_ncrdb_scraper",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
   "description": "Standalone CLI that scrapes the USGA National Course Rating Database (ncrdb.usga.org) into JSONL, and syncs it into the app's read-only usga_* tables.",
+  "type": "module",
   "scripts": {
     "scrape": "bun ncrdb.ts scrape",
     "search": "bun ncrdb.ts search",
