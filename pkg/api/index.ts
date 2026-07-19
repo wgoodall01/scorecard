@@ -34,7 +34,12 @@ export {
 } from "./routes/scorecard";
 export { TEES, type Tee } from "./schema";
 export type { MatchedData } from "./src/agent/card_scores/agent";
-export type { ExtractDataSchema, NineSchema } from "./src/agent/card_scores/schema";
+export type {
+  ExtractDataSchema,
+  NineSchema,
+  PlayerBoxSchema,
+  PlayerSchema,
+} from "./src/agent/card_scores/schema";
 export type { CardMetadataSchema } from "./src/agent/card_metadata/schema";
 export type {
   CourseProposalSchema,

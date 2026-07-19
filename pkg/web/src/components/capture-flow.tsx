@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Calculator,
@@ -35,6 +35,19 @@ import { cn } from "@/lib/utils";
 
 type FlowStep = "capture" | "analyze" | "review" | "submit";
 
+// The fake-but-honest progress bar. A hyperbolic curve p(t) = t / (t + K):
+// it always increases and always decelerates, asymptotically approaching (but
+// never reaching) 100% — so it never plateaus at a fixed value the way an
+// exponential-to-95% curve does, and only the real result snaps it to 100.
+// K sets the pace (p = 50% at t = K); tuned deliberately slow so it reads as
+// "still working." PROGRESS_MIN_STEP is a tiny per-tick floor so that even in
+// the far decelerated tail the bar keeps visibly creeping and never looks
+// frozen. Capped just below 1 until completion.
+const PROGRESS_K_MS = 6500;
+const PROGRESS_CAP = 0.994;
+const PROGRESS_MIN_STEP = 0.0009;
+const PROGRESS_TICK_MS = 120;
+
 type CaptureResult = {
   extracted: ExtractDataSchema;
   matched: MatchedData | null;
@@ -48,6 +61,8 @@ export function CaptureFlow() {
   const [image, setImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analyzeStatus, setAnalyzeStatus] = useState("");
+  const [progress, setProgress] = useState(0);
+  const analyzeStartedAt = useRef<number | null>(null);
   const [result, setResult] = useState<CaptureResult | null>(null);
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [outingId, setOutingId] = useState<string | null>(null);
@@ -60,6 +75,25 @@ export function CaptureFlow() {
     [previewUrl],
   );
 
+  // Drive the progress curve while analysis is in flight. It approaches
+  // PROGRESS_TARGET asymptotically off the elapsed time, so it never stalls
+  // and never claims "done" before the result actually arrives.
+  useEffect(() => {
+    if (step !== "analyze" || error) return;
+    const tick = () => {
+      const startedAt = analyzeStartedAt.current ?? Date.now();
+      const elapsed = Date.now() - startedAt;
+      const curve = elapsed / (elapsed + PROGRESS_K_MS);
+      // Take whichever is further along — the curve, or a small guaranteed
+      // step past where we already are — so it always visibly advances even
+      // once the curve has flattened out, but never jumps backward.
+      setProgress((prev) => Math.min(PROGRESS_CAP, Math.max(curve, prev + PROGRESS_MIN_STEP)));
+    };
+    tick();
+    const id = window.setInterval(tick, PROGRESS_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [step, error]);
+
   function reset() {
     setStep("capture");
     setImage(null);
@@ -68,6 +102,7 @@ export function CaptureFlow() {
     setCaptureId(null);
     setOutingId(null);
     setError(null);
+    setProgress(0);
   }
 
   function startAnalyze(nextImage: File) {
@@ -82,11 +117,19 @@ export function CaptureFlow() {
     setStep("analyze");
     setError(null);
     setResult(null);
+    setProgress(0);
+    analyzeStartedAt.current = Date.now();
 
     try {
       setAnalyzeStatus("Uploading your photo…");
+      // Preview (and crop review thumbnails) from the EXACT resized bytes the
+      // model sees, not the original file — so the extraction's bounding boxes
+      // line up with what we crop, regardless of the phone's EXIF orientation
+      // or original resolution.
+      const resized = await resizeImageForCapture(imageToAnalyze);
+      setPreviewUrl(URL.createObjectURL(resized));
       const form = new FormData();
-      form.set("image", await resizeImageForCapture(imageToAnalyze));
+      form.set("image", resized);
       form.set("extract", JSON.stringify({ scores: true }));
       const submitResponse = await fetch("/api/scorecard", {
         method: "POST",
@@ -105,6 +148,12 @@ export function CaptureFlow() {
           { headers: { Authorization: `Bearer ${token}` } },
         );
         if (resultResponse.status === 202) {
+          // Surface the job's own progress message ("Reading the scorecard…",
+          // "Matching golfers and course…") when it has reported one.
+          const pending = (await resultResponse.json().catch(() => null)) as {
+            message?: string | null;
+          } | null;
+          if (pending?.message) setAnalyzeStatus(pending.message);
           await new Promise((resolve) => window.setTimeout(resolve, 750));
           continue;
         }
@@ -117,6 +166,7 @@ export function CaptureFlow() {
               : "Unable to extract your scorecard.";
           throw new Error(message);
         }
+        setProgress(1);
         setResult(resultBody as CaptureResult);
         setStep("review");
         return;
@@ -232,13 +282,28 @@ export function CaptureFlow() {
                 </Button>
               </div>
             ) : (
-              previewUrl && (
-                <ImageExpand
-                  src={previewUrl}
-                  alt="Scorecard being analyzed"
-                  className="max-h-40 rounded-xl border object-contain opacity-80"
-                />
-              )
+              <div className="flex w-full max-w-xs flex-col items-center gap-4">
+                <div
+                  className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(progress * 100)}
+                  aria-label="Analysis progress"
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+                    style={{ width: `${Math.round(progress * 100)}%` }}
+                  />
+                </div>
+                {previewUrl && (
+                  <ImageExpand
+                    src={previewUrl}
+                    alt="Scorecard being analyzed"
+                    className="max-h-40 rounded-xl border object-contain opacity-80"
+                  />
+                )}
+              </div>
             )}
           </EmptyContent>
         </Empty>

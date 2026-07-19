@@ -65,11 +65,12 @@ export type JobReportSchema = z.infer<typeof JobReport>;
 
 // A job row's outcome as a zod mirror of the job_state_consistent check
 // constraint, with the ok arm carrying this job type's result. `state`
-// discriminates: running → still working; ok → result present; error →
-// error present.
+// discriminates: queued/working → still in flight; ok → result present;
+// error → error present.
 export function JobOutcomeOf<T extends z.ZodType>(result: T) {
   return z.discriminatedUnion("state", [
-    z.object({ state: z.literal("running"), result: z.null(), error: z.null() }),
+    z.object({ state: z.literal("queued"), result: z.null(), error: z.null() }),
+    z.object({ state: z.literal("working"), result: z.null(), error: z.null() }),
     z.object({ state: z.literal("ok"), result, error: z.null() }),
     z.object({ state: z.literal("error"), result: z.null(), error: JobError }),
   ]);

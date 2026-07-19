@@ -15,7 +15,7 @@ import {
 } from "../schema";
 import { CourseProposal } from "../src/agent/research_course/schema";
 import type { CourseProposalSchema } from "../src/agent/research_course/schema";
-import type { JobErrorSchema } from "../src/jobs/common";
+import type { JobErrorSchema, JobReportSchema } from "../src/jobs/common";
 import { submit } from "../src/jobs/client";
 import { requireAdmin, requireAuth } from "./shared";
 
@@ -101,7 +101,10 @@ export const courseRoutes = new Hono<Env>()
     if (!jobRow || jobRow.jobType !== "research_course") {
       return c.json({ error: "Job not found" }, 404);
     }
-    if (jobRow.state === "running") return c.json({ status: "pending" as const }, 202);
+    if (jobRow.state === "queued" || jobRow.state === "working") {
+      const report = (jobRow.status as JobReportSchema | null) ?? null;
+      return c.json({ status: "pending" as const, message: report?.message ?? null }, 202);
+    }
     if (jobRow.state === "error") {
       return c.json(
         { error: jobErrorMessage((jobRow.error as JobErrorSchema | null) ?? null) },

@@ -1,4 +1,12 @@
-import { APICallError, generateText, hasToolCall, stepCountIs, tool, type ToolSet } from "ai";
+import {
+  APICallError,
+  generateText,
+  hasToolCall,
+  stepCountIs,
+  tool,
+  type ToolSet,
+  type UserContent,
+} from "ai";
 import type { z } from "zod";
 import { RateLimitError } from "../extraction_errors";
 import {
@@ -31,7 +39,9 @@ export async function runAnswerAgent<TSchema extends z.ZodType>({
   resolver: ModelResolver;
   model: ModelSpec;
   system: string;
-  prompt: string;
+  // Text, or multimodal content parts (e.g. text plus cropped handwriting
+  // images) — carried into the forced-answer fallback unchanged.
+  prompt: string | UserContent;
   tools: ToolSet;
   answerSchema: TSchema;
   answerDescription: string;
@@ -42,11 +52,13 @@ export async function runAnswerAgent<TSchema extends z.ZodType>({
     answer: tool({ description: answerDescription, inputSchema: answerSchema }),
   };
 
+  const userMessage = { role: "user" as const, content: prompt };
+
   try {
     const result = await generateText({
       model: resolver(model),
       system,
-      prompt,
+      messages: [userMessage],
       tools: allTools,
       toolChoice: "required",
       stopWhen: [stepCountIs(maxSteps), hasToolCall("answer")],
@@ -65,7 +77,7 @@ export async function runAnswerAgent<TSchema extends z.ZodType>({
       const forced = await generateText({
         model: resolver(model),
         system,
-        messages: [{ role: "user", content: prompt }, ...result.response.messages],
+        messages: [userMessage, ...result.response.messages],
         tools: allTools,
         toolChoice: { type: "tool", toolName: "answer" },
         maxOutputTokens: maxOutputTokensFor(model, 4096),

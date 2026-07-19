@@ -28,7 +28,6 @@ export type Golfer = {
   email: string | null;
   name: string | null;
   admin: boolean;
-  handicap: number | null;
   preferredTee: Tee | null;
   gender: "m" | "f" | null;
   nicknames: { id: string; userId: string; nickname: string; nicknameType: string }[];
@@ -141,7 +140,6 @@ export function GolfersPage() {
                       </p>
                       <p className="truncate text-sm text-muted-foreground">
                         {golfer.email ?? "No email"}
-                        {golfer.handicap !== null && ` · ${golfer.handicap} handicap`}
                         {golfer.preferredTee && ` · ${TEE_LABELS[golfer.preferredTee]} tees`}
                       </p>
                     </div>
@@ -267,7 +265,6 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [handicap, setHandicap] = useState("");
   const [preferredTee, setPreferredTee] = useState<Tee | null>(null);
   const [gender, setGender] = useState<"m" | "f" | null>(null);
   const [nicknames, setNicknames] = useState<string[]>([]);
@@ -331,7 +328,6 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
     if (!golfer) return;
     setName(golfer.name ?? "");
     setEmail(golfer.email ?? "");
-    setHandicap(golfer.handicap === null ? "" : String(golfer.handicap));
     setPreferredTee(golfer.preferredTee);
     setGender(golfer.gender);
     setNicknames(golfer.nicknames.map((entry) => entry.nickname));
@@ -371,16 +367,11 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
     setSaving(true);
     setProfileError(null);
     try {
-      const parsedHandicap = handicap.trim() === "" ? null : Number.parseInt(handicap, 10);
-      if (parsedHandicap !== null && Number.isNaN(parsedHandicap)) {
-        throw new Error("Handicap must be a whole number.");
-      }
       const response = await client.api.golfers[":id"].$patch({
         param: { id: golfer.id },
         json: {
           name: name.trim() || null,
           email: email.trim() === "" ? null : email,
-          handicap: parsedHandicap,
           preferredTee,
           gender,
           nicknames: nicknames.map((nickname) => ({ nickname, nicknameType: "nickname" })),
@@ -484,8 +475,6 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
                     ))
                   : "None"}
               </dd>
-              <dt className="text-muted-foreground">Handicap</dt>
-              <dd>{golfer.handicap ?? "Not set"}</dd>
               <dt className="text-muted-foreground">Preferred tee</dt>
               <dd>{golfer.preferredTee ? TEE_LABELS[golfer.preferredTee] : "Not set"}</dd>
               <dt className="text-muted-foreground">Gender</dt>
@@ -562,20 +551,6 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
             />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="golfer-handicap">Handicap</Label>
-              <Input
-                id="golfer-handicap"
-                type="number"
-                inputMode="numeric"
-                min={-10}
-                max={54}
-                step={1}
-                placeholder="Not set"
-                value={handicap}
-                onChange={(event) => setHandicap(event.target.value)}
-              />
-            </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="golfer-tee">Preferred tee</Label>
               <Select

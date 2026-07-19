@@ -1,0 +1,1251 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "85fd15be-d608-4d46-8292-dba6865b223e",
+  "prevId": "5e6425dc-7a31-4f75-82c8-8f6e8918b16b",
+  "tables": {
+    "course": {
+      "name": "course",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "location": {
+          "name": "location",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ncrdb_facility_id": {
+          "name": "ncrdb_facility_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "imported_scorecard_id": {
+          "name": "imported_scorecard_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "course_imported_scorecard_id_scorecard_id_fk": {
+          "name": "course_imported_scorecard_id_scorecard_id_fk",
+          "tableFrom": "course",
+          "tableTo": "scorecard",
+          "columnsFrom": ["imported_scorecard_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "course_set": {
+      "name": "course_set",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "course_id": {
+          "name": "course_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "usga_course_id": {
+          "name": "usga_course_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "usga_course_nine": {
+          "name": "usga_course_nine",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "course_set_name_unique": {
+          "name": "course_set_name_unique",
+          "columns": ["course_id", "name"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "course_set_course_id_course_id_fk": {
+          "name": "course_set_course_id_course_id_fk",
+          "tableFrom": "course_set",
+          "tableTo": "course",
+          "columnsFrom": ["course_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "course_set_tee": {
+      "name": "course_set_tee",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "course_set_id": {
+          "name": "course_set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "gender": {
+          "name": "gender",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "course_rating": {
+          "name": "course_rating",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "slope_rating": {
+          "name": "slope_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "usga_tee_id": {
+          "name": "usga_tee_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "course_set_tee_usga_tee_id_idx": {
+          "name": "course_set_tee_usga_tee_id_idx",
+          "columns": ["usga_tee_id"],
+          "isUnique": false
+        },
+        "course_set_tee_unique": {
+          "name": "course_set_tee_unique",
+          "columns": ["course_set_id", "lower(\"name\")", "coalesce(\"gender\", '')"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "course_set_tee_course_set_id_course_set_id_fk": {
+          "name": "course_set_tee_course_set_id_course_set_id_fk",
+          "tableFrom": "course_set_tee",
+          "tableTo": "course_set",
+          "columnsFrom": ["course_set_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "hole": {
+      "name": "hole",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "course_set_tee_id": {
+          "name": "course_set_tee_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "par": {
+          "name": "par",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "yardage": {
+          "name": "yardage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "hole_number_unique": {
+          "name": "hole_number_unique",
+          "columns": ["course_set_tee_id", "number"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "hole_course_set_tee_id_course_set_tee_id_fk": {
+          "name": "hole_course_set_tee_id_course_set_tee_id_fk",
+          "tableFrom": "hole",
+          "tableTo": "course_set_tee",
+          "columnsFrom": ["course_set_tee_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "job": {
+      "name": "job",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "job_type": {
+          "name": "job_type",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "spec": {
+          "name": "spec",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "result": {
+          "name": "result",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error": {
+          "name": "error",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "queued_at": {
+          "name": "queued_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "working_at": {
+          "name": "working_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ok_at": {
+          "name": "ok_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_at": {
+          "name": "error_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "job_type_idx": {
+          "name": "job_type_idx",
+          "columns": ["job_type"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "job_state_consistent": {
+          "name": "job_state_consistent",
+          "value": "(\"job\".\"state\" = 'queued' AND \"job\".\"result\" IS NULL AND \"job\".\"error\" IS NULL)\n        OR (\"job\".\"state\" = 'working' AND \"job\".\"result\" IS NULL AND \"job\".\"error\" IS NULL)\n        OR (\"job\".\"state\" = 'ok' AND \"job\".\"result\" IS NOT NULL AND \"job\".\"error\" IS NULL)\n        OR (\"job\".\"state\" = 'error' AND \"job\".\"result\" IS NULL AND \"job\".\"error\" IS NOT NULL)"
+        },
+        "job_json_not_null_literal": {
+          "name": "job_json_not_null_literal",
+          "value": "\"job\".\"spec\" <> 'null'\n        AND (\"job\".\"result\" IS NULL OR \"job\".\"result\" <> 'null')\n        AND (\"job\".\"error\" IS NULL OR \"job\".\"error\" <> 'null')\n        AND (\"job\".\"status\" IS NULL OR \"job\".\"status\" <> 'null')"
+        }
+      }
+    },
+    "nickname": {
+      "name": "nickname",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nickname": {
+          "name": "nickname",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nickname_type": {
+          "name": "nickname_type",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "nickname_user_nickname_unique": {
+          "name": "nickname_user_nickname_unique",
+          "columns": ["user_id", "lower(\"nickname\")"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "nickname_user_id_user_id_fk": {
+          "name": "nickname_user_id_user_id_fk",
+          "tableFrom": "nickname",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "outing": {
+      "name": "outing",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date": {
+          "name": "date",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "course_id": {
+          "name": "course_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "outing_course_id_course_id_fk": {
+          "name": "outing_course_id_course_id_fk",
+          "tableFrom": "outing",
+          "tableTo": "course",
+          "columnsFrom": ["course_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "score": {
+      "name": "score",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score_set_id": {
+          "name": "score_set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hole_id": {
+          "name": "hole_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scorecard_id": {
+          "name": "scorecard_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "score_cell_unique": {
+          "name": "score_cell_unique",
+          "columns": ["score_set_id", "hole_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "score_score_set_id_score_set_id_fk": {
+          "name": "score_score_set_id_score_set_id_fk",
+          "tableFrom": "score",
+          "tableTo": "score_set",
+          "columnsFrom": ["score_set_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "score_hole_id_hole_id_fk": {
+          "name": "score_hole_id_hole_id_fk",
+          "tableFrom": "score",
+          "tableTo": "hole",
+          "columnsFrom": ["hole_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "score_scorecard_id_scorecard_id_fk": {
+          "name": "score_scorecard_id_scorecard_id_fk",
+          "tableFrom": "score",
+          "tableTo": "scorecard",
+          "columnsFrom": ["scorecard_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "score_set": {
+      "name": "score_set",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "outing_id": {
+          "name": "outing_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "player_id": {
+          "name": "player_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "course_set_tee_id": {
+          "name": "course_set_tee_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "score_set_unique": {
+          "name": "score_set_unique",
+          "columns": ["outing_id", "player_id", "course_set_tee_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "score_set_outing_id_outing_id_fk": {
+          "name": "score_set_outing_id_outing_id_fk",
+          "tableFrom": "score_set",
+          "tableTo": "outing",
+          "columnsFrom": ["outing_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "score_set_player_id_user_id_fk": {
+          "name": "score_set_player_id_user_id_fk",
+          "tableFrom": "score_set",
+          "tableTo": "user",
+          "columnsFrom": ["player_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "score_set_course_set_tee_id_course_set_tee_id_fk": {
+          "name": "score_set_course_set_tee_id_course_set_tee_id_fk",
+          "tableFrom": "score_set",
+          "tableTo": "course_set_tee",
+          "columnsFrom": ["course_set_tee_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "scorecard": {
+      "name": "scorecard",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "extract_score_job_id": {
+          "name": "extract_score_job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "extract_metadata_job_id": {
+          "name": "extract_metadata_job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "research_course_job_id": {
+          "name": "research_course_job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "scorecard_user_id_user_id_fk": {
+          "name": "scorecard_user_id_user_id_fk",
+          "tableFrom": "scorecard",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "scorecard_extract_score_job_id_job_id_fk": {
+          "name": "scorecard_extract_score_job_id_job_id_fk",
+          "tableFrom": "scorecard",
+          "tableTo": "job",
+          "columnsFrom": ["extract_score_job_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "scorecard_extract_metadata_job_id_job_id_fk": {
+          "name": "scorecard_extract_metadata_job_id_job_id_fk",
+          "tableFrom": "scorecard",
+          "tableTo": "job",
+          "columnsFrom": ["extract_metadata_job_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "scorecard_research_course_job_id_job_id_fk": {
+          "name": "scorecard_research_course_job_id_job_id_fk",
+          "tableFrom": "scorecard",
+          "tableTo": "job",
+          "columnsFrom": ["research_course_job_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "user": {
+      "name": "user",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "admin": {
+          "name": "admin",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "gender": {
+          "name": "gender",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "preferred_tee": {
+          "name": "preferred_tee",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "user_email_unique": {
+          "name": "user_email_unique",
+          "columns": ["email"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "usga_course": {
+      "name": "usga_course",
+      "columns": {
+        "course_id": {
+          "name": "course_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "full_name": {
+          "name": "full_name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "address1": {
+          "name": "address1",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "address2": {
+          "name": "address2",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "city": {
+          "name": "city",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "legacy_crp_course_id": {
+          "name": "legacy_crp_course_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "usga_course_facility_id_idx": {
+          "name": "usga_course_facility_id_idx",
+          "columns": ["facility_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "usga_facility": {
+      "name": "usga_facility",
+      "columns": {
+        "facility_id": {
+          "name": "facility_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "country": {
+          "name": "country",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ent_country_code": {
+          "name": "ent_country_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ent_state_code": {
+          "name": "ent_state_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "telephone": {
+          "name": "telephone",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "state_display": {
+          "name": "state_display",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "usga_tee": {
+      "name": "usga_tee",
+      "columns": {
+        "tee_id": {
+          "name": "tee_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "course_id": {
+          "name": "course_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "gender": {
+          "name": "gender",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "par": {
+          "name": "par",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "course_rating": {
+          "name": "course_rating",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "bogey_rating": {
+          "name": "bogey_rating",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "slope_rating": {
+          "name": "slope_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "length": {
+          "name": "length",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "front9_course_rating": {
+          "name": "front9_course_rating",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "front9_slope_rating": {
+          "name": "front9_slope_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "back9_course_rating": {
+          "name": "back9_course_rating",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "back9_slope_rating": {
+          "name": "back9_slope_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "usga_tee_course_id_idx": {
+          "name": "usga_tee_course_id_idx",
+          "columns": ["course_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {
+      "course_set_tee_unique": {
+        "columns": {
+          "lower(\"name\")": {
+            "isExpression": true
+          },
+          "coalesce(\"gender\", '')": {
+            "isExpression": true
+          }
+        }
+      },
+      "nickname_user_nickname_unique": {
+        "columns": {
+          "lower(\"nickname\")": {
+            "isExpression": true
+          }
+        }
+      }
+    }
+  }
+}

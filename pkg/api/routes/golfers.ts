@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
 import { nickname, TEES, user } from "../schema";
+import { INVITE_CODE_TTL_SECONDS, issueCode, magicLink } from "../src/auth/magic";
 import { inviteEmail } from "../src/email/templates/invite";
 import { computeHandicap } from "../src/handicap";
 import { Email, requireAuth, zodBody } from "./shared";
@@ -37,7 +38,6 @@ export const UpdateGolferRequest = z
     name: z.string().trim().min(1).nullable().optional(),
     email: Email.nullable().optional(),
     admin: z.boolean().optional(),
-    handicap: z.number().int().min(-10).max(54).nullable().optional(),
     preferredTee: z.enum(TEES).nullable().optional(),
     gender: z.enum(["m", "f"]).nullable().optional(),
     // Replace-all semantics: the full nickname list the golfer should end up with.
@@ -171,9 +171,10 @@ export const golferRoutes = new Hono<Env>()
         if (!invitedUser) throw error;
       }
 
-      const loginLink = new URL("/login", c.req.url);
-      loginLink.searchParams.set("email", request.email);
-      const emailBody = inviteEmail(loginLink);
+      // A 24-hour one-click magic link so the invitee signs straight in
+      // (a separate active code from any sign-in code they later request).
+      const code = await issueCode(c.env, request.email, INVITE_CODE_TTL_SECONDS);
+      const emailBody = inviteEmail(magicLink(c.req.url, request.email, code));
       await c.env.EMAIL.send({
         to: request.email,
         from: { email: c.env.AUTH_EMAIL_FROM, name: "Scorecard" },

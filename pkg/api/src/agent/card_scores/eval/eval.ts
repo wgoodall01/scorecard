@@ -39,13 +39,29 @@ import { score } from "./score";
 const evalDir = fileURLToPath(new URL(".", import.meta.url));
 const repoRoot = fileURLToPath(new URL("../../../../../..", import.meta.url));
 
-const DEFAULT_MODELS: ModelSpec[] = [
-  "google/gemini-3.5-flash@low",
-  "anthropic/claude-sonnet-5@low",
-  "openai/gpt-5.6-terra@low",
-];
+// The production model only — this eval is now the latency+accuracy benchmark
+// for what actually ships. Pass --models to sweep alternatives.
+const DEFAULT_MODELS: ModelSpec[] = ["google/gemini-3.5-flash@low"];
 
 const CONCURRENCY = 8;
+
+// p-th percentile (0–100) of a sample by linear interpolation, or null when
+// empty — for the latency benchmark printed after a run.
+function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  if (sorted.length === 1) return sorted[0];
+  const rank = (p / 100) * (sorted.length - 1);
+  const low = Math.floor(rank);
+  const high = Math.ceil(rank);
+  return Math.round(sorted[low] + (sorted[high] - sorted[low]) * (rank - low));
+}
+
+function latencyLine(durations: number[]): string {
+  if (durations.length === 0) return "latency n/a";
+  const mean = Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length);
+  return `latency mean ${mean}ms, median ${percentile(durations, 50)}ms, p75 ${percentile(durations, 75)}ms, p95 ${percentile(durations, 95)}ms (n=${durations.length})`;
+}
 
 // "google/gemini-3.5-flash@low" → "google__gemini-3.5-flash__low"
 function specDirName(spec: ModelSpec): string {
@@ -133,7 +149,13 @@ function scoreRun(runDir: string) {
         .filter(([, count]) => count > 0)
         .map(([category, count]) => `${category} ${count}`)
         .join(", ");
-      console.log(`      ${caseName} → ${graded.overall}${errorNote ? ` (${errorNote})` : ""}`);
+      const bboxNote =
+        graded.bboxCloseness !== null
+          ? `, bbox ${Math.round(graded.bboxCloseness * 100)}% close`
+          : "";
+      console.log(
+        `      ${caseName} → ${graded.overall}${errorNote ? ` (${errorNote})` : ""}${bboxNote}`,
+      );
     }
   }
 }
@@ -199,6 +221,7 @@ const runCommand = command({
     );
 
     let failures = 0;
+    const perModelDurations = new Map<string, number[]>();
     await pMap(
       cases,
       async ({ spec, fixture }) => {
@@ -207,13 +230,17 @@ const runCommand = command({
         const caseName = `${fixture.label} × ${spec}`;
 
         try {
+          const startedAt = Date.now();
           const data = await extractScorecard({
             image: { buf: fixture.bytes, contentType: fixture.contentType },
             resolver: evalModel,
             model: spec,
           });
+          const durationMs = Date.now() - startedAt;
+          perModelDurations.set(spec, [...(perModelDurations.get(spec) ?? []), durationMs]);
           writeFileSync(join(outDir, "output.json"), `${JSON.stringify(data, null, 2)}\n`);
-          console.log(`ok    ${caseName}`);
+          writeFileSync(join(outDir, "timing.json"), `${JSON.stringify({ durationMs })}\n`);
+          console.log(`ok    ${caseName} (${durationMs}ms)`);
         } catch (error) {
           failures += 1;
           writeFileSync(
@@ -228,6 +255,10 @@ const runCommand = command({
 
     console.log("\nScores:");
     scoreRun(runDir);
+    console.log("\nLatency:");
+    for (const [spec, durations] of [...perModelDurations.entries()].sort()) {
+      console.log(`  ${spec}: ${latencyLine(durations)}`);
+    }
     console.log(`\nresults → ${runDir} (symlinked as results/latest)`);
     if (failures > 0) {
       console.error(`${failures} case(s) errored`);

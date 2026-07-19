@@ -4,7 +4,7 @@ import { z } from "zod";
 // what's stored in R2 as extracted.json, and what the eval fixtures assert.
 // One schema, no wire/public split.
 //
-// Per-player data is index-aligned ARRAYS: `players` lists the names in
+// Per-player data is index-aligned ARRAYS: `players` lists the players in
 // score-row order, and every `scores`/`writtenTotals` array lines up with it
 // (entry 0 = players[0], one entry per player; null = "player exists but
 // this value isn't written/legible"). Every field is required; absence is
@@ -32,13 +32,49 @@ export const Hole = z.object({
 });
 export type HoleSchema = z.infer<typeof Hole>;
 
+// A bounding box around the handwritten name/initials, on the 0–1000
+// normalized scale Gemini models are trained to emit (0 = left/top edge,
+// 1000 = right/bottom edge). Rescaled to 0–1 fractions right after extraction
+// (see normalizeBox). Used to crop a thumbnail of the scrawl in the review UI
+// so an illegible name is easy to disambiguate against a real golfer.
+// Vision-model box coordinates are only approximate — a visual aid, never
+// relied on for correctness.
+export const PlayerBox = z.object({
+  x: z.number().describe("Left edge, on a 0–1000 scale across the image width."),
+  y: z.number().describe("Top edge, on a 0–1000 scale down the image height."),
+  width: z.number().describe("Box width, on a 0–1000 scale across the image width."),
+  height: z.number().describe("Box height, on a 0–1000 scale down the image height."),
+});
+export type PlayerBoxSchema = z.infer<typeof PlayerBox>;
+
+// One player as read off a single nine. `name` is the model's single best
+// reading of the handwritten name/initials; `guesses` holds up to five
+// alternative readings when the scrawl is illegible or ambiguous (empty when
+// it's clearly legible), which the matcher uses to recover a golfer the top
+// reading alone would miss; `bbox` locates the scrawl for the review
+// thumbnail.
+export const Player = z.object({
+  name: z.string().describe("Your single best reading of this player's name/initials as written."),
+  guesses: z
+    .array(z.string())
+    .describe(
+      "0–5 ALTERNATIVE plausible readings of the same scrawl, most likely first, when it's " +
+        'illegible or ambiguous (e.g. "WG" could be ["W6", "WC"]). Do NOT repeat `name`. ' +
+        "Empty when the name is clearly legible.",
+    ),
+  bbox: PlayerBox.nullable().describe(
+    "Normalized box around this player's written name/initials, or null if it can't be located.",
+  ),
+});
+export type PlayerSchema = z.infer<typeof Player>;
+
 export const Nine = z.object({
   nineName: z.string().nullable(),
   players: z
-    .array(z.string())
+    .array(Player)
     .describe(
-      "The players on this nine, in score-row order (first score row first). Each " +
-        "entry is that player's name/initials exactly as written on this nine.",
+      "The players on this nine, in score-row order (first score row first), each read " +
+        "exactly as written on this nine.",
     ),
   holes: z.array(Hole),
   writtenTotals: Scores.describe(

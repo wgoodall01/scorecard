@@ -6,7 +6,38 @@
   "nines": [
     {
       "nineName": "White Oak",
-      "players": ["Ashley", "Adam", "Jacob"],
+      "players": [
+        {
+          "name": "Ashley",
+          "guesses": [],
+          "bbox": {
+            "x": 0.185,
+            "y": 0.552,
+            "width": 0.055,
+            "height": 0.031
+          }
+        },
+        {
+          "name": "Adam",
+          "guesses": [],
+          "bbox": {
+            "x": 0.18,
+            "y": 0.588,
+            "width": 0.052,
+            "height": 0.03
+          }
+        },
+        {
+          "name": "Jacob",
+          "guesses": [],
+          "bbox": {
+            "x": 0.176,
+            "y": 0.624,
+            "width": 0.052,
+            "height": 0.031
+          }
+        }
+      ],
       "holes": [
         {
           "hole": 1,
@@ -58,7 +89,38 @@
     },
     {
       "nineName": "Blue Spruce",
-      "players": ["Ashley", "Adam", "Jacob"],
+      "players": [
+        {
+          "name": "Ashley",
+          "guesses": [],
+          "bbox": {
+            "x": 0.47,
+            "y": 0.541,
+            "width": 0.023,
+            "height": 0.026
+          }
+        },
+        {
+          "name": "Adam",
+          "guesses": [],
+          "bbox": {
+            "x": 0.471,
+            "y": 0.572,
+            "width": 0.025,
+            "height": 0.031
+          }
+        },
+        {
+          "name": "Jacob",
+          "guesses": [],
+          "bbox": {
+            "x": 0.471,
+            "y": 0.612,
+            "width": 0.025,
+            "height": 0.031
+          }
+        }
+      ],
       "holes": [
         {
           "hole": 10,

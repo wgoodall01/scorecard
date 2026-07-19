@@ -28,7 +28,7 @@ export const extractScore = createJobType({
   async execute(ctx, { scorecardId }) {
     const { env } = ctx;
 
-    await ctx.report({ message: "Reading your scorecard…" });
+    await ctx.report({ message: "Reading the scorecard…" });
     const imageObject = await env.BUCKET.get(scorecardImageKey(scorecardId));
     if (!imageObject) throw new Error("Scorecard image not found");
     const image = await normalizeImage(env, await imageObject.arrayBuffer());
@@ -48,8 +48,8 @@ export const extractScore = createJobType({
       }
     }
 
-    await ctx.report({ message: "Matching players and course…" });
-    const matched = await matchCapture(env, extracted);
+    await ctx.report({ message: "Matching golfers and course…" });
+    const matched = await matchCapture(env, extracted, image);
 
     return { extracted, matched };
   },

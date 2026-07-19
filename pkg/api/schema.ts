@@ -76,7 +76,6 @@ export const user = sqliteTable(
     email: varchar("email"),
     name: varchar("name"),
     admin: integer("admin", { mode: "boolean" }).notNull().default(false),
-    handicap: integer("handicap"),
     // The golfer's gender ("m"/"f"), or null. Drives which gendered tee
     // (course_set_tee.gender) a round defaults to — null falls back to the
     // men's tees. Not tied to account/login, just scorekeeping.
@@ -262,26 +261,37 @@ export const job = sqliteTable(
     // job type's args schema at submit.
     spec: json("spec").notNull(),
     // Lifecycle state. The check constraint below ties it to result/error.
-    state: varchar("state").$type<"running" | "ok" | "error">().notNull(),
+    // queued → enqueued, not yet picked up; working → the consumer is running
+    // it; ok/error → terminal.
+    state: varchar("state").$type<"queued" | "working" | "ok" | "error">().notNull(),
     // The handler's return value on success (the job type's result schema);
-    // null while running or on error.
+    // null while queued/working or on error.
     result: json("result"),
     // { message, stack, ... } when state='error'; null otherwise.
     error: json("error"),
     // The latest report({ message, ... }) the handler emitted — progress UX
     // only, not part of the state machine; null until the handler reports.
     status: json("status"),
+    // Per-transition timings, for latency tracking. queued_at is stamped at
+    // submit; the others when the consumer picks the job up and when it
+    // reaches its terminal state (exactly one of ok_at/error_at ever sets).
+    queuedAt: varchar("queued_at").notNull().$defaultFn(isoNow),
+    workingAt: varchar("working_at"),
+    okAt: varchar("ok_at"),
+    errorAt: varchar("error_at"),
     ...timestamps,
   },
   (table) => [
     index("job_type_idx").on(table.jobType),
     // Exactly one lifecycle shape is representable:
-    //   running → result null,    error null
+    //   queued  → result null,    error null
+    //   working → result null,    error null
     //   ok      → result present, error null
     //   error   → result null,    error present
     check(
       "job_state_consistent",
-      sql`(${table.state} = 'running' AND ${table.result} IS NULL AND ${table.error} IS NULL)
+      sql`(${table.state} = 'queued' AND ${table.result} IS NULL AND ${table.error} IS NULL)
+        OR (${table.state} = 'working' AND ${table.result} IS NULL AND ${table.error} IS NULL)
         OR (${table.state} = 'ok' AND ${table.result} IS NOT NULL AND ${table.error} IS NULL)
         OR (${table.state} = 'error' AND ${table.result} IS NULL AND ${table.error} IS NOT NULL)`,
     ),

@@ -10,10 +10,16 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import type { ExtractDataSchema, MatchedData, SubmitOutingRequestSchema } from "api";
+import type {
+  ExtractDataSchema,
+  MatchedData,
+  PlayerBoxSchema,
+  SubmitOutingRequestSchema,
+} from "api";
 import { AsyncCombobox } from "@/components/async-combobox";
 import { GolfScore } from "@/components/golf-score";
 import { ImageExpand } from "@/components/image-expand";
+import { InitialsThumbnail } from "@/components/initials-thumbnail";
 import { Score } from "@/components/score";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +53,39 @@ type CourseWithSets = {
 
 type CourseSetOption = CourseWithSets["sets"][number];
 
-type PlayerReview = { name: string; playerId: string | null };
+// Where a written name appeared on the card, with the box around the scrawl.
+type PlayerOccurrence = { location: string; bbox: PlayerBoxSchema | null };
+
+type PlayerReview = {
+  name: string;
+  playerId: string | null;
+  // The model's alternative readings of the scrawl, and every place this name
+  // was seen — both shown in the golfer picker to disambiguate a hard read.
+  guesses: string[];
+  occurrences: PlayerOccurrence[];
+};
+
+// Collapse the per-nine player rows to one entry per distinct written name (in
+// first-seen order), merging alternative readings and collecting where each
+// appeared ("Player 2 on Blue Spruce") with its bounding box.
+function distinctPlayers(extracted: ExtractDataSchema): Omit<PlayerReview, "playerId">[] {
+  const byName = new Map<string, Omit<PlayerReview, "playerId">>();
+  for (const nine of extracted.nines) {
+    const nineLabel =
+      nine.nineName ??
+      (nine.holes.length > 0 && nine.holes.every((hole) => hole.hole >= 10) ? "Back 9" : "Front 9");
+    nine.players.forEach((player, index) => {
+      const entry = byName.get(player.name) ?? { name: player.name, guesses: [], occurrences: [] };
+      entry.guesses = [...new Set([...entry.guesses, ...player.guesses])];
+      entry.occurrences.push({
+        location: `Player ${index + 1} on ${nineLabel}`,
+        bbox: player.bbox,
+      });
+      byName.set(player.name, entry);
+    });
+  }
+  return [...byName.values()];
+}
 
 // The user's verdict on a written-vs-computed totals comparison. Every
 // section with a handwritten total must have one before submitting.
@@ -65,6 +103,11 @@ type NineReview = {
   // a merge candidate's recorded tee wins) whenever the set changes.
   teeIds: (string | null)[];
   totalsChoice: TotalsChoice | null;
+  // True only while this nine's scores are exactly as scanned AND those scanned
+  // scores summed to the scanned written totals. Editing any score clears it —
+  // so "all OK" is offered only when the card checked out untouched, never
+  // after the user corrected a score into agreement.
+  pristineMatch: boolean;
 };
 
 // The default tee for a golfer on a set: the tee already recorded for them
@@ -227,10 +270,15 @@ function TotalsCheck({
   rows,
   choice,
   onChoice,
+  canAffirm,
 }: {
   rows: TotalsRow[];
   choice: TotalsChoice | null;
   onChoice: (choice: TotalsChoice) => void;
+  // Offer the "all OK" affirmation only when the untouched scan already
+  // matched (see NineReview.pristineMatch / roundPristine) — never after the
+  // user edited a score into agreement, where "I corrected a score" is right.
+  canAffirm: boolean;
 }) {
   const checked = rows.filter((row) => row.written !== null);
   if (checked.length === 0) {
@@ -272,9 +320,15 @@ function TotalsCheck({
         <div className="flex flex-wrap gap-2">
           {(
             [
+              // Only when the untouched scan already agreed: let the user affirm
+              // it rather than forcing a "wrong"/"corrected" claim. Hidden once
+              // any score is edited (canAffirm goes false).
+              ...(canAffirm
+                ? ([["agree", "Totals look right — all OK"]] as [TotalsChoice, string][])
+                : []),
               ["wrong", "Written totals are wrong"],
               ["corrected", "I corrected a score — now it's right"],
-            ] as const
+            ] as [TotalsChoice, string][]
           ).map(([value, label]) => (
             <Button
               key={value}
@@ -315,13 +369,12 @@ export function ReviewRound({
 
   const [date, setDate] = useState(() => parseExtractedDate(extracted.date));
   const [courseId, setCourseId] = useState<string | null>(matched?.course.courseId ?? null);
-  const [players, setPlayers] = useState<PlayerReview[]>(() => {
-    const names = [...new Set(extracted.nines.flatMap((nine) => nine.players))];
-    return names.map((name) => ({
-      name,
-      playerId: matched?.players.find((player) => player.name === name)?.userId ?? null,
-    }));
-  });
+  const [players, setPlayers] = useState<PlayerReview[]>(() =>
+    distinctPlayers(extracted).map((entry) => ({
+      ...entry,
+      playerId: matched?.players.find((player) => player.name === entry.name)?.userId ?? null,
+    })),
+  );
   const [nines, setNines] = useState<NineReview[]>(() =>
     extracted.nines.map((nine, index) => {
       const writtenTotals = nine.players.map((_, pi) => nine.writtenTotals[pi] ?? null);
@@ -330,27 +383,44 @@ export function ReviewRound({
       );
       return {
         nineName: nine.nineName,
-        playerNames: nine.players,
+        playerNames: nine.players.map((player) => player.name),
         holes: nine.holes.map((hole) => ({ number: hole.hole, par: hole.par })),
         scores: nine.holes.map((hole) => nine.players.map((_, pi) => hole.scores[pi] ?? null)),
         writtenTotals,
         courseSetId: matched?.course.sets[index]?.courseSetId ?? null,
         teeIds: nine.players.map(() => null),
         totalsChoice: writtenTotalsMatch(writtenTotals, computed) ? ("agree" as const) : null,
+        pristineMatch: writtenTotalsMatch(writtenTotals, computed),
       };
     }),
   );
-  const [roundChoice, setRoundChoice] = useState<TotalsChoice | null>(() => {
-    // Mirror roundRows below: the 18-hole written totals are index-aligned
-    // with the distinct player list, computed sums that player's extracted
-    // cells across every nine.
-    const names = [...new Set(extracted.nines.flatMap((nine) => nine.players))];
+  // Whether the 18-hole totals checked out against the untouched scan — the
+  // gate for offering "all OK" on the round; any score edit clears it.
+  const [roundPristine, setRoundPristine] = useState(() => {
+    const names = distinctPlayers(extracted).map((entry) => entry.name);
     const written = names.map((_, index) => extracted.writtenTotals[index] ?? null);
     const computed = names.map((name) =>
       sumOrNull(
         extracted.nines.flatMap((nine) =>
           nine.players.flatMap((player, pi) =>
-            player === name ? nine.holes.map((hole) => hole.scores[pi] ?? null) : [],
+            player.name === name ? nine.holes.map((hole) => hole.scores[pi] ?? null) : [],
+          ),
+        ),
+      ),
+    );
+    return writtenTotalsMatch(written, computed);
+  });
+  const [roundChoice, setRoundChoice] = useState<TotalsChoice | null>(() => {
+    // Mirror roundRows below: the 18-hole written totals are index-aligned
+    // with the distinct player list, computed sums that player's extracted
+    // cells across every nine.
+    const names = distinctPlayers(extracted).map((entry) => entry.name);
+    const written = names.map((_, index) => extracted.writtenTotals[index] ?? null);
+    const computed = names.map((name) =>
+      sumOrNull(
+        extracted.nines.flatMap((nine) =>
+          nine.players.flatMap((player, pi) =>
+            player.name === name ? nine.holes.map((hole) => hole.scores[pi] ?? null) : [],
           ),
         ),
       ),
@@ -530,9 +600,12 @@ export function ReviewRound({
         const scores = nine.scores.map((row, hi) =>
           hi === holeIndex ? row.map((cell, pi) => (pi === playerIndex ? value : cell)) : row,
         );
-        return { ...nine, scores };
+        // Any edit means this nine (and the 18-hole total) is no longer the
+        // untouched scan, so "all OK" is no longer offered for it.
+        return { ...nine, scores, pristineMatch: false };
       }),
     );
+    setRoundPristine(false);
   }
 
   // Changing the course re-derives each nine's set: an exact par-sequence
@@ -808,9 +881,29 @@ export function ReviewRound({
                 .map((other) => `“${other.name}”`);
               return (
                 <div key={player.name} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0">
-                  <p className="text-sm">
-                    Written on card: <span className="font-medium">“{player.name}”</span>
-                  </p>
+                  <div className="flex items-center gap-3">
+                    {(() => {
+                      const withBox = player.occurrences.find((occurrence) => occurrence.bbox);
+                      return previewUrl && withBox?.bbox ? (
+                        <InitialsThumbnail src={previewUrl} bbox={withBox.bbox} />
+                      ) : null;
+                    })()}
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <p className="text-sm">
+                        Written on card: <span className="font-medium">“{player.name}”</span>
+                      </p>
+                      {player.occurrences.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {player.occurrences.map((occurrence) => occurrence.location).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {player.guesses.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Could also read: {player.guesses.map((guess) => `“${guess}”`).join(", ")}
+                    </p>
+                  )}
                   {aliases.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       Same golfer as {aliases.join(" and ")} — their nines are scored as one player.
@@ -1036,6 +1129,7 @@ export function ReviewRound({
               rows={nineTotalsRows(nine)}
               choice={nine.totalsChoice}
               onChoice={(choice) => updateNine(nineIndex, { totalsChoice: choice })}
+              canAffirm={nine.pristineMatch}
             />
           </ReviewSection>
         );
@@ -1046,7 +1140,12 @@ export function ReviewRound({
           title="18-hole totals"
           description="The card's grand totals, checked against every score above."
         >
-          <TotalsCheck rows={roundRows} choice={roundChoice} onChoice={setRoundChoice} />
+          <TotalsCheck
+            rows={roundRows}
+            choice={roundChoice}
+            onChoice={setRoundChoice}
+            canAffirm={roundPristine}
+          />
         </ReviewSection>
       )}
 

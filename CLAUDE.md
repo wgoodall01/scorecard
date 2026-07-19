@@ -72,7 +72,7 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   `scorecard-jobs` queue (consumer: `max_batch_size = 1`,
   `max_batch_timeout = 0`, `max_retries = 0` — see the jobs framework).
 - `pkg/api/schema.ts`: Drizzle schema (with `relations` for the relational
-  query API). Tables: `user` (+ `handicap`, `preferred_tee` — the `TEES`
+  query API). Tables: `user` (+ `preferred_tee` — the `TEES`
   const is the app-level tee CATEGORY list, matched against
   `course_set_tee.type`; `email` is NULLABLE-but-unique: a golfer can exist
   purely as a player with no account email, and can't sign in until one is
@@ -155,9 +155,10 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   the index after it, and `counted` (whether the current index averages
   it). The golfer page charts the timeseries (recharts + `ui/chart.tsx`;
   UI calls the computed feature "Casual Handicap" — it's an estimate —
-  never "Handicap Index"; the profile's manually entered `handicap` field
-  stays plain "Handicap") and its outing list shows
-  per-round scores with a star on counted rounds. Ratings live ON the
+  never "Handicap Index") and its outing list shows
+  per-round scores with a star on counted rounds. There is NO
+  manually-entered handicap field on the profile — the handicap is always
+  computed from posted rounds. Ratings live ON the
   `course_set_tee` row (nullable 9-hole `course_rating`/`slope_rating`;
   null = unrated, the nine can't post) — no tee resolution: every score
   hangs off a score_set that names its tee, and nines group by (outing,
@@ -217,23 +218,29 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   cycle; `common.ts` is the always-leaf module holding `createJobType`,
   `jobSpec`, and the shared `JobError`/`JobReport`/`JobOutcomeOf` schemas. The
   source of truth for a job's lifecycle is the `job` D1 row (NOT R2): `spec`
-  (json, the full `{ _job, id, ...args }`), `state` (`running`/`ok`/`error`),
-  `result`/`error`/`status` (json), with a `job_state_consistent` CHECK tying
-  state to result/error (running→both null, ok→result set, error→error set)
+  (json, the full `{ _job, id, ...args }`), `state`
+  (`queued`/`working`/`ok`/`error`), `result`/`error`/`status` (json), and
+  per-transition timing columns `queued_at`/`working_at`/`ok_at`/`error_at`
+  (queued_at stamped at submit, the others at pickup and terminal), with a
+  `job_state_consistent` CHECK tying state to result/error
+  (queued/working→both null, ok→result set, error→error set)
   and a `job_json_not_null_literal` CHECK forbidding the TEXT `'null'` in any
   json column (the driver serializes a top-level JS null to `'null'`, which
   isn't SQL NULL and would slip past the IS NULL arms — so writers must use a
   real SQL NULL for absence, which drizzle `.set({ x: null })` does). Large
   artifacts a handler makes go to R2 under `jobs/<id>/…`; everything small
   stays on the row so reads are cheap D1. `client.ts`'s `submit(env, input)`
-  mints the id, writes the `running` row, enqueues just `{ id }`, and returns
-  a `JobHandle` whose `.status()`/`.result({timeoutMs})` (poll the row every
-  1s) are INTERNAL-only — the web never calls them, it polls its own HTTP
-  endpoints. `queue_handler.ts`'s `handleJobQueue` (wired into `index.ts`'s
-  `queue`) loads the row by id, skips it unless `state==='running'` (so a
-  duplicate delivery never re-runs), dispatches on `job_type`, runs `execute`
-  with a `report()` that overwrites the `status` column, then writes the
-  terminal state — and ALWAYS acks (the queue has `max_retries = 0`; per-job
+  mints the id, writes the `queued` row (stamping `queued_at`), enqueues just
+  `{ id }`, and returns a `JobHandle` whose `.status()`/`.result({timeoutMs})`
+  (poll the row every 1s) are INTERNAL-only — the web never calls them, it
+  polls its own HTTP endpoints (whose 202 body carries the current
+  `status.message` for progress display). `queue_handler.ts`'s
+  `handleJobQueue` (wired into `index.ts`'s `queue`) loads the row by id,
+  skips it unless `state==='queued'` (so a duplicate delivery never re-runs),
+  claims it (queued→working, stamping `working_at`), dispatches on `job_type`,
+  runs `execute` with a `report()` that overwrites the `status` column, then
+  writes the terminal state with `ok_at`/`error_at` — and ALWAYS acks (the
+  queue has `max_retries = 0`; per-job
   retry like rate-limit backoff lives inside the handler, not the framework).
 - `pkg/api/src/agent/card_extract/`: the extraction agent, driven by the
   `extract_score` job (`jobs/extract_score/`). `agent.ts` exports
@@ -250,8 +257,11 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   eval fixtures assert; there is no wire/public split (it also hosts the
   `MatchedData` / `ScoresExtractData` zod schemas + types, the latter being
   the `extract_score` job's `result` schema). Per-player data is
-  index-aligned arrays (`players: string[]`, `scores`/`writtenTotals`:
-  `(number|null)[]`), every field required, `null` = "not written/legible".
+  index-aligned arrays: `players` is now an array of `Player` objects (`name`
+  = best reading, `guesses` = 0–5 alternative readings of an illegible scrawl,
+  `bbox` = normalized 0–1 box around the writing for the review thumbnail),
+  and `scores`/`writtenTotals` are `(number|null)[]` lined up with it; every
+  field required, `null` = "not written/legible".
   That array shape is also the only one all three providers' structured-output
   compilers accept (Anthropic caps union-typed AND optional parameters and
   requires `additionalProperties: false`; Google rejects `const`/`z.literal`).
@@ -260,19 +270,32 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   degrades to nulls rather than failing the job, since the review UI lets the
   user pick manually.
 - `pkg/api/src/agent/player_match/` and `pkg/api/src/agent/course_match/`:
-  the matching agents. Both are agentic-search loops (no embeddings) built on
-  `src/agent/answer_tool.ts`'s `runAnswerAgent`: `generateText` with
-  `toolChoice: "required"`, one ILIKE-style search tool, and a terminal
-  `answer` tool (no execute) whose inputSchema is the result — so the
+  the matching agents. Both are HYBRID prefetch loops (no embeddings) built on
+  `src/agent/answer_tool.ts`'s `runAnswerAgent`: the DB searches for every
+  written name/guess (and course-/nine-name word) are run DETERMINISTICALLY up
+  front and the candidate lists handed to the model in-context, so the common
+  case answers in a single LLM turn (or zero — player_match resolves a written
+  name that exactly, uniquely matches one candidate's name/nickname with no
+  LLM at all, like course_match's exact par phase). The model may still call
+  the search tool — now `queries: string[]`, so a whole batch of fragments
+  goes in ONE call — bounded to a few steps (`MAX_MATCH_STEPS`). This
+  round-trip reduction is also what tamed the gemini-3 thought-signature
+  warning: it comes from the multi-turn tool loop replaying tool-call parts
+  through the workers-ai-provider gateway transport (benign — the SDK injects
+  a `skip_thought_signature_validator` sentinel), NOT from single-turn
+  extraction, and the single-turn common path avoids it. `runAnswerAgent`:
+  `generateText` with `toolChoice: "required"`, the batched search tool, and a
+  terminal `answer` tool (no execute) whose inputSchema is the result — so the
   card_extract structured-output constraints apply to answer schemas too.
-  Hallucinated ids are nulled (only ids seen in tool results survive), and
-  course/set answers are forced consistent (sets must belong to the final
-  course). The search functions are injected: `search.ts` in each module has
-  the production Drizzle version (SQLite LIKE is case-insensitive for ASCII =
-  ILIKE) and an in-memory version with identical semantics for evals.
-  `matchPlayers` maps written names (initials, nicknames, misspellings) to
-  user ids or null — ambiguity must yield null, a wrong match is worse than
-  none. `matchCourseSets` maps courseName+nines to a course and per-nine
+  Hallucinated ids are nulled (only ids seen in prefetch/tool results
+  survive), and course/set answers are forced consistent (sets must belong to
+  the final course). The search functions are injected: `search.ts` in each
+  module has the production Drizzle version (SQLite LIKE is case-insensitive
+  for ASCII = ILIKE) and an in-memory version with identical semantics for
+  evals. `matchPlayers` takes `{name, guesses, locations}` per written name
+  (the extraction's alternative readings plus where it appeared on the card,
+  "Player 2 on Blue Spruce") and maps each to a user id or null — ambiguity
+  must yield null, a wrong match is worse than none. `matchCourseSets` maps courseName+nines to a course and per-nine
   course-set ids in two phases: FIRST a no-LLM exact match of each nine's
   (hole, par) sequence against every set in the db (unique-candidate only,
   all matches must share one course) — this is how "BLUE SPRUCE" on a card
@@ -290,9 +313,14 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   agents, in the card_extract eval style (cmd-ts `run`/`score`, plain Bun,
   `evalModel`, `results/<stamp>` + `latest` symlink) but graded as retrieval:
   per-slot tp/fp/fn/tn where a wrong id counts as both fp and fn, with
-  per-model precision/recall/accuracy aggregates printed at the end. Fixtures
+  per-model precision/recall/accuracy aggregates printed at the end, plus a
+  per-model latency benchmark (mean/median/p75/p95 of the per-case wall-clock).
+  Both evals now default to the single PRODUCTION model per agent
+  (gemini-3.5-flash@low for players, gpt-5.4-nano@low for courses) so a bare
+  run is the ship benchmark; pass `--models` to sweep alternatives. Fixtures
   are JSON files under each agent's `eval/fixtures/` (a roster or course list
-  plus labeled cases); `bun eval:players` / `bun eval:courses` run them.
+  plus labeled cases; player cases may carry optional per-name `guesses`);
+  `bun eval:players` / `bun eval:courses` run them.
 - `pkg/api/src/model.ts`: all model selection/routing. Models are addressed
   as `ModelSpec` strings of the form `"provider/model@effort"` — reasoning
   effort is part of the model identity, and effort levels are
@@ -324,22 +352,26 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   (which must already be running separately in another terminal).
 - Mint a local sign-in magic link (for phone/tunnel testing without email
   delivery): `POST /api/auth/code` stores a 6-digit code in the `AUTH_CODES` KV
-  but only emails it, so read it back out of KV rather than an inbox. The KV key
-  is `auth:code:<base64url(sha256(email))>`. Steps (Worker on :8787):
+  but only emails it, so read it back out of KV rather than an inbox. Codes are
+  keyed PER-CODE (`auth:code:<base64url(sha256(email))>:<code>`) so several can
+  be active for one email at once (an invite's 24h code plus a sign-in code) —
+  so list by the email's prefix and take the code from the key suffix. Steps
+  (Worker on :8787):
   1. Pick an admin email:
      `wrangler d1 execute scorecard --local --config ../../wrangler.toml --json
 --command "SELECT email FROM user WHERE admin=1 AND email IS NOT NULL"`.
   2. Trigger the code: `curl -X POST localhost:8787/api/auth/code -H
 'content-type: application/json' -d '{"email":"<email>"}'` (the code is
      stored before the email send, so a failed/no-op send doesn't matter).
-  3. Read it back:
-     `KEY="auth:code:$(printf %s "<email>" | openssl dgst -binary -sha256 |
+  3. Read it back (the code is the part after the final `:` in the key):
+     `PREFIX="auth:code:$(printf %s "<email>" | openssl dgst -binary -sha256 |
 openssl base64 -A | tr '+/' '-_' | tr -d '=')"` then
-     `wrangler kv key get "$KEY" --binding AUTH_CODES --local --config ../../wrangler.toml`.
-  4. Build the link (single-use, 10-min TTL):
-     `<origin>/login/magic?email=<urlencoded-email>&code=<code>` — where
+     `wrangler kv key list --prefix "$PREFIX:" --binding AUTH_CODES --local --config ../../wrangler.toml`
+     and take the suffix of the newest key.
+  4. Build the link (single-use; 10-min TTL for sign-in codes, 24h for invite
+     codes): `<origin>/login/magic?email=<urlencoded-email>&code=<code>` — where
      `<origin>` is the Vite/ngrok URL. The `/login/magic` page redeems it
-     automatically. Reading the code from KV does NOT consume it (only
+     automatically. Listing the code from KV does NOT consume it (only
      `POST /api/auth/token` does), so the link stays valid.
 - `bun build`: build the Vite app.
 - `bun lint`: lint and type-check the repository with Oxlint.
@@ -398,16 +430,23 @@ openssl base64 -A | tr '+/' '-_' | tr -d '=')"` then
   (`account_id`/`AI_GATEWAY_ID` come from `wrangler.toml` — single source of
   truth, nothing duplicated into env files).
   `--models provider/model@effort,…` and `--fixtures bhf-01,…` select a
-  slice; the default is the gemini-3.5-flash / claude-sonnet-5 /
-  gpt-5.6-terra trio at low effort. Cases run 8-way parallel (`p-map`). Each
-  case writes `…/eval/results/<YYYY_MM_DD__HH_MM_SS>/<fixture>/
-<provider>__<model>__<effort>/{output.json,score.json}` (gitignored), with
+  slice; the default is the single production model gemini-3.5-flash@low (so a
+  bare run is the ship benchmark — accuracy plus a mean/median/p75/p95 latency
+  line), and `--models` sweeps alternatives. Cases run 8-way parallel
+  (`p-map`). Each case writes `…/eval/results/<YYYY_MM_DD__HH_MM_SS>/<fixture>/
+<provider>__<model>__<effort>/{output.json,score.json,timing.json}`
+  (gitignored), with
   `results/latest` symlinked to the newest run. `run` scores itself when
   extraction finishes; `./eval.ts score [run]` re-grades a past run (default
   `latest`) against the current labels and `score()` criteria without
   re-spending model calls — `score.json` holds a 0–1 `overall` (weighting
-  score cells over names over metadata; names compare case-insensitively)
-  plus per-category error counts. Fixture images are committed as high-res originals;
+  score cells over names over metadata over bounding boxes; names compare
+  case-insensitively) plus per-category error counts and `bboxCloseness` (mean
+  0–1 closeness of the labeled player-name boxes: 1 when centers coincide,
+  falling linearly to 0 once they're 12% of the image apart — forgiving of a
+  little difference of opinion, harsh on a wildly-misplaced box like the old
+  un-rescaled-coordinate bug; the labels carry hand-verified boxes). Fixture
+  images are committed as high-res originals;
   `eval/fixtures.ts` resizes with `sharp` to mirror
   `pkg/web/src/lib/image_resize.ts`'s `resizeImageForCapture` exactly (2048px
   long edge, JPEG quality 80, always re-encoded), so the eval sees the same

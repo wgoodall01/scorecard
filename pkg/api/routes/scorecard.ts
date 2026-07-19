@@ -6,7 +6,7 @@ import type { Env } from "../env";
 import { job, score, scorecard, user, uuidv7 } from "../schema";
 import type { CardMetadataSchema } from "../src/agent/card_metadata/schema";
 import type { ScoresExtractData } from "../src/agent/card_scores/schema";
-import type { JobErrorSchema } from "../src/jobs/common";
+import type { JobErrorSchema, JobReportSchema } from "../src/jobs/common";
 import { submit } from "../src/jobs/client";
 import { requireAuth, zodQuery } from "./shared";
 
@@ -32,8 +32,10 @@ export type ScorecardExtractRequestSchema = z.infer<typeof ScorecardExtractReque
 export type ScorecardStatus = "pending" | "complete" | "failed";
 
 // The extract_score job's lifecycle projected onto the scorecard's status:
-// running (or no job yet) → pending, ok → complete, error → failed.
-function statusFromJobState(state: "running" | "ok" | "error" | undefined): ScorecardStatus {
+// queued/working (or no job yet) → pending, ok → complete, error → failed.
+function statusFromJobState(
+  state: "queued" | "working" | "ok" | "error" | undefined,
+): ScorecardStatus {
   if (state === "ok") return "complete";
   if (state === "error") return "failed";
   return "pending";
@@ -182,10 +184,15 @@ export const scorecardRoutes = new Hono<Env>()
     if (!row || !authUser || row.userId !== authUser.id) {
       return c.json({ error: "Scorecard not found" }, 404);
     }
-    if (!row.extractScoreJobId) return c.json({ status: "pending" as const }, 202);
+    if (!row.extractScoreJobId) {
+      return c.json({ status: "pending" as const, message: null }, 202);
+    }
 
     const jobRow = await db.query.job.findFirst({ where: eq(job.id, row.extractScoreJobId) });
-    if (!jobRow || jobRow.state === "running") return c.json({ status: "pending" as const }, 202);
+    if (!jobRow || jobRow.state === "queued" || jobRow.state === "working") {
+      const report = (jobRow?.status as JobReportSchema | null) ?? null;
+      return c.json({ status: "pending" as const, message: report?.message ?? null }, 202);
+    }
     if (jobRow.state === "error") {
       return c.json(
         { error: scorecardErrorMessage((jobRow.error as JobErrorSchema | null) ?? null) },
@@ -206,10 +213,15 @@ export const scorecardRoutes = new Hono<Env>()
     if (!row || !authUser || row.userId !== authUser.id) {
       return c.json({ error: "Scorecard not found" }, 404);
     }
-    if (!row.extractMetadataJobId) return c.json({ status: "pending" as const }, 202);
+    if (!row.extractMetadataJobId) {
+      return c.json({ status: "pending" as const, message: null }, 202);
+    }
 
     const jobRow = await db.query.job.findFirst({ where: eq(job.id, row.extractMetadataJobId) });
-    if (!jobRow || jobRow.state === "running") return c.json({ status: "pending" as const }, 202);
+    if (!jobRow || jobRow.state === "queued" || jobRow.state === "working") {
+      const report = (jobRow?.status as JobReportSchema | null) ?? null;
+      return c.json({ status: "pending" as const, message: report?.message ?? null }, 202);
+    }
     if (jobRow.state === "error") {
       return c.json(
         { error: scorecardErrorMessage((jobRow.error as JobErrorSchema | null) ?? null) },

@@ -27,12 +27,12 @@ export class JobFailedError extends Error {
 
 // A row's lifecycle snapshot as read back from D1.
 export type JobStatus = {
-  state: "running" | "ok" | "error";
+  state: "queued" | "working" | "ok" | "error";
   status: JobReportSchema | null;
   error: JobErrorSchema | null;
 };
 
-// Submit a job: mint its id, write the `running` row (the spec validated
+// Submit a job: mint its id, write the `queued` row (the spec validated
 // against the job type's args schema), and enqueue just the id. Returns a
 // handle. INTERNAL — routes/queue code call this, never the browser (the web
 // polls its own HTTP endpoints).
@@ -45,7 +45,7 @@ export async function submit<N extends JobName>(
 
   const id = uuidv7();
   const spec = jobSpec(def).parse({ ...input, id });
-  await getDb(env.DB).insert(job).values({ id, jobType: def.name, spec, state: "running" });
+  await getDb(env.DB).insert(job).values({ id, jobType: def.name, spec, state: "queued" });
   await env.JOB_QUEUE.send({ id });
 
   return new JobHandle<JobResultOf<N>>(env, def.name, id);
@@ -75,8 +75,8 @@ export class JobHandle<Result = unknown> {
     };
   }
 
-  // Poll every second until the job leaves `running`, then resolve with its
-  // result (state='ok') or throw JobFailedError (state='error'). Throws on
+  // Poll every second until the job leaves queued/working, then resolve with
+  // its result (state='ok') or throw JobFailedError (state='error'). Throws on
   // timeout or if the row vanishes.
   async result({
     timeoutMs = DEFAULT_RESULT_TIMEOUT_MS,

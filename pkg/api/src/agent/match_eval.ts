@@ -79,8 +79,27 @@ type CaseOutput = {
   expected: (string | null)[];
   got: (string | null)[];
   output: unknown;
+  durationMs?: number;
   error?: string;
 };
+
+// p-th percentile (0–100) of a sample by linear interpolation, or null when
+// empty. Used for the latency benchmark printed alongside accuracy.
+function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  if (sorted.length === 1) return sorted[0];
+  const rank = (p / 100) * (sorted.length - 1);
+  const low = Math.floor(rank);
+  const high = Math.ceil(rank);
+  return Math.round(sorted[low] + (sorted[high] - sorted[low]) * (rank - low));
+}
+
+function latencyLine(durations: number[]): string {
+  if (durations.length === 0) return "latency n/a";
+  const mean = Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length);
+  return `latency mean ${mean}ms, median ${percentile(durations, 50)}ms, p75 ${percentile(durations, 75)}ms, p95 ${percentile(durations, 95)}ms (n=${durations.length})`;
+}
 
 // "google/gemini-3.5-flash@low" → "google__gemini-3.5-flash__low"
 function specDirName(spec: ModelSpec): string {
@@ -129,6 +148,7 @@ function scoreRun(runDir: string, cases: MatchEvalCase[]) {
     cases.map((entry) => [`${entry.fixture}/${entry.label}`, entry.expected]),
   );
   const perModel = new Map<string, MatchCounts>();
+  const perModelDurations = new Map<string, number[]>();
 
   for (const fixture of readdirSync(runDir).sort()) {
     if (!statSync(join(runDir, fixture)).isDirectory()) continue;
@@ -145,6 +165,9 @@ function scoreRun(runDir: string, cases: MatchEvalCase[]) {
           rmSync(scorePath, { force: true }); // never leave a stale grade next to an error
           console.log(`      ${caseName} → agent error`);
           continue;
+        }
+        if (typeof output.durationMs === "number") {
+          perModelDurations.set(slug, [...(perModelDurations.get(slug) ?? []), output.durationMs]);
         }
         const expected = currentExpected.get(`${fixture}/${caseLabel}`) ?? output.expected;
         const counts = matchCounts(expected, output.got);
@@ -174,6 +197,7 @@ function scoreRun(runDir: string, cases: MatchEvalCase[]) {
       `  ${slug}: accuracy ${score.accuracy}, precision ${score.precision ?? "n/a"}, ` +
         `recall ${score.recall ?? "n/a"} (tp ${counts.tp}, fp ${counts.fp}, fn ${counts.fn}, tn ${counts.tn})`,
     );
+    console.log(`    ${latencyLine(perModelDurations.get(slug) ?? [])}`);
   }
 }
 
@@ -247,10 +271,12 @@ export async function runMatchEvalCli({
           const caseName = `${entry.fixture}/${entry.label} × ${spec}`;
 
           try {
+            const startedAt = Date.now();
             const { output, got } = await entry.run(spec);
-            const record: CaseOutput = { expected: entry.expected, got, output };
+            const durationMs = Date.now() - startedAt;
+            const record: CaseOutput = { expected: entry.expected, got, output, durationMs };
             writeFileSync(join(outDir, "output.json"), `${JSON.stringify(record, null, 2)}\n`);
-            console.log(`ok    ${caseName}`);
+            console.log(`ok    ${caseName} (${durationMs}ms)`);
           } catch (error) {
             failures += 1;
             const record: CaseOutput = {

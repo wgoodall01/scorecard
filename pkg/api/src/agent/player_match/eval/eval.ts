@@ -31,6 +31,11 @@ const Fixture = z.object({
     z.object({
       label: z.string(),
       names: z.array(z.string()).min(1),
+      // Optional per-name alternative readings and card locations, index-aligned
+      // with `names`, so cases can exercise the illegible-scrawl path the
+      // extraction now feeds the matcher.
+      guesses: z.array(z.array(z.string())).optional(),
+      locations: z.array(z.string()).optional(),
       expect: z.array(z.string().nullable()),
       note: z.string().optional(),
     }),
@@ -69,7 +74,11 @@ function loadCases(): Promise<MatchEvalCase[]> {
         expected: entry.expect,
         run: async (model: ModelSpec) => {
           const matches = await matchPlayers({
-            names: entry.names,
+            players: entry.names.map((name, index) => ({
+              name,
+              guesses: entry.guesses?.[index] ?? [],
+              locations: entry.locations?.[index] ? [entry.locations[index]] : [],
+            })),
             search: playerSearchFromRoster(roster),
             resolver: evalModel,
             model,
@@ -82,11 +91,9 @@ function loadCases(): Promise<MatchEvalCase[]> {
   return Promise.resolve(cases);
 }
 
-const DEFAULT_MODELS: ModelSpec[] = [
-  "openai/gpt-5.4-mini@medium",
-  "openai/gpt-5.4-nano@medium",
-  "google/gemini-3.5-flash@low",
-];
+// The production model only — this eval is now the latency+accuracy benchmark
+// for what actually ships. Pass --models to sweep alternatives.
+const DEFAULT_MODELS: ModelSpec[] = ["google/gemini-3.5-flash@low"];
 
 await runMatchEvalCli({
   name: "player_match",

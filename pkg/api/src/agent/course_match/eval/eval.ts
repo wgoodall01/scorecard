@@ -127,11 +127,9 @@ function loadCases(): Promise<MatchEvalCase[]> {
   return Promise.resolve(cases);
 }
 
-const DEFAULT_MODELS: ModelSpec[] = [
-  "openai/gpt-5.4-mini@medium",
-  "openai/gpt-5.4-nano@medium",
-  "google/gemini-3.5-flash@low",
-];
+// The production model only — this eval is now the latency+accuracy benchmark
+// for what actually ships. Pass --models to sweep alternatives.
+const DEFAULT_MODELS: ModelSpec[] = ["openai/gpt-5.4-nano@low"];
 
 await runMatchEvalCli({
   name: "course_match",

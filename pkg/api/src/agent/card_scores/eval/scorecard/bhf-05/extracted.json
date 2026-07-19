@@ -6,7 +6,38 @@
   "nines": [
     {
       "nineName": "Blue Spruce",
-      "players": ["AJM", "JJM", "AJG"],
+      "players": [
+        {
+          "name": "AJM",
+          "guesses": [],
+          "bbox": {
+            "x": 0.118,
+            "y": 0.506,
+            "width": 0.021,
+            "height": 0.139
+          }
+        },
+        {
+          "name": "JJM",
+          "guesses": [],
+          "bbox": {
+            "x": 0.121,
+            "y": 0.498,
+            "width": 0.018,
+            "height": 0.092
+          }
+        },
+        {
+          "name": "AJG",
+          "guesses": [],
+          "bbox": {
+            "x": 0.121,
+            "y": 0.595,
+            "width": 0.019,
+            "height": 0.045
+          }
+        }
+      ],
       "holes": [
         {
           "hole": 10,
@@ -58,7 +89,38 @@
     },
     {
       "nineName": "Red Maple",
-      "players": ["AJM", "JJM", "AJG"],
+      "players": [
+        {
+          "name": "AJM",
+          "guesses": [],
+          "bbox": {
+            "x": 0.485,
+            "y": 0.512,
+            "width": 0.038,
+            "height": 0.033
+          }
+        },
+        {
+          "name": "JJM",
+          "guesses": [],
+          "bbox": {
+            "x": 0.489,
+            "y": 0.551,
+            "width": 0.032,
+            "height": 0.034
+          }
+        },
+        {
+          "name": "AJG",
+          "guesses": [],
+          "bbox": {
+            "x": 0.486,
+            "y": 0.598,
+            "width": 0.036,
+            "height": 0.034
+          }
+        }
+      ],
       "holes": [
         {
           "hole": 1,

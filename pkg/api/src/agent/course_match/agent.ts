@@ -41,9 +41,9 @@ const SYSTEM = `You match a golf course and its nines ("course sets"), as read o
 
 You get the course name as written on the card (often missing or partial) and each played nine with its printed name (often missing), hole numbers, and pars.
 
-Use the searchCourses tool as many times as you need. It does a case-insensitive substring search over course names AND set names, and returns whole courses with all of their sets — so a distinctive nine name alone (e.g. "White Oak") can find the course even when the card has no course name. Search with SHORT fragments — a full written name like "BLUE SPRUCE" matches nothing if the database calls the set just "Blue", so always also search each individual word ("blue", "spruce"): cards routinely embellish nine names beyond what the database stores.
+You are GIVEN a list of candidate courses already looked up for you (from the course name and nine names, each individual word searched). Usually the right course — or a confident "nothing" — is decidable from these candidates alone, so answer directly without searching.
 
-The searches are independent of each other, so batch them: issue ALL the searches you currently want as parallel searchCourses calls in a single turn (e.g. the course-name fragments and every nine-name word at once), rather than one search per turn.
+Only if the candidates are insufficient, use the searchCourses tool. It takes a LIST of queries and runs them all at once — a case-insensitive substring search over course names AND set names, returning whole courses with all of their sets, so a distinctive nine name alone (e.g. "White Oak") can find the course even with no course name on the card. Search with SHORT fragments — a full written name like "BLUE SPRUCE" matches nothing if the database calls the set just "Blue", so also search each individual word ("blue", "spruce"). Batch every query you want into a single call.
 
 Matching rules:
 - Only return a courseId or courseSetId you saw in a searchCourses result.
@@ -62,6 +62,10 @@ When you are done, call the answer tool with the matched course and exactly one 
 // guessed on the ambiguous-nine case (precision 0.905). Most cards never
 // reach the LLM at all thanks to the exact par-sequence phase.
 const DEFAULT_MODEL: ModelSpec = "openai/gpt-5.4-nano@low";
+
+// Candidates are prefetched, so the model usually answers in one turn; a
+// couple of extra steps let it batch-search when they fall short.
+const MAX_MATCH_STEPS = 4;
 
 // "1:4,2:5,…" — the exact-match fingerprint of a hole layout.
 function parSignature(holes: { number: number; par: number }[]): string {
@@ -143,22 +147,62 @@ export async function matchCourseSets({
   const seenCourses = new Set<string>();
   const setCourse = new Map<string, string>();
 
+  const searchCache = new Map<string, CourseSearchResult[]>();
+  const runSearch = async (query: string) => {
+    const key = query.toLowerCase();
+    const cached = searchCache.get(key);
+    if (cached) return cached;
+    const courses = await search(query);
+    searchCache.set(key, courses);
+    for (const found of courses) {
+      seenCourses.add(found.id);
+      for (const set of found.sets) setCourse.set(set.id, found.id);
+    }
+    return courses;
+  };
+
   const searchCourses = tool({
     description:
       "Case-insensitive substring search over golf course names AND their set/nine " +
-      "names. Returns matching courses with all of their sets.",
+      "names. Pass MANY queries at once; each returns matching courses with all of their sets.",
     inputSchema: z.object({
-      query: z.string().min(1).describe("Substring to search for (case-insensitive)."),
+      queries: z
+        .array(z.string().min(1))
+        .min(1)
+        .describe("Substrings to search for (case-insensitive), run as a batch."),
     }),
-    execute: async ({ query }) => {
-      const courses = await search(query);
-      for (const found of courses) {
-        seenCourses.add(found.id);
-        for (const set of found.sets) setCourse.set(set.id, found.id);
-      }
-      return { courses };
+    execute: async ({ queries }) => {
+      const results = await Promise.all(
+        queries.map(async (query) => ({ query, courses: await runSearch(query) })),
+      );
+      return { results };
     },
   });
+
+  // Prefetch: search the course name and every nine-name word up front (each
+  // whole term plus its individual words, since cards embellish names), so the
+  // model usually answers straight from the candidates without searching.
+  const words = (value: string | null): string[] =>
+    value
+      ? value
+          .split(/\s+/)
+          .map((w) => w.trim())
+          .filter(Boolean)
+      : [];
+  const prefetchQueries = [
+    ...new Set(
+      [
+        ...(courseName ? [courseName, ...words(courseName)] : []),
+        ...nines.flatMap((nine) => (nine.name ? [nine.name, ...words(nine.name)] : [])),
+      ]
+        .map((q) => q.trim())
+        .filter(Boolean),
+    ),
+  ];
+  const candidatesById = new Map<string, CourseSearchResult>();
+  for (const found of (await Promise.all(prefetchQueries.map(runSearch))).flat()) {
+    candidatesById.set(found.id, found);
+  }
 
   const nineDescriptions = nines.map((nine) => ({
     name: nine.name,
@@ -174,13 +218,21 @@ export async function matchCourseSets({
             .join(",")
         : null,
   }));
+  const candidateCourses = [...candidatesById.values()].map((course) => ({
+    id: course.id,
+    name: course.name,
+    location: course.location,
+    sets: course.sets,
+  }));
   const answer = await runAnswerAgent({
     resolver,
     model,
+    maxSteps: MAX_MATCH_STEPS,
     system: SYSTEM,
     prompt:
       `Course name as written on the card: ${JSON.stringify(courseName)}\n` +
-      `Nines played (in order): ${JSON.stringify(nineDescriptions)}`,
+      `Nines played (in order): ${JSON.stringify(nineDescriptions)}\n` +
+      `Candidate courses already looked up for you: ${JSON.stringify(candidateCourses, null, 2)}`,
     tools: { searchCourses },
     answerSchema: CourseMatchAnswer,
     answerDescription:
