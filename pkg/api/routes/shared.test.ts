@@ -7,13 +7,13 @@ import { createToken, requireAuth } from "./shared";
 
 function buildApp() {
   return new Hono<Env>().get("/protected", requireAuth, (c) =>
-    c.json({ email: c.get("authEmail") }),
+    c.json({ userId: c.get("authUserId") }),
   );
 }
 
 describe("requireAuth", () => {
-  it("allows a valid token and normalizes the email", async () => {
-    const token = await createToken("Foo@Example.com", env.JWT_SECRET);
+  it("allows a valid token and exposes the user id", async () => {
+    const token = await createToken("user-123", env.JWT_SECRET);
     const res = await buildApp().request(
       "/protected",
       { headers: { Authorization: `Bearer ${token}` } },
@@ -21,7 +21,7 @@ describe("requireAuth", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ email: "foo@example.com" });
+    expect(await res.json()).toEqual({ userId: "user-123" });
   });
 
   it("rejects a request with no Authorization header", async () => {
@@ -39,7 +39,7 @@ describe("requireAuth", () => {
   });
 
   it("rejects a token signed with the wrong secret", async () => {
-    const token = await createToken("foo@example.com", "wrong-secret");
+    const token = await createToken("user-123", "wrong-secret");
     const res = await buildApp().request(
       "/protected",
       { headers: { Authorization: `Bearer ${token}` } },
@@ -50,7 +50,7 @@ describe("requireAuth", () => {
 
   it("rejects an expired token", async () => {
     const token = await Jwt.sign(
-      { email: "foo@example.com", exp: Math.floor(Date.now() / 1000) - 60 },
+      { sub: "user-123", exp: Math.floor(Date.now() / 1000) - 60 },
       env.JWT_SECRET,
       "HS256",
     );
@@ -62,9 +62,9 @@ describe("requireAuth", () => {
     expect(res.status).toBe(401);
   });
 
-  it("rejects a token with an invalid email claim", async () => {
+  it("rejects a token with no subject", async () => {
     const token = await Jwt.sign(
-      { email: "not-an-email", exp: Math.floor(Date.now() / 1000) + 60 },
+      { exp: Math.floor(Date.now() / 1000) + 60 },
       env.JWT_SECRET,
       "HS256",
     );

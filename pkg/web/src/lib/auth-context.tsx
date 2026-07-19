@@ -11,8 +11,9 @@ type AuthContextValue = {
   profile: Profile | null;
   profileError: string | null;
   isAdmin: boolean;
-  requestCode: (email: string) => Promise<void>;
-  useCode: (email: string, code: string) => Promise<void>;
+  signInWithPasskey: () => Promise<void>;
+  enrollPasskey: (opts: { inviteToken?: string; name?: string }) => Promise<void>;
+  requestRecovery: (email: string) => Promise<void>;
   signOut: () => void;
 };
 
@@ -67,10 +68,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       profileError,
       isAdmin: profile?.admin ?? false,
-      requestCode: (email) => authService.requestCode(email),
-      useCode: async (email, code) => {
-        setToken(await authService.useCode(email, code));
+      signInWithPasskey: async () => {
+        setToken(await authService.signInWithPasskey());
       },
+      enrollPasskey: async (opts) => {
+        setToken(await authService.enrollPasskey(opts));
+      },
+      requestRecovery: (email) => authService.requestRecovery(email),
       signOut: () => {
         authService.clearToken();
         setToken(null);

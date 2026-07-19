@@ -3,12 +3,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
-import { job, score, scorecard, user, uuidv7 } from "../schema";
+import { job, score, scorecard, uuidv7 } from "../schema";
 import type { CardMetadataSchema } from "../src/agent/card_metadata/schema";
 import type { ScoresExtractData } from "../src/agent/card_scores/schema";
 import type { JobErrorSchema, JobReportSchema } from "../src/jobs/common";
 import { submit } from "../src/jobs/client";
-import { requireAuth, zodQuery } from "./shared";
+import { getCurrentUser, requireAuth, zodQuery } from "./shared";
 
 const MAX_CAPTURE_BYTES = 10 * 1024 * 1024;
 
@@ -48,10 +48,6 @@ function scorecardErrorMessage(error: JobErrorSchema | null): string {
   return "Service Error";
 }
 
-async function getAuthUser(db: ReturnType<typeof getDb>, authEmail: string) {
-  return await db.query.user.findFirst({ where: eq(user.email, authEmail) });
-}
-
 export const scorecardRoutes = new Hono<Env>()
   // Upload a scorecard photo. The image goes to R2, the row (tagged with the
   // uploading user) goes to the database, and each requested extraction is
@@ -80,7 +76,7 @@ export const scorecardRoutes = new Hono<Env>()
     }
 
     const db = getDb(c.env.DB);
-    const authUser = await getAuthUser(db, c.get("authEmail"));
+    const authUser = await getCurrentUser(c);
     if (!authUser) return c.json({ error: "Unauthorized" }, 401);
 
     const scorecardId = uuidv7();
@@ -118,7 +114,7 @@ export const scorecardRoutes = new Hono<Env>()
     ),
     async (c) => {
       const db = getDb(c.env.DB);
-      const authUser = await getAuthUser(db, c.get("authEmail"));
+      const authUser = await getCurrentUser(c);
       if (!authUser) return c.json({ error: "Unauthorized" }, 401);
 
       const rows = await db.query.scorecard.findMany({
@@ -177,7 +173,7 @@ export const scorecardRoutes = new Hono<Env>()
   // message when the extraction failed.
   .get("/scorecard/:id/scores", requireAuth, async (c) => {
     const db = getDb(c.env.DB);
-    const authUser = await getAuthUser(db, c.get("authEmail"));
+    const authUser = await getCurrentUser(c);
     const row = await db.query.scorecard.findFirst({
       where: eq(scorecard.id, c.req.param("id")),
     });
@@ -206,7 +202,7 @@ export const scorecardRoutes = new Hono<Env>()
   // the admin searches for the facility.
   .get("/scorecard/:id/metadata", requireAuth, async (c) => {
     const db = getDb(c.env.DB);
-    const authUser = await getAuthUser(db, c.get("authEmail"));
+    const authUser = await getCurrentUser(c);
     const row = await db.query.scorecard.findFirst({
       where: eq(scorecard.id, c.req.param("id")),
     });

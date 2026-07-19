@@ -5,7 +5,7 @@ import { Camera, Flag, LandPlot, NotebookText, Trophy, UserRound, Users } from "
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-svh bg-background">
+    <div className="flex min-h-dvh flex-col bg-background">
       <aside className="hidden w-64 border-r bg-sidebar text-sidebar-foreground md:fixed md:inset-y-0 md:left-0 md:flex md:flex-col">
         <div className="flex h-16 items-center gap-2 px-5 font-medium">
           <span className="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
@@ -26,11 +26,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NavigationLink to="/me" icon={<UserRound aria-hidden="true" />} label="Me" />
         </nav>
       </aside>
-      <main className="mx-auto w-full max-w-3xl px-5 pt-[calc(2rem+env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-0 md:ml-64 md:px-10 md:py-10">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-5 pt-[calc(2rem+env(safe-area-inset-top))] pb-8 md:mx-0 md:ml-64 md:px-10 md:py-10">
         {children}
       </main>
+      {/* Sticky (not fixed): the shell is a flex column and <main> fills the
+          height, so the nav rests at the viewport bottom on short pages and
+          sticks there on tall ones — without `fixed`'s mobile
+          dynamic-viewport misplacement. */}
       <nav
-        className="fixed inset-x-0 bottom-0 flex border-t bg-background/95 pt-2 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] backdrop-blur md:hidden"
+        className="sticky bottom-0 z-40 flex border-t bg-background/95 pt-2 pb-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] backdrop-blur md:hidden"
         aria-label="Main navigation"
       >
         <MobileNavigationLink to="/capture" icon={<Camera aria-hidden="true" />} label="Capture" />

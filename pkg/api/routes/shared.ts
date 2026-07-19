@@ -17,41 +17,57 @@ export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-export async function createToken(email: string, secret: string) {
+// The session JWT's subject is the user id — NOT the email. Passkey identity
+// is decoupled from email (a user may have a null email and still sign in),
+// and email can change without invalidating a session.
+export async function createToken(userId: string, secret: string) {
   return Jwt.sign(
-    { email, exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS },
+    { sub: userId, exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS },
     secret,
     "HS256",
   );
 }
 
-async function getTokenEmail(token: string, secret: string) {
+async function getTokenSub(token: string, secret: string) {
   try {
     const payload = await Jwt.verify(token, secret, "HS256");
     // Jwt.verify only checks exp when the claim is present; every token we
     // mint expires, so one without exp is not ours.
     if (typeof payload.exp !== "number") return null;
-    const email = Email.safeParse(payload.email);
-    return email.success ? normalizeEmail(email.data) : null;
+    return typeof payload.sub === "string" && payload.sub ? payload.sub : null;
   } catch {
     return null;
   }
 }
 
-export const requireAuth = createMiddleware<Env>(async (c, next) => {
+// The signed-in user's id from the request's bearer token, or null when the
+// token is missing/invalid/expired. requireAuth builds on this; routes that
+// accept EITHER a session or an unauthenticated path (e.g. passkey enrollment
+// via an invite token) call it directly.
+export async function getRequestUserId(c: Context<Env>): Promise<string | null> {
   const authorization = c.req.header("Authorization");
   const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : null;
-  const email = token ? await getTokenEmail(token, c.env.JWT_SECRET) : null;
+  return token ? await getTokenSub(token, c.env.JWT_SECRET) : null;
+}
 
-  if (!email) return c.json({ error: "Unauthorized" }, 401);
+export const requireAuth = createMiddleware<Env>(async (c, next) => {
+  const userId = await getRequestUserId(c);
 
-  c.set("authEmail", email);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+
+  c.set("authUserId", userId);
   await next();
 });
 
-export const requireAdmin = createMiddleware<Env>(async (c, next) => {
+// The signed-in user's row (from requireAuth's authUserId), or null/undefined
+// if the token's subject no longer maps to a user. Use after requireAuth.
+export async function getCurrentUser(c: Context<Env>) {
   const db = getDb(c.env.DB);
-  const existingUser = await db.query.user.findFirst({ where: eq(user.email, c.get("authEmail")) });
+  return await db.query.user.findFirst({ where: eq(user.id, c.get("authUserId")) });
+}
+
+export const requireAdmin = createMiddleware<Env>(async (c, next) => {
+  const existingUser = await getCurrentUser(c);
   if (!existingUser?.admin) return c.json({ error: "Forbidden" }, 403);
 
   await next();

@@ -4,11 +4,11 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
-import { nickname, TEES, user } from "../schema";
-import { INVITE_CODE_TTL_SECONDS, issueCode, magicLink } from "../src/auth/magic";
-import { inviteEmail } from "../src/email/templates/invite";
+import { invite as inviteTable, nickname, TEES, user } from "../schema";
+import { enrollEmail } from "../src/email/templates/enroll_link";
+import { randomToken } from "../src/auth/webauthn";
 import { computeHandicap } from "../src/handicap";
-import { Email, requireAuth, zodBody } from "./shared";
+import { Email, getCurrentUser, requireAuth, zodBody } from "./shared";
 
 export const Nickname = z.object({
   nickname: z.string().trim().min(1),
@@ -53,10 +53,6 @@ function isEmailConflict(error: unknown) {
     error instanceof DrizzleQueryError &&
     String(error.cause?.message ?? error.cause).includes("UNIQUE constraint failed: user.email")
   );
-}
-
-async function getAuthUser(db: ReturnType<typeof getDb>, authEmail: string) {
-  return await db.query.user.findFirst({ where: eq(user.email, authEmail) });
 }
 
 async function getGolfer(db: ReturnType<typeof getDb>, id: string) {
@@ -111,7 +107,7 @@ export const golferRoutes = new Hono<Env>()
       // Golfers can edit their own profile; admins can edit anyone. Only an
       // admin can change the admin flag, and never their own (so the last
       // admin can't lock everyone out).
-      const authUser = await getAuthUser(db, c.get("authEmail"));
+      const authUser = await getCurrentUser(c);
       if (!authUser) return c.json({ error: "Unauthorized" }, 401);
       const isSelf = authUser.id === id;
       if (!authUser.admin && !isSelf) return c.json({ error: "Forbidden" }, 403);
@@ -150,7 +146,7 @@ export const golferRoutes = new Hono<Env>()
       const request = c.req.valid("json");
       const db = getDb(c.env.DB);
 
-      const authUser = await getAuthUser(db, c.get("authEmail"));
+      const authUser = await getCurrentUser(c);
       if (!authUser?.admin) return c.json({ error: "Forbidden" }, 403);
 
       // Inviting is idempotent on email: an existing golfer (e.g. one seeded
@@ -171,10 +167,14 @@ export const golferRoutes = new Hono<Env>()
         if (!invitedUser) throw error;
       }
 
-      // A 24-hour one-click magic link so the invitee signs straight in
-      // (a separate active code from any sign-in code they later request).
-      const code = await issueCode(c.env, request.email, INVITE_CODE_TTL_SECONDS);
-      const emailBody = inviteEmail(magicLink(c.req.url, request.email, code));
+      // Create an invite token and email a one-click enroll link (7-day
+      // window); the invitee sets up a passkey and is signed straight in.
+      const token = randomToken();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      await db.insert(inviteTable).values({ userId: invitedUser.id, token, expiresAt });
+      const enrollUrl = new URL("/enroll", c.req.url);
+      enrollUrl.searchParams.set("token", token);
+      const emailBody = enrollEmail(enrollUrl, "invite");
       await c.env.EMAIL.send({
         to: request.email,
         from: { email: c.env.AUTH_EMAIL_FROM, name: "Scorecard" },

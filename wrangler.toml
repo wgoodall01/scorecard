@@ -3,6 +3,16 @@ main = "pkg/api/index.ts"
 compatibility_date = "2026-07-16"
 compatibility_flags = ["nodejs_compat"]
 account_id = "dfd083c9490364800d31a6e3a745ad6c"
+# Serve the deployed Worker at the production custom domain so it's the
+# canonical URL and WebAuthn passkeys bind to the scorecard.wg.gay origin
+# (rpID). Requires the wg.gay zone on this account; provisioned on
+# `wrangler deploy`. Disabling workers.dev keeps *.workers.dev from being a
+# second origin. (Routes are ignored by `wrangler dev` — local is unaffected.)
+workers_dev = false
+
+[[routes]]
+pattern = "scorecard.wg.gay"
+custom_domain = true
 
 [assets]
 directory = "pkg/web/dist"
@@ -20,10 +30,6 @@ migrations_dir = "pkg/api/migrations"
 binding = "BUCKET"
 bucket_name = "scorecard"
 
-[[kv_namespaces]]
-binding = "AUTH_CODES"
-id = "a6ef3987b8b34a869f2abf7fa0db7739"
-
 [[ratelimits]]
 name = "AUTH_RATE_LIMITER"
 namespace_id = "817364291"
@@ -36,6 +42,11 @@ period = 10
 [[send_email]]
 name = "EMAIL"
 allowed_sender_addresses = ["noreply@scorecard.wg.gay"]
+
+# Weekly cleanup: the scheduled handler in pkg/api/index.ts prunes expired
+# invite rows (Sundays 00:00 UTC).
+[triggers]
+crons = ["0 0 * * 0"]
 
 [[queues.producers]]
 binding = "JOB_QUEUE"
@@ -61,6 +72,11 @@ binding = "IMAGES"
 [vars]
 AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
 AI_GATEWAY_ID = "scorecard"
+WEBAUTHN_RP_NAME = "Scorecard"
+# Origins passkeys may be registered/used from. rpID/expectedOrigin are derived
+# from the request Origin validated against this list. Add ngrok/tunnel origins
+# here when testing on a phone.
+WEBAUTHN_ALLOWED_ORIGINS = "http://localhost:5173,https://scorecard.wg.gay"
 
 # Secrets the Worker requires. Local values come from the repo-root
 # `.env.local` (the only env file in this repo — wrangler dev reads it since
@@ -68,7 +84,7 @@ AI_GATEWAY_ID = "scorecard"
 # AI_GATEWAY_TOKEN also lives in .env.local but is eval-only (see
 # pkg/api/src/model_provider.ts's evalModel), not a Worker secret.
 [secrets]
-required = ["JWT_SECRET"]
+required = ["JWT_SECRET", "AUTHN_CHALLENGE_SIGNING_SECRET"]
 
 [observability]
 traces = { enabled = true }

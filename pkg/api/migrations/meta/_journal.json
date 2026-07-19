@@ -134,6 +134,13 @@
       "when": 1784490100724,
       "tag": "0018_purple_gorilla_man",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1784498615190,
+      "tag": "0019_unknown_shooting_star",
+      "breakpoints": true
     }
   ]
 }

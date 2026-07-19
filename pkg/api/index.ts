@@ -1,5 +1,8 @@
+import { lt } from "drizzle-orm";
 import { Hono } from "hono";
+import { getDb } from "./db";
 import type { Env, JobQueueMessage } from "./env";
+import { invite } from "./schema";
 import { authRoutes } from "./routes/auth";
 import { courseRoutes } from "./routes/courses";
 import { scorecardRoutes } from "./routes/scorecard";
@@ -11,12 +14,6 @@ import { userRoutes } from "./routes/users";
 import { handleJobQueue } from "./src/jobs/queue_handler";
 
 export type { Env } from "./env";
-export {
-  AuthCodeRequest,
-  AuthTokenRequest,
-  type AuthCodeRequestSchema,
-  type AuthTokenRequestSchema,
-} from "./routes/auth";
 export {
   InviteGolferRequest,
   UpdateGolferRequest,
@@ -61,7 +58,16 @@ const app = new Hono<Env>()
 
 export type AppType = typeof app;
 
+// Weekly cron (see wrangler.toml [triggers]): prune expired invite/recovery
+// tokens. Challenge tokens self-expire (they're stateless JWTs), and
+// credentials never expire, so invites are the only rows needing cleanup.
+async function handleScheduled(_event: ScheduledController, env: Env["Bindings"]) {
+  const db = getDb(env.DB);
+  await db.delete(invite).where(lt(invite.expiresAt, new Date().toISOString()));
+}
+
 export default {
   fetch: app.fetch,
   queue: handleJobQueue,
+  scheduled: handleScheduled,
 } satisfies ExportedHandler<Env["Bindings"], JobQueueMessage>;

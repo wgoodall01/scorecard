@@ -23,6 +23,7 @@
     "@ai-sdk/anthropic": "^3",
     "@ai-sdk/google": "^3",
     "@ai-sdk/openai": "^3.0.0",
+    "@simplewebauthn/server": "^13.3.2",
     "ai": "^6.0.229",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.30",

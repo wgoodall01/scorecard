@@ -63,20 +63,33 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   wrapper over the stock shadcn/Base UI `ui/combobox.tsx` in `multiple` mode
   with creatable free-text entries.
 - `pkg/api`: Cloudflare Worker written with Hono + TypeScript. `index.ts` is
-  the composition root; its default export is `{ fetch, queue }` and
-  `POST /api/ping` responds with `{ time: Date }`.
+  the composition root; its default export is `{ fetch, queue, scheduled }`
+  (the `scheduled` handler is the weekly cron that prunes expired `invite`
+  rows) and `POST /api/ping` responds with `{ time: Date }`.
 - `wrangler.toml`: deployment configuration at the repository root. It serves
   `pkg/web/dist` as SPA assets, runs the Worker first for `/api/*`, and binds
   `DB` to the `scorecard` D1 database, `BUCKET` to the `scorecard` R2 bucket,
   `IMAGES` to Cloudflare Images transforms, and `JOB_QUEUE` to the
   `scorecard-jobs` queue (consumer: `max_batch_size = 1`,
-  `max_batch_timeout = 0`, `max_retries = 0` — see the jobs framework).
+  `max_batch_timeout = 0`, `max_retries = 0` — see the jobs framework). A
+  weekly `[triggers] crons` entry drives the `scheduled` invite-cleanup handler.
+  Auth needs no KV (challenges are stateless signed tokens); the `[vars]`
+  `WEBAUTHN_RP_NAME`/`WEBAUTHN_ALLOWED_ORIGINS` and the `[secrets]`
+  `AUTHN_CHALLENGE_SIGNING_SECRET` (alongside `JWT_SECRET`) configure WebAuthn.
 - `pkg/api/schema.ts`: Drizzle schema (with `relations` for the relational
   query API). Tables: `user` (+ `preferred_tee` — the `TEES`
   const is the app-level tee CATEGORY list, matched against
   `course_set_tee.type`; `email` is NULLABLE-but-unique: a golfer can exist
-  purely as a player with no account email, and can't sign in until one is
-  set), `nickname` (user_id, nickname, nickname_type; a case-insensitive
+  purely as a player with no account email — auth is by passkey keyed to the
+  user id, not email, so a null-email user CAN sign in once they have a
+  credential, though recovery needs an email), `credential` (a WebAuthn
+  passkey — PK is the base64url credential id, `user_id`, user-facing `name`,
+  `public_key` COSE key as base64url text, signature `counter`, JSON
+  `transports`, and optional `aaguid`/`device_type`/`backed_up`; a user may
+  have many), `invite` (an outstanding invite/recovery token: `user_id`, a
+  long random unique `token`, `expires_at`; enrolling a passkey through it
+  deletes the row, and the weekly cron prunes expired ones),
+  `nickname` (user_id, nickname, nickname_type; a case-insensitive
   expression index makes nicknames unique per user, and the golfers routes
   reject duplicate lists at the request edge),
   `course`, `course_set` (a "nine"; name unique per course; NO stored
@@ -109,9 +122,35 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
 - `pkg/api/routes/golfers.ts`: the player registry (subsumes the old admin
   routes/page). List/get golfers with nicknames (any signed-in user); PATCH is
   self-or-admin (nicknames use replace-all semantics; the `admin` flag needs an
-  admin and never on yourself); `/golfers/invite` is admin-only and sends the
-  invite email. The web's Golfers tab drives all of this — there is no
+  admin and never on yourself); `/golfers/invite` is admin-only, idempotent on
+  email, and creates an `invite` row + emails a passkey-enroll link (7-day
+  window). The web's Golfers tab drives all of this — there is no
   separate admin UI; controls are shown by permission checks.
+- `pkg/api/routes/auth.ts` + `pkg/api/src/auth/webauthn.ts`: WebAuthn passkey
+  auth (magic links are gone). `webauthn.ts` wraps `@simplewebauthn/server`,
+  resolves the RP (`rpID`/`origin`) per-request from the `Origin` header
+  validated against `WEBAUTHN_ALLOWED_ORIGINS`, and holds the STATELESS
+  challenge token — a ~5-min HS256 JWT (dedicated `AUTHN_CHALLENGE_SIGNING_SECRET`)
+  carrying the server-issued `challenge` + bound `rpID`/`origin`/`userId`/
+  `inviteToken`, so a ceremony needs no KV/DB between its options→verify round
+  trips (public keys are stored base64url text, not blobs). Routes: sign-in is
+  usernameless/discoverable (`/auth/passkey/options` with empty
+  allowCredentials → `/auth/passkey/verify`); enrollment
+  (`/auth/register/options`+`/verify`) works via an invite token (signed out)
+  OR the current session (adding a device), requires a resident key, and
+  consumes the invite on success; `/auth/recover` is self-serve email recovery
+  (rate-limited, ALWAYS 200 for anti-enumeration — also the migration path for
+  old magic-link users and the lost-device reset); `/auth/invite/self` emails
+  yourself an enroll link; `/auth/invite/:token` backs the enroll page; and
+  `/auth/credentials` (GET/PATCH/DELETE, self-owned) manages passkeys. The
+  ceremony verify functions are dependency-injected (`createAuthRoutes(deps)`)
+  so tests stub the crypto. A successful ceremony mints the session JWT via
+  `routes/shared.ts`'s `createToken`, whose subject is now the USER ID (not
+  email — passkeys decouple identity from a mutable/nullable email);
+  `requireAuth` sets `authUserId` and `getCurrentUser(c)` resolves the row,
+  `getRequestUserId(c)` exposes the bearer's subject for the mixed-auth
+  register route. The web stores the bearer token in `localStorage` exactly as
+  before.
 - `pkg/api/routes/outings.ts`: `/courses` (with sets, their TEES, and each
   tee's holes — the review UI shows database pars and auto-picks sets by par
   sequence against any tee's layout);
@@ -350,29 +389,26 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   front end.
 - `bun dev:web`: run only Vite locally; its `/api` requests proxy to the Worker
   (which must already be running separately in another terminal).
-- Mint a local sign-in magic link (for phone/tunnel testing without email
-  delivery): `POST /api/auth/code` stores a 6-digit code in the `AUTH_CODES` KV
-  but only emails it, so read it back out of KV rather than an inbox. Codes are
-  keyed PER-CODE (`auth:code:<base64url(sha256(email))>:<code>`) so several can
-  be active for one email at once (an invite's 24h code plus a sign-in code) —
-  so list by the email's prefix and take the code from the key suffix. Steps
-  (Worker on :8787):
-  1. Pick an admin email:
-     `wrangler d1 execute scorecard --local --config ../../wrangler.toml --json
---command "SELECT email FROM user WHERE admin=1 AND email IS NOT NULL"`.
-  2. Trigger the code: `curl -X POST localhost:8787/api/auth/code -H
-'content-type: application/json' -d '{"email":"<email>"}'` (the code is
-     stored before the email send, so a failed/no-op send doesn't matter).
-  3. Read it back (the code is the part after the final `:` in the key):
-     `PREFIX="auth:code:$(printf %s "<email>" | openssl dgst -binary -sha256 |
-openssl base64 -A | tr '+/' '-_' | tr -d '=')"` then
-     `wrangler kv key list --prefix "$PREFIX:" --binding AUTH_CODES --local --config ../../wrangler.toml`
-     and take the suffix of the newest key.
-  4. Build the link (single-use; 10-min TTL for sign-in codes, 24h for invite
-     codes): `<origin>/login/magic?email=<urlencoded-email>&code=<code>` — where
-     `<origin>` is the Vite/ngrok URL. The `/login/magic` page redeems it
-     automatically. Listing the code from KV does NOT consume it (only
-     `POST /api/auth/token` does), so the link stays valid.
+- Enroll a passkey locally (for testing without email delivery): auth is
+  WebAuthn passkeys (see the auth section below). Recovery/invite links are
+  `invite` rows in D1, so read the token straight from the database rather than
+  an inbox, and drive the ceremony with Chrome DevTools' **WebAuthn** tab
+  (enable "Virtual Authenticator environment" with resident keys on) or a real
+  platform authenticator on `localhost`. Steps (Worker on :8787, Vite on
+  :5173):
+  1. Trigger a recovery link for an admin (anti-enumeration always 200):
+     `curl -X POST localhost:8787/api/auth/recover -H 'content-type: application/json'
+-d '{"email":"<admin-email>"}'` — or invite/re-invite from the Golfers tab.
+     (Pick an admin: `wrangler d1 execute scorecard --local --config ../../wrangler.toml
+--json --command "SELECT email FROM user WHERE admin=1 AND email IS NOT NULL"`.)
+  2. Read the freshest invite token from D1: `wrangler d1 execute scorecard --local
+--config ../../wrangler.toml --json --command "SELECT token, expires_at FROM invite
+ORDER BY created_at DESC LIMIT 1"`.
+  3. Open `<vite-origin>/enroll?token=<token>` (e.g.
+     `http://localhost:5173/enroll?token=…`) and create a passkey; you land
+     signed in. Then "Sign in with passkey" on `/login` is usernameless.
+     Reading the token does NOT consume the invite — only completing enrollment
+     deletes the row (a weekly cron prunes expired ones).
 - `bun build`: build the Vite app.
 - `bun lint`: lint and type-check the repository with Oxlint.
 - `bun fmt`: format the repository with Oxfmt.
@@ -472,7 +508,8 @@ openssl base64 -A | tr '+/' '-_' | tr -d '=')"` then
   raw D1 queries unless there is a concrete reason.
 - Never commit Cloudflare credentials or generated `.wrangler` state.
 - The repo-root `.env.local` is the ONLY env file — no `.dev.vars`, no other
-  `.env*` anywhere. It holds local secrets (`JWT_SECRET` for `wrangler dev`,
+  `.env*` anywhere. It holds local secrets (`JWT_SECRET` and
+  `AUTHN_CHALLENGE_SIGNING_SECRET` for `wrangler dev`,
   `AI_GATEWAY_TOKEN` for `bun eval`); wrangler dev reads it directly since no
   `.dev.vars` exists. Required Worker secrets are declared in `wrangler.toml`'s
   `[secrets]` block (validated at dev/deploy time); non-secret config belongs

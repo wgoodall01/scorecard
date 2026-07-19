@@ -19,6 +19,7 @@ export default defineConfig({
       miniflare: {
         bindings: {
           JWT_SECRET: "test-jwt-secret",
+          AUTHN_CHALLENGE_SIGNING_SECRET: "test-challenge-secret",
           TEST_MIGRATIONS: await readD1Migrations("./migrations"),
         },
       },

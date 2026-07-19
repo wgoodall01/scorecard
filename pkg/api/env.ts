@@ -9,7 +9,6 @@ export type Env = {
     DB: D1Database;
     BUCKET: R2Bucket;
     ASSETS: Fetcher;
-    AUTH_CODES: KVNamespace;
     AUTH_RATE_LIMITER: RateLimit;
     EMAIL: SendEmail;
     JOB_QUEUE: Queue<JobQueueMessage>;
@@ -18,9 +17,20 @@ export type Env = {
     AI_GATEWAY_ID: string;
     AUTH_EMAIL_FROM: string;
     JWT_SECRET: string;
+    // WebAuthn: the RP's display name and the comma-separated allowlist of
+    // origins passkeys may be used from. rpID/expectedOrigin are derived
+    // per-request from the caller's Origin header validated against this list
+    // (see src/auth/webauthn.ts), so localhost/prod/ngrok all work.
+    WEBAUTHN_RP_NAME: string;
+    WEBAUTHN_ALLOWED_ORIGINS: string;
+    // Signs the short-lived WebAuthn challenge JWT. A dedicated secret,
+    // separate from JWT_SECRET, so session tokens and challenge tokens can't
+    // be cross-forged.
+    AUTHN_CHALLENGE_SIGNING_SECRET: string;
   };
   Variables: {
-    authEmail: string;
+    // The signed-in user's id (the session JWT's `sub`).
+    authUserId: string;
   };
 };
 

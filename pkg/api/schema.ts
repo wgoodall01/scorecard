@@ -103,6 +103,56 @@ export const nickname = sqliteTable(
   ],
 );
 
+// A WebAuthn passkey registered to a user. The primary key IS the base64url
+// credential id the authenticator minted (globally unique). A user may have
+// several (one per device), each with a user-facing `name`. The credential is
+// tied to the user by id, NOT email — email can change without invalidating a
+// passkey. `publicKey` is the COSE public key stored base64url (text, not a
+// blob), `counter` the signature counter (some authenticators, e.g. Apple,
+// always report 0 — that's fine). `transports` is the JSON array of hints from
+// registration, used to populate allowCredentials.
+export const credential = sqliteTable(
+  "credential",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    name: varchar("name").notNull(),
+    publicKey: varchar("public_key").notNull(),
+    counter: integer("counter").notNull(),
+    transports: json("transports").$type<string[]>(),
+    aaguid: varchar("aaguid"),
+    deviceType: varchar("device_type"),
+    backedUp: integer("backed_up", { mode: "boolean" }),
+    lastUsedAt: varchar("last_used_at"),
+    ...timestamps,
+  },
+  (table) => [index("credential_user_id_idx").on(table.userId)],
+);
+
+// An outstanding invite / recovery token. Enrolling a passkey through it deletes
+// the row. Admin invites (Golfers tab) and self-serve email recovery (login/Me
+// pages) both create one and email an enroll link carrying `token`. Tied to a
+// user id (not email — email may change); expires, and a weekly cron prunes
+// expired rows (see index.ts's scheduled handler).
+export const invite = sqliteTable(
+  "invite",
+  {
+    id: text("id").primaryKey().$defaultFn(uuidv7),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    token: varchar("token").notNull(),
+    expiresAt: varchar("expires_at").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("invite_token_unique").on(table.token),
+    index("invite_user_id_idx").on(table.userId),
+  ],
+);
+
 export const course = sqliteTable("course", {
   id: text("id").primaryKey().$defaultFn(uuidv7),
   name: varchar("name").notNull(),
@@ -439,10 +489,20 @@ export const usgaTee = sqliteTable(
 export const userRelations = relations(user, ({ many }) => ({
   nicknames: many(nickname),
   scorecards: many(scorecard),
+  credentials: many(credential),
+  invites: many(invite),
 }));
 
 export const nicknameRelations = relations(nickname, ({ one }) => ({
   user: one(user, { fields: [nickname.userId], references: [user.id] }),
+}));
+
+export const credentialRelations = relations(credential, ({ one }) => ({
+  user: one(user, { fields: [credential.userId], references: [user.id] }),
+}));
+
+export const inviteRelations = relations(invite, ({ one }) => ({
+  user: one(user, { fields: [invite.userId], references: [user.id] }),
 }));
 
 export const courseRelations = relations(course, ({ many }) => ({

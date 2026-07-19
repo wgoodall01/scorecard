@@ -15,12 +15,12 @@ import { Route as MeRouteImport } from './routes/me'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HonorsRouteImport } from './routes/honors'
 import { Route as GolfersRouteImport } from './routes/golfers'
+import { Route as EnrollRouteImport } from './routes/enroll'
 import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as CaptureRouteImport } from './routes/capture'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ScorecardsIdRouteImport } from './routes/scorecards_.$id'
 import { Route as OutingsIdRouteImport } from './routes/outings_.$id'
-import { Route as LoginMagicRouteImport } from './routes/login_.magic'
 import { Route as GolfersIdRouteImport } from './routes/golfers_.$id'
 import { Route as CoursesCreateRouteImport } from './routes/courses_.create'
 import { Route as CoursesIdRouteImport } from './routes/courses_.$id'
@@ -55,6 +55,11 @@ const GolfersRoute = GolfersRouteImport.update({
   path: '/golfers',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EnrollRoute = EnrollRouteImport.update({
+  id: '/enroll',
+  path: '/enroll',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CoursesRoute = CoursesRouteImport.update({
   id: '/courses',
   path: '/courses',
@@ -80,11 +85,6 @@ const OutingsIdRoute = OutingsIdRouteImport.update({
   path: '/outings/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LoginMagicRoute = LoginMagicRouteImport.update({
-  id: '/login_/magic',
-  path: '/login/magic',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const GolfersIdRoute = GolfersIdRouteImport.update({
   id: '/golfers_/$id',
   path: '/golfers/$id',
@@ -105,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/capture': typeof CaptureRoute
   '/courses': typeof CoursesRoute
+  '/enroll': typeof EnrollRoute
   '/golfers': typeof GolfersRoute
   '/honors': typeof HonorsRoute
   '/login': typeof LoginRoute
@@ -114,7 +115,6 @@ export interface FileRoutesByFullPath {
   '/courses/$id': typeof CoursesIdRoute
   '/courses/create': typeof CoursesCreateRoute
   '/golfers/$id': typeof GolfersIdRoute
-  '/login/magic': typeof LoginMagicRoute
   '/outings/$id': typeof OutingsIdRoute
   '/scorecards/$id': typeof ScorecardsIdRoute
 }
@@ -122,6 +122,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/capture': typeof CaptureRoute
   '/courses': typeof CoursesRoute
+  '/enroll': typeof EnrollRoute
   '/golfers': typeof GolfersRoute
   '/honors': typeof HonorsRoute
   '/login': typeof LoginRoute
@@ -131,7 +132,6 @@ export interface FileRoutesByTo {
   '/courses/$id': typeof CoursesIdRoute
   '/courses/create': typeof CoursesCreateRoute
   '/golfers/$id': typeof GolfersIdRoute
-  '/login/magic': typeof LoginMagicRoute
   '/outings/$id': typeof OutingsIdRoute
   '/scorecards/$id': typeof ScorecardsIdRoute
 }
@@ -140,6 +140,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/capture': typeof CaptureRoute
   '/courses': typeof CoursesRoute
+  '/enroll': typeof EnrollRoute
   '/golfers': typeof GolfersRoute
   '/honors': typeof HonorsRoute
   '/login': typeof LoginRoute
@@ -149,7 +150,6 @@ export interface FileRoutesById {
   '/courses_/$id': typeof CoursesIdRoute
   '/courses_/create': typeof CoursesCreateRoute
   '/golfers_/$id': typeof GolfersIdRoute
-  '/login_/magic': typeof LoginMagicRoute
   '/outings_/$id': typeof OutingsIdRoute
   '/scorecards_/$id': typeof ScorecardsIdRoute
 }
@@ -159,6 +159,7 @@ export interface FileRouteTypes {
     | '/'
     | '/capture'
     | '/courses'
+    | '/enroll'
     | '/golfers'
     | '/honors'
     | '/login'
@@ -168,7 +169,6 @@ export interface FileRouteTypes {
     | '/courses/$id'
     | '/courses/create'
     | '/golfers/$id'
-    | '/login/magic'
     | '/outings/$id'
     | '/scorecards/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -176,6 +176,7 @@ export interface FileRouteTypes {
     | '/'
     | '/capture'
     | '/courses'
+    | '/enroll'
     | '/golfers'
     | '/honors'
     | '/login'
@@ -185,7 +186,6 @@ export interface FileRouteTypes {
     | '/courses/$id'
     | '/courses/create'
     | '/golfers/$id'
-    | '/login/magic'
     | '/outings/$id'
     | '/scorecards/$id'
   id:
@@ -193,6 +193,7 @@ export interface FileRouteTypes {
     | '/'
     | '/capture'
     | '/courses'
+    | '/enroll'
     | '/golfers'
     | '/honors'
     | '/login'
@@ -202,7 +203,6 @@ export interface FileRouteTypes {
     | '/courses_/$id'
     | '/courses_/create'
     | '/golfers_/$id'
-    | '/login_/magic'
     | '/outings_/$id'
     | '/scorecards_/$id'
   fileRoutesById: FileRoutesById
@@ -211,6 +211,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CaptureRoute: typeof CaptureRoute
   CoursesRoute: typeof CoursesRoute
+  EnrollRoute: typeof EnrollRoute
   GolfersRoute: typeof GolfersRoute
   HonorsRoute: typeof HonorsRoute
   LoginRoute: typeof LoginRoute
@@ -220,7 +221,6 @@ export interface RootRouteChildren {
   CoursesIdRoute: typeof CoursesIdRoute
   CoursesCreateRoute: typeof CoursesCreateRoute
   GolfersIdRoute: typeof GolfersIdRoute
-  LoginMagicRoute: typeof LoginMagicRoute
   OutingsIdRoute: typeof OutingsIdRoute
   ScorecardsIdRoute: typeof ScorecardsIdRoute
 }
@@ -269,6 +269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GolfersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/enroll': {
+      id: '/enroll'
+      path: '/enroll'
+      fullPath: '/enroll'
+      preLoaderRoute: typeof EnrollRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/courses': {
       id: '/courses'
       path: '/courses'
@@ -304,13 +311,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OutingsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login_/magic': {
-      id: '/login_/magic'
-      path: '/login/magic'
-      fullPath: '/login/magic'
-      preLoaderRoute: typeof LoginMagicRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/golfers_/$id': {
       id: '/golfers_/$id'
       path: '/golfers/$id'
@@ -339,6 +339,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CaptureRoute: CaptureRoute,
   CoursesRoute: CoursesRoute,
+  EnrollRoute: EnrollRoute,
   GolfersRoute: GolfersRoute,
   HonorsRoute: HonorsRoute,
   LoginRoute: LoginRoute,
@@ -348,7 +349,6 @@ const rootRouteChildren: RootRouteChildren = {
   CoursesIdRoute: CoursesIdRoute,
   CoursesCreateRoute: CoursesCreateRoute,
   GolfersIdRoute: GolfersIdRoute,
-  LoginMagicRoute: LoginMagicRoute,
   OutingsIdRoute: OutingsIdRoute,
   ScorecardsIdRoute: ScorecardsIdRoute,
 }
