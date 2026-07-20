@@ -168,6 +168,18 @@ class AuthService {
     return token;
   }
 
+  // DEV ONLY. Trades an email for a session with no passkey ceremony, via the
+  // local-only /auth/dev-login route (which 404s unless the Worker's
+  // NODE_ENV === "development"). Callers must gate this behind
+  // `process.env.NODE_ENV === "development"` so it's dead code in prod builds.
+  async devLogin(email: string) {
+    const response = await createApiClient().api.auth["dev-login"].$post({ json: { email } });
+    if (!response.ok) throw new ApiError(await requestError(response), response.status);
+    const { token } = await response.json();
+    this.setToken(token);
+    return token;
+  }
+
   // Self-serve recovery / "email me a sign-in link". Always resolves (the API
   // never reveals whether the email exists).
   async requestRecovery(email: string) {

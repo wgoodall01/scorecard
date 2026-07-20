@@ -11,13 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ResponsiveSelect } from "@/components/responsive-select";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth-context";
 import { OutingList, type OutingListRound, type OutingSummary } from "@/pages/outings";
@@ -553,26 +547,15 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="golfer-tee">Preferred tee</Label>
-              <Select
-                items={[
-                  { value: null, label: "Not set" },
-                  ...TEES.map((tee) => ({ value: tee, label: TEE_LABELS[tee] })),
-                ]}
+              <ResponsiveSelect
+                id="golfer-tee"
                 value={preferredTee}
-                onValueChange={(value) => setPreferredTee(value as Tee | null)}
-              >
-                <SelectTrigger id="golfer-tee" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={null}>Not set</SelectItem>
-                  {TEES.map((tee) => (
-                    <SelectItem key={tee} value={tee}>
-                      {TEE_LABELS[tee]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={(value) => setPreferredTee(value)}
+                options={TEES.map((tee) => ({ value: tee, label: TEE_LABELS[tee] }))}
+                clearable
+                placeholder="Not set"
+                title="Preferred tee"
+              />
             </div>
             <div className="flex flex-col gap-2">
               <Label>Gender</Label>

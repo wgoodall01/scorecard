@@ -12,6 +12,8 @@ type AuthContextValue = {
   profileError: string | null;
   isAdmin: boolean;
   signInWithPasskey: () => Promise<void>;
+  // DEV ONLY — see AuthService.devLogin. Gate calls on process.env.NODE_ENV.
+  devLogin: (email: string) => Promise<void>;
   enrollPasskey: (opts: { inviteToken?: string; name?: string }) => Promise<void>;
   requestRecovery: (email: string) => Promise<void>;
   signOut: () => void;
@@ -70,6 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: profile?.admin ?? false,
       signInWithPasskey: async () => {
         setToken(await authService.signInWithPasskey());
+      },
+      devLogin: async (email) => {
+        setToken(await authService.devLogin(email));
       },
       enrollPasskey: async (opts) => {
         setToken(await authService.enrollPasskey(opts));

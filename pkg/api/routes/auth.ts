@@ -63,6 +63,8 @@ const RegisterVerifyRequest = z.object({
 
 const RecoverRequest = z.object({ email: Email });
 
+const DevLoginRequest = z.object({ email: Email });
+
 const RenameCredentialRequest = z.object({ name: z.string().trim().min(1).max(60) });
 
 function nowIso() {
@@ -277,6 +279,23 @@ export function createAuthRoutes(deps: AuthDeps = defaultDeps) {
           });
         }
         return c.json({ ok: true });
+      })
+      // --- Local-dev sign-in bypass -----------------------------------------
+      // DEV ONLY. Mints a session for any existing user by email — no passkey,
+      // no email round-trip — so local development doesn't need a virtual
+      // authenticator. Hard-gated on process.env.NODE_ENV with a default-deny
+      // check: anything other than exactly "development" 404s, so the route is
+      // inert unless something sets NODE_ENV=development. wrangler.toml pins
+      // NODE_ENV="production" for deploys (and Workers defaults to production
+      // regardless), while .env.local sets it to "development" for wrangler dev
+      // — so this cannot be reached in production.
+      .post("/auth/dev-login", zodBody(DevLoginRequest, "A valid email is required"), async (c) => {
+        if (process.env.NODE_ENV !== "development") return c.json({ error: "Not found" }, 404);
+        const { email } = c.req.valid("json");
+        const db = getDb(c.env.DB);
+        const target = await db.query.user.findFirst({ where: eq(user.email, email) });
+        if (!target) return c.json({ error: `No user with email ${email}.` }, 404);
+        return c.json({ token: await createToken(target.id, c.env.JWT_SECRET) });
       })
       // Logged-in "add a new device": email yourself an enroll link.
       .post("/auth/invite/self", requireAuth, async (c) => {

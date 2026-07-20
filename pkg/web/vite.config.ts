@@ -15,8 +15,14 @@ export default defineConfig({
   server: {
     // Listen on all interfaces so phones on the LAN can reach the dev server.
     host: true,
-    // Allow tunneling the dev server through ngrok (e.g. for HTTPS on a phone).
-    allowedHosts: [".ngrok-free.app"],
+    // Pin the port so `bun dev:tunnel` (and the Cloudflare quick tunnel it
+    // points at localhost:5173) always line up; fail loudly rather than
+    // silently hopping to 5174 if it's taken.
+    port: 5173,
+    strictPort: true,
+    // Allow tunneling the dev server for phone testing (Cloudflare quick
+    // tunnels serve on *.trycloudflare.com; ngrok kept for compatibility).
+    allowedHosts: [".trycloudflare.com", ".ngrok-free.app"],
     proxy: {
       "/api": "http://localhost:8787",
     },

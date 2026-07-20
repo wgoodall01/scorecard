@@ -26,8 +26,8 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   `TEES` list for this reason). The capture review step
   (`src/components/review-round.tsx`) is the mobile-first editor over the
   extraction: score grid, golfer pickers seeded from `matched`, an
-  async-loading course combobox
-  (`src/components/async-combobox.tsx`, re-fetched on every open) over
+  async-loading course picker
+  (`src/components/responsive-select.tsx`, re-fetched on every open) over
   existing courses, a date input defaulting to the handwritten date else
   today (future dates are flagged and a "Today" button resolves them; the
   API also rejects them), and the `/outings/check`-driven "add to existing
@@ -142,7 +142,11 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   (rate-limited, ALWAYS 200 for anti-enumeration — also the migration path for
   old magic-link users and the lost-device reset); `/auth/invite/self` emails
   yourself an enroll link; `/auth/invite/:token` backs the enroll page; and
-  `/auth/credentials` (GET/PATCH/DELETE, self-owned) manages passkeys. The
+  `/auth/credentials` (GET/PATCH/DELETE, self-owned) manages passkeys;
+  `/auth/dev-login` is a LOCAL-ONLY bypass that mints a session for any existing
+  user by email with no ceremony, hard-gated on
+  `process.env.NODE_ENV === "development"` (404 otherwise — see the dev sign-in
+  note under Commands). The
   ceremony verify functions are dependency-injected (`createAuthRoutes(deps)`)
   so tests stub the crypto. A successful ceremony mints the session JWT via
   `routes/shared.ts`'s `createToken`, whose subject is now the USER ID (not
@@ -210,12 +214,18 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   per-tee ratings plus a rightmost par-exceptions column — "Hole 4 is Par
   4"-style deviations from that baseline). Buck Hill
   Falls is seeded in
-  `seed/courses.yaml` from NCRDB CourseIDs 21162/21163/21164 (facility
-  20114): men's marker tees Blue/White/Gold/Red/Green typed as
-  back/standard/senior/front/junior (BHF has no tips). Every seed tee
-  carries its own `holes` list with hardcoded uuidv7 ids (pars differ by
-  tee on some holes — exact per-tee pars/ratings will be re-upserted by a
-  planned USGA scraper).
+  `seed/courses.yaml` (course "Buck Hill Falls Golf Club", NCRDB facility
+  20114, sets White Oak/Blue Spruce/Red Maple = CourseIDs 21162/21163/21164).
+  The seed entry MIRRORS the live production course — every course, set, tee,
+  and hole id is the REAL prod uuid (it was regenerated from prod after the
+  course was uploaded/edited via the admin course-create flow, replacing the
+  original hand-seeded "Golf Course" entry, now archived on prod), so
+  re-seeding upserts into the same rows. It carries all 36 tees: men's and
+  women's markers (Blue/White/Gold/Red/Green typed
+  back/standard/senior/front/junior) plus USGA combo markers (e.g. "Blue/White",
+  `type: null`); unrated combos carry null ratings. Each tee lists its own
+  `holes` (par differs by tee on some holes; the script seeds id/number/par —
+  `yardage` in the YAML is documentation only, not applied).
 - `pkg/api/routes/honors.ts` + `pkg/api/src/honors.ts`: the honors board.
   `computeHonors(db, since)` runs ONE SQLite query (CTEs + window functions;
   raw D1, deliberately not Drizzle) over the recent window
@@ -389,6 +399,27 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   front end.
 - `bun dev:web`: run only Vite locally; its `/api` requests proxy to the Worker
   (which must already be running separately in another terminal).
+- `bun dev:tunnel`: `bun dev` plus a Cloudflare quick tunnel
+  (`wrangler tunnel quick-start http://localhost:5173`) so a phone can reach the
+  app over HTTPS. It prints a `https://<name>.trycloudflare.com` URL and kills
+  the tunnel on exit. Vite's port is pinned to 5173 (`strictPort`) so the tunnel
+  target always lines up, and `.trycloudflare.com` is in Vite's `allowedHosts`.
+  The URL is random per run, so it is NOT a registered WebAuthn origin — pair it
+  with the dev sign-in bypass below (no passkey needed), not the passkey
+  ceremony. When handing the tunnel URL to the user, ALWAYS also give the
+  one-click dev-login link `<tunnel-url>/login?devLoginOverride=<email>` using a
+  seeded golfer's email (default the admin `wgoodall01@gmail.com`), so they land
+  signed in with a single tap.
+- Sign in locally without a passkey (DEV ONLY): the `/login` page shows a
+  caution-striped form (`<CautionStripe>`) to sign in as any existing golfer by
+  email, and `/login?devLoginOverride=<email>` does it immediately on load. Both
+  hit `POST /api/auth/dev-login`, hard-gated on
+  `process.env.NODE_ENV === "development"` (default-deny — 404 otherwise) so it
+  cannot exist in production. `NODE_ENV` is `development` via `.env.local` for
+  `wrangler dev` and pinned `production` in `wrangler.toml` `[vars]` for deploys;
+  the client UI is gated on the same check and stripped from prod bundles by
+  Vite. This is the fast path for local + phone-tunnel testing; the passkey
+  ceremony below is only for testing passkeys themselves.
 - Enroll a passkey locally (for testing without email delivery): auth is
   WebAuthn passkeys (see the auth section below). Recovery/invite links are
   `invite` rows in D1, so read the token straight from the database rather than
@@ -436,6 +467,13 @@ ORDER BY created_at DESC LIMIT 1"`.
   hand-fix the generated SQL (pragmas → `defer_foreign_keys`; multi-arg index
   expressions).
 - `bun db:migrate:local` / `bun db:migrate:remote`: apply migrations.
+- `bun db:seed:local`: upsert `seed/*.yaml` into the LOCAL D1 (`nu
+  script/update_seed.nu --local`).
+- `bun db:nuke`: wipe ALL local Miniflare state (`rm -rf .wrangler/state` — D1,
+  KV, R2, cache, images, workflows), then re-migrate and re-seed local from
+  scratch. Stop `bun dev` first (it holds the state open) and restart it after.
+  A clean-slate reset — handy when local rows have drifted from the seed (e.g.
+  nickname/course natural-key collisions).
 - `nu script/update_seed.nu --local --remote`: upsert the seed data in
   `seed/*.yaml` (golfers + nicknames, courses + sets + tees + holes) into
   D1. The baked-in uuidv7s are CANONICAL for users, nicknames, and courses

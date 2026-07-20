@@ -16,21 +16,14 @@ import type {
   PlayerBoxSchema,
   SubmitOutingRequestSchema,
 } from "api";
-import { AsyncCombobox } from "@/components/async-combobox";
 import { GolfScore } from "@/components/golf-score";
 import { ImageExpand } from "@/components/image-expand";
 import { InitialsThumbnail } from "@/components/initials-thumbnail";
+import { ResponsiveSelect } from "@/components/responsive-select";
 import { Score } from "@/components/score";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import type { Golfer } from "@/pages/golfers";
@@ -847,17 +840,22 @@ export function ReviewRound({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="round-course">Course</Label>
-            <AsyncCombobox
+            <ResponsiveSelect
               id="round-course"
               value={courseId}
               onValueChange={(value) => changeCourse(value)}
               options={
                 coursesLoaded
-                  ? courses.map((course) => ({ value: course.id, label: course.name }))
+                  ? courses.map((course) => ({
+                      value: course.id,
+                      label: course.name,
+                      description: course.location ?? undefined,
+                    }))
                   : null
               }
               onOpen={() => void loadCourses()}
               placeholder="— Choose course —"
+              title="Choose course"
               searchPlaceholder="Search courses…"
               emptyMessage="No courses match."
               invalid={courseId === null}
@@ -909,33 +907,21 @@ export function ReviewRound({
                       Same golfer as {aliases.join(" and ")} — their nines are scored as one player.
                     </p>
                   )}
-                  <Select
-                    items={[
-                      { value: null, label: "— Choose golfer —" },
-                      ...golfers.map((golfer) => ({
-                        value: golfer.id,
-                        label: golfer.name ?? golfer.email ?? "Unnamed golfer",
-                      })),
-                    ]}
+                  <ResponsiveSelect
+                    ariaLabel={`Golfer for ${player.name}`}
                     value={player.playerId}
-                    onValueChange={(value) => assignGolfer(index, value as string | null)}
-                  >
-                    <SelectTrigger
-                      className="w-full"
-                      aria-label={`Golfer for ${player.name}`}
-                      aria-invalid={player.playerId === null}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={null}>— Choose golfer —</SelectItem>
-                      {golfers.map((golfer) => (
-                        <SelectItem key={golfer.id} value={golfer.id}>
-                          {golfer.name ?? golfer.email ?? "Unnamed golfer"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(value) => assignGolfer(index, value)}
+                    options={golfers.map((golfer) => ({
+                      value: golfer.id,
+                      label: golfer.name ?? golfer.email ?? "Unnamed golfer",
+                    }))}
+                    searchable
+                    clearable
+                    invalid={player.playerId === null}
+                    placeholder="— Choose golfer —"
+                    title={`Golfer for “${player.name}”`}
+                    searchPlaceholder="Search golfers…"
+                  />
                 </div>
               );
             })}
@@ -990,49 +976,42 @@ export function ReviewRound({
           >
             <div className="flex flex-col gap-2">
               <Label>Nine at {selectedCourse?.name ?? "the course"}</Label>
-              <Select
-                items={[
-                  { value: null, label: "— Choose nine —" },
-                  ...(selectedCourse?.sets ?? []).map((entry) => ({
-                    value: entry.id,
-                    label: entry.name,
-                  })),
-                ]}
+              <ResponsiveSelect
+                ariaLabel={`Course nine for ${defaultNineName(nine)}`}
                 value={nine.courseSetId}
                 onValueChange={(value) =>
                   updateNine(nineIndex, {
-                    courseSetId: value as string | null,
+                    courseSetId: value,
                     // Reset tees so the defaults re-derive for the new set.
                     teeIds: nine.playerNames.map(() => null),
                   })
                 }
-              >
-                <SelectTrigger
-                  className="w-full"
-                  aria-label={`Course nine for ${defaultNineName(nine)}`}
-                  aria-invalid={nine.courseSetId === null}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={null}>— Choose nine —</SelectItem>
-                  {(selectedCourse?.sets ?? []).map((entry) => {
-                    const numbers = entry.tees.flatMap((tee) =>
-                      tee.holes.map((hole) => hole.number),
-                    );
-                    const range =
-                      numbers.length > 0
-                        ? ` · holes ${Math.min(...numbers)}–${Math.max(...numbers)}`
-                        : "";
-                    return (
-                      <SelectItem key={entry.id} value={entry.id}>
-                        {entry.name}
-                        {range}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                options={(selectedCourse?.sets ?? []).map((entry) => ({
+                  value: entry.id,
+                  label: entry.name,
+                }))}
+                clearable
+                invalid={nine.courseSetId === null}
+                placeholder="— Choose nine —"
+                title={`Nine at ${selectedCourse?.name ?? "the course"}`}
+                // Custom row: append the nine's hole range (muted) after its
+                // name, while the trigger stays just the name.
+                renderItem={(option) => {
+                  const entry = selectedCourse?.sets.find((s) => s.id === option.value);
+                  const numbers =
+                    entry?.tees.flatMap((tee) => tee.holes.map((hole) => hole.number)) ?? [];
+                  const range =
+                    numbers.length > 0
+                      ? ` · holes ${Math.min(...numbers)}–${Math.max(...numbers)}`
+                      : "";
+                  return (
+                    <span className="truncate">
+                      {option.label}
+                      {range && <span className="text-muted-foreground">{range}</span>}
+                    </span>
+                  );
+                }}
+              />
             </div>
 
             {set && set.tees.length > 0 && (
@@ -1040,39 +1019,25 @@ export function ReviewRound({
                 {nine.playerNames.map((name, playerIndex) => (
                   <div key={name} className="flex flex-col gap-2">
                     <Label>Tee for {golferLabel(name)}</Label>
-                    <Select
-                      items={[
-                        { value: null, label: "— Choose tee —" },
-                        ...sortTees(set.tees).map((tee) => ({
-                          value: tee.id,
-                          label: teeLabel(tee),
-                        })),
-                      ]}
+                    <ResponsiveSelect
+                      ariaLabel={`Tee for ${golferLabel(name)} on ${defaultNineName(nine)}`}
                       value={nine.teeIds[playerIndex] ?? null}
                       onValueChange={(value) =>
                         updateNine(nineIndex, {
                           teeIds: nine.teeIds.map((teeId, index) =>
-                            index === playerIndex ? (value as string | null) : teeId,
+                            index === playerIndex ? value : teeId,
                           ),
                         })
                       }
-                    >
-                      <SelectTrigger
-                        className="w-full"
-                        aria-label={`Tee for ${golferLabel(name)} on ${defaultNineName(nine)}`}
-                        aria-invalid={nine.teeIds[playerIndex] === null}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={null}>— Choose tee —</SelectItem>
-                        {sortTees(set.tees).map((tee) => (
-                          <SelectItem key={tee.id} value={tee.id}>
-                            {teeLabel(tee)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      options={sortTees(set.tees).map((tee) => ({
+                        value: tee.id,
+                        label: teeLabel(tee),
+                      }))}
+                      clearable
+                      invalid={nine.teeIds[playerIndex] === null}
+                      placeholder="— Choose tee —"
+                      title={`Tee for ${golferLabel(name)}`}
+                    />
                   </div>
                 ))}
               </div>

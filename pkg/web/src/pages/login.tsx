@@ -1,14 +1,28 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { KeyRound, MailCheck, Share } from "lucide-react";
+import { KeyRound, LogIn, MailCheck, Share } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CautionStripe } from "@/components/caution-stripe";
 import { CenterCardLayout } from "@/components/center-card-layout";
 import { PageTitle } from "@/App";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, authService, browserSupportsWebAuthn } from "@/lib/auth";
 
-export function LoginPage({ returnTo, initialEmail }: { returnTo: string; initialEmail?: string }) {
-  const { signInWithPasskey, requestRecovery } = useAuth();
+// Vite statically replaces this, so the dev-login UI and its call site are
+// dead-code-eliminated from production bundles. The server route is the real
+// gate; this just keeps the bypass out of prod entirely.
+const IS_DEV = process.env.NODE_ENV === "development";
+
+export function LoginPage({
+  returnTo,
+  initialEmail,
+  devLoginOverride,
+}: {
+  returnTo: string;
+  initialEmail?: string;
+  devLoginOverride?: string;
+}) {
+  const { signInWithPasskey, requestRecovery, devLogin } = useAuth();
   const navigate = useNavigate();
   const [supported] = useState(() => browserSupportsWebAuthn());
   const [email, setEmail] = useState(initialEmail ?? "");
@@ -16,11 +30,38 @@ export function LoginPage({ returnTo, initialEmail }: { returnTo: string; initia
   const [recoverySent, setRecoverySent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [devEmail, setDevEmail] = useState(devLoginOverride ?? initialEmail ?? "");
   const [isStandalone] = useState(
     () =>
       window.matchMedia("(display-mode: standalone)").matches ||
       (navigator as Navigator & { standalone?: boolean }).standalone === true,
   );
+
+  // DEV ONLY: sign in as an arbitrary email with no passkey. Shared by the
+  // ?devLoginOverride= auto-login and the caution-striped form below.
+  async function devSignIn(email: string) {
+    if (!IS_DEV || !email.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await devLogin(email.trim());
+      await navigate({ href: returnTo, replace: true });
+    } catch (devError) {
+      setError(devError instanceof ApiError ? devError.message : "Dev sign-in failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Fire the auto-login once when arriving at /login?devLoginOverride=<email>.
+  const autoLoginDone = useRef(false);
+  useEffect(() => {
+    if (!IS_DEV || !devLoginOverride || autoLoginDone.current) return;
+    autoLoginDone.current = true;
+    void devSignIn(devLoginOverride);
+    // devSignIn closes over stable values; run exactly once for this param.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devLoginOverride]);
 
   async function signIn() {
     setLoading(true);
@@ -168,6 +209,35 @@ export function LoginPage({ returnTo, initialEmail }: { returnTo: string; initia
           </button>
         )}
       </div>
+
+      {IS_DEV && (
+        <CautionStripe label="Dev only · local sign-in">
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void devSignIn(devEmail);
+            }}
+          >
+            <p className="text-sm text-muted-foreground">
+              Sign in as any existing golfer by email — no passkey. Works only on local dev.
+            </p>
+            <input
+              id="dev-email"
+              className="w-full rounded-md border bg-background px-3 py-2"
+              type="email"
+              autoComplete="off"
+              placeholder="golfer@example.com"
+              value={devEmail}
+              onChange={(event) => setDevEmail(event.target.value)}
+            />
+            <Button type="submit" variant="outline" disabled={loading || !devEmail.trim()}>
+              <LogIn data-icon="inline-start" />
+              {loading ? "Signing in…" : "Sign in as this email"}
+            </Button>
+          </form>
+        </CautionStripe>
+      )}
     </CenterCardLayout>
   );
 }

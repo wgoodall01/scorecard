@@ -70,6 +70,11 @@ remote = true
 binding = "IMAGES"
 
 [vars]
+# Pins process.env.NODE_ENV in production (Workers defaults to "production"
+# anyway, but be explicit). `.env.local` overrides it to "development" for
+# wrangler dev, which is the ONLY thing that enables the /auth/dev-login
+# bypass — see routes/auth.ts.
+NODE_ENV = "production"
 AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
 AI_GATEWAY_ID = "scorecard"
 WEBAUTHN_RP_NAME = "Scorecard"

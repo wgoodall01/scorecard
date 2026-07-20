@@ -7,272 +7,612 @@
 # differ by tee position); exact per-tee pars and ratings will be
 # re-upserted by the planned USGA scraper.
 courses:
-  - id: 019f7224-8600-7a93-b371-af4ba7a96372
-    name: Buck Hill Falls Golf Course
+  - id: 019f781c-5264-728d-b485-66f5b01c1701
+    name: Buck Hill Falls Golf Club
     location: Buck Hill Falls, PA
     ncrdb_facility_id: 20114
-    # The NCRDB (ncrdb.usga.org) knows the facility as 20114 and rates it as
-    # three 18-hole nine-combinations: 21162 = White/Blue, 21163 = Blue/Red,
-    # 21164 = Red/White. Each nine carries the CourseID of the combo it
-    # fronts (usga_course_nine: front); its per-tee 9-hole ratings are that
-    # combo's Front(9) splits.
+    # The live, USGA-imported Buck Hill Falls course (NCRDB facility 20114,
+    # ncrdb.usga.org). This entry mirrors the course as it exists in
+    # production — course, set, tee, and hole ids are the REAL prod uuids so
+    # the seed upserts into the same rows (the older hand-seeded "Golf Course"
+    # entry it replaced is archived on prod).
     #
-    # BHF's men's markers, longest to shortest: Blue, White, Gold, Red,
-    # Green (no tips). Their app-level `type` tags them for matching a
-    # golfer's preferred-tee profile setting.
+    # NCRDB rates the facility as three 18-hole nine-combinations:
+    # 21162 = White Oak, 21163 = Blue Spruce, 21164 = Red Maple; each nine
+    # carries the CourseID of the combo it fronts (usga_course_nine: front).
+    # Tees cover men's and women's markers (Blue/White/Gold/Red/Green, typed
+    # back/standard/senior/front/junior) plus USGA combo markers
+    # (e.g. Blue/White) which have no profile type. Nine-hole ratings live on
+    # each tee; unrated combos carry null ratings.
     sets:
-      - id: 019f7224-8600-7909-9260-233d35044908
+      - id: 019f781c-5264-7e29-9b35-0660957eeb1a
         name: White Oak
         usga_course_id: 21162
         usga_course_nine: front
         tees:
-          - id: 019f73ae-72d6-7ac8-84a3-48a1e439692c
+          - id: 019f781c-5264-7ed5-96ed-8715c6fbe151
             name: Blue
             type: back
             gender: m
             course_rating: 35.7
             slope_rating: 127
             holes:
-              - { id: 019f762c-5601-74f3-8d88-138e2a9578dd, number: 1, par: 4, yardage: 343 }
-              - { id: 019f762c-5602-75bb-a532-b12ad91e61a2, number: 2, par: 5, yardage: 510 }
-              - { id: 019f762c-5602-7c57-a2a0-106074397497, number: 3, par: 4, yardage: 336 }
-              - { id: 019f762c-5602-712a-ba37-f83b432f2204, number: 4, par: 5, yardage: 563 }
-              - { id: 019f762c-5602-70fb-a809-009f4d1f2355, number: 5, par: 4, yardage: 387 }
-              - { id: 019f762c-5602-7cbd-bc22-341863d4c0a7, number: 6, par: 4, yardage: 392 }
-              - { id: 019f762c-5602-784f-905a-9745dba0f5c0, number: 7, par: 3, yardage: 161 }
-              - { id: 019f762c-5602-772c-9924-33308d196cef, number: 8, par: 4, yardage: 432 }
-              - { id: 019f762c-5602-7c9a-8ba4-b42f1a698188, number: 9, par: 3, yardage: 207 }
-          - id: 019f73ae-72d6-7ee6-890a-c9366aea8032
+              - { id: 019f781c-5264-70c8-8fa4-03b274a1d852, number: 1, par: 4, yardage: 343 }
+              - { id: 019f781c-5264-788f-a791-95a316c2686f, number: 2, par: 5, yardage: 510 }
+              - { id: 019f781c-5264-7705-b048-5dc7401dfc07, number: 3, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-7655-b29d-916b6c7a16a7, number: 4, par: 5, yardage: 563 }
+              - { id: 019f781c-5264-79fd-b52a-0005049a5e24, number: 5, par: 4, yardage: 387 }
+              - { id: 019f781c-5264-77f1-81b6-5bf4f2bdbff1, number: 6, par: 4, yardage: 392 }
+              - { id: 019f781c-5264-7dd3-9f65-17b302fa9cdb, number: 7, par: 3, yardage: 161 }
+              - { id: 019f781c-5264-75a0-b4f0-99385292fdaf, number: 8, par: 4, yardage: 432 }
+              - { id: 019f781c-5264-7e55-955d-d57fcd07e2d7, number: 9, par: 3, yardage: 207 }
+          - id: 019f781c-5264-70f2-9624-458758a30395
+            name: Blue/White
+            type: null
+            gender: m
+            course_rating: 35.2
+            slope_rating: 126
+            holes:
+              - { id: 019f781c-5264-7a53-bee1-d884daaae1e0, number: 1, par: 4, yardage: 343 }
+              - { id: 019f781c-5264-74ac-83a4-723547352d0f, number: 2, par: 5, yardage: 475 }
+              - { id: 019f781c-5264-77f8-9811-eea197d6693f, number: 3, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-74e4-b5c9-4f4881842fd2, number: 4, par: 5, yardage: 563 }
+              - { id: 019f781c-5264-7a9e-81b6-32b3e98c84e3, number: 5, par: 4, yardage: 361 }
+              - { id: 019f781c-5264-7c41-a184-1f693515d5e8, number: 6, par: 4, yardage: 382 }
+              - { id: 019f781c-5264-7ca4-8f53-05cfb46c2724, number: 7, par: 3, yardage: 149 }
+              - { id: 019f781c-5264-7759-a2c0-fddfa87d0799, number: 8, par: 4, yardage: 410 }
+              - { id: 019f781c-5264-752d-b783-80bae144b3da, number: 9, par: 3, yardage: 207 }
+          - id: 019f781c-5264-737c-ad84-8a139af597af
             name: White
             type: standard
             gender: m
             course_rating: 35
             slope_rating: 125
             holes:
-              - { id: 019f762c-5602-7895-938f-eca934da94c8, number: 1, par: 4, yardage: 336 }
-              - { id: 019f762c-5602-76e5-bfd7-b1b5a05c6f9c, number: 2, par: 5, yardage: 475 }
-              - { id: 019f762c-5602-7728-a2e7-776158456813, number: 3, par: 4, yardage: 322 }
-              - { id: 019f762c-5602-7b1b-8da2-2e6992681aae, number: 4, par: 5, yardage: 554 }
-              - { id: 019f762c-5602-7cde-a24e-b55d987368dd, number: 5, par: 4, yardage: 361 }
-              - { id: 019f762c-5602-7ddc-a6b8-6af10d2456a7, number: 6, par: 4, yardage: 382 }
-              - { id: 019f762c-5602-768c-bbbe-3dc8a125dbd6, number: 7, par: 3, yardage: 149 }
-              - { id: 019f762c-5602-70b6-841f-bb26f75010bc, number: 8, par: 4, yardage: 410 }
-              - { id: 019f762c-5602-77b3-b8ac-98820ef64f29, number: 9, par: 3, yardage: 199 }
-          - id: 019f73b6-7eb8-70cd-9fea-2e4d5a3b19a4
+              - { id: 019f781c-5264-7431-a6a7-920f5c6ed7c5, number: 1, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-7265-9c3d-e945250fe3c3, number: 2, par: 5, yardage: 475 }
+              - { id: 019f781c-5264-7c1d-be4e-6ae983e8acff, number: 3, par: 4, yardage: 322 }
+              - { id: 019f781c-5264-748e-9fd7-b9d09ac653ba, number: 4, par: 5, yardage: 554 }
+              - { id: 019f781c-5264-7f10-bd2f-afc797945d2f, number: 5, par: 4, yardage: 361 }
+              - { id: 019f781c-5264-7da3-8fa0-4996f9a2eb1c, number: 6, par: 4, yardage: 382 }
+              - { id: 019f781c-5264-7b0e-a6f0-10ec1263dabc, number: 7, par: 3, yardage: 149 }
+              - { id: 019f781c-5264-782b-b0b5-faa848be7ada, number: 8, par: 4, yardage: 410 }
+              - { id: 019f781c-5264-72a4-936b-b1e362a961a3, number: 9, par: 3, yardage: 199 }
+          - id: 019f781c-5264-76ae-a6cb-645c1ccc788c
+            name: White/Gold
+            type: null
+            gender: m
+            course_rating: 33.7
+            slope_rating: 119
+            holes:
+              - { id: 019f781c-5264-7cfd-9ce8-ee66001b9f28, number: 1, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-7f83-95b0-28b194359994, number: 2, par: 5, yardage: 475 }
+              - { id: 019f781c-5264-79fd-8a06-1c920a495ed5, number: 3, par: 4, yardage: 278 }
+              - { id: 019f781c-5264-79b7-b290-405b5791e93d, number: 4, par: 5, yardage: 489 }
+              - { id: 019f781c-5264-7a36-a6f4-5d245e66e93b, number: 5, par: 4, yardage: 310 }
+              - { id: 019f781c-5264-77d8-a2ed-c9b5120015d1, number: 6, par: 4, yardage: 382 }
+              - { id: 019f781c-5264-7d45-90fe-d8bb0e246138, number: 7, par: 3, yardage: 149 }
+              - { id: 019f781c-5264-79ea-9a3f-8c8d1a86df28, number: 8, par: 4, yardage: 340 }
+              - { id: 019f781c-5264-769a-878b-fdaa45cf8cca, number: 9, par: 3, yardage: 166 }
+          - id: 019f781c-5264-7f3e-8d2a-a66686884a77
             name: Gold
             type: senior
             gender: m
             course_rating: 33.1
             slope_rating: 116
             holes:
-              - { id: 019f762c-5602-759b-a62e-5a9e132214a3, number: 1, par: 4, yardage: 318 }
-              - { id: 019f762c-5602-7602-9d87-26b67cc3095b, number: 2, par: 5, yardage: 440 }
-              - { id: 019f762c-5602-73ef-a90a-fa4821b7b668, number: 3, par: 4, yardage: 278 }
-              - { id: 019f762c-5602-77f2-9803-dc98991cce8a, number: 4, par: 5, yardage: 489 }
-              - { id: 019f762c-5602-7eb6-9d20-c9bdc7861701, number: 5, par: 4, yardage: 310 }
-              - { id: 019f762c-5602-7f8b-b8c9-6c49c46da81c, number: 6, par: 4, yardage: 314 }
-              - { id: 019f762c-5602-75d5-b217-de2ecc229f26, number: 7, par: 3, yardage: 139 }
-              - { id: 019f762c-5602-76b2-8d3c-260ff832b877, number: 8, par: 4, yardage: 340 }
-              - { id: 019f762c-5602-7cc7-927d-216655ae8493, number: 9, par: 3, yardage: 166 }
-          - id: 019f73ae-72d6-7656-b190-3c03a4cb2691
+              - { id: 019f781c-5264-7a93-8642-7aa99017d2f8, number: 1, par: 4, yardage: 318 }
+              - { id: 019f781c-5264-7b93-b48b-e9d335c1bc91, number: 2, par: 5, yardage: 440 }
+              - { id: 019f781c-5264-7229-894f-d6b0082465c1, number: 3, par: 4, yardage: 278 }
+              - { id: 019f781c-5264-73ca-a0da-22961b78b9af, number: 4, par: 5, yardage: 489 }
+              - { id: 019f781c-5264-74a4-b1ea-69999067f56f, number: 5, par: 4, yardage: 310 }
+              - { id: 019f781c-5264-7625-9b19-8b83375eaa54, number: 6, par: 4, yardage: 314 }
+              - { id: 019f781c-5264-7fd5-b5d1-e4ad6cf2a8c6, number: 7, par: 3, yardage: 139 }
+              - { id: 019f781c-5264-72ad-b5b3-9ea5ea994c29, number: 8, par: 4, yardage: 340 }
+              - { id: 019f781c-5264-7568-8f3e-82581b6cf45a, number: 9, par: 3, yardage: 166 }
+          - id: 019f781c-5264-71ca-a88d-9c2384554ea2
             name: Red
             type: front
             gender: m
             course_rating: 32.4
             slope_rating: 113
             holes:
-              - { id: 019f762c-5602-7075-a701-27ca2af3315e, number: 1, par: 4, yardage: 263 }
-              - { id: 019f762c-5602-76b9-9c05-d0c8e9b3dd36, number: 2, par: 5, yardage: 430 }
-              - { id: 019f762c-5602-71f7-9768-d58dbed09823, number: 3, par: 4, yardage: 267 }
-              - { id: 019f762c-5602-76b1-b84c-413cab5ddc26, number: 4, par: 5, yardage: 480 }
-              - { id: 019f762c-5602-7c06-989e-2942bac25ace, number: 5, par: 4, yardage: 297 }
-              - { id: 019f762c-5602-7cbc-8a57-1fb470d0dcd1, number: 6, par: 4, yardage: 298 }
-              - { id: 019f762c-5602-7bc3-abbe-bed468e0b852, number: 7, par: 3, yardage: 129 }
-              - { id: 019f762c-5602-72b3-bdff-be04acacc20c, number: 8, par: 4, yardage: 310 }
-              - { id: 019f762c-5602-7bc1-9469-038f07f27aa4, number: 9, par: 3, yardage: 156 }
-          - id: 019f73ae-72d6-74db-9011-d4f524035dc9
+              - { id: 019f781c-5264-7b4a-87aa-07dc289648c2, number: 1, par: 4, yardage: 263 }
+              - { id: 019f781c-5264-72cd-9762-cbfc4ec7e99a, number: 2, par: 5, yardage: 430 }
+              - { id: 019f781c-5264-743c-8965-9a59d7b38666, number: 3, par: 4, yardage: 267 }
+              - { id: 019f781c-5264-74eb-ad36-78405b826bfb, number: 4, par: 5, yardage: 480 }
+              - { id: 019f781c-5264-7294-b8a4-de6c37b27a98, number: 5, par: 4, yardage: 297 }
+              - { id: 019f781c-5264-74d5-a39b-a117baae3319, number: 6, par: 4, yardage: 298 }
+              - { id: 019f781c-5264-7be7-be7f-19f62b15cc9c, number: 7, par: 3, yardage: 129 }
+              - { id: 019f781c-5264-7da5-8c13-0e3c107e7150, number: 8, par: 4, yardage: 310 }
+              - { id: 019f781c-5264-72b1-a4c9-4347d7419d9f, number: 9, par: 3, yardage: 156 }
+          - id: 019f781c-5264-7ad4-90d8-c56120106f0e
             name: Green
             type: junior
             gender: m
             course_rating: 30.4
             slope_rating: 104
             holes:
-              - { id: 019f762c-5602-7c8f-97fb-f5365b1c63d6, number: 1, par: 4, yardage: 196 }
-              - { id: 019f762c-5602-7cfb-a06e-e48b977a1e1a, number: 2, par: 5, yardage: 372 }
-              - { id: 019f762c-5602-712c-936e-94164c4558bc, number: 3, par: 4, yardage: 215 }
-              - { id: 019f762c-5602-7d4d-8ec1-745ca9a5b8ea, number: 4, par: 5, yardage: 392 }
-              - { id: 019f762c-5602-7d6f-97dd-ed12351e59b3, number: 5, par: 4, yardage: 227 }
-              - { id: 019f762c-5602-7666-b13f-70fd347647d1, number: 6, par: 4, yardage: 240 }
-              - { id: 019f762c-5602-72c7-86b3-f0893d14b659, number: 7, par: 3, yardage: 105 }
-              - { id: 019f762c-5602-77d1-b4f1-f08b34d652df, number: 8, par: 4, yardage: 275 }
-              - { id: 019f762c-5602-7e8e-843a-d0a40d7c7cf8, number: 9, par: 3, yardage: 115 }
-      - id: 019f7224-8600-7f69-a0ae-12627b0a7b22
+              - { id: 019f781c-5264-7fa4-9cac-eed592e1e192, number: 1, par: 4, yardage: 196 }
+              - { id: 019f781c-5264-7f76-b555-dbba457c49f6, number: 2, par: 5, yardage: 372 }
+              - { id: 019f781c-5264-7996-ab8f-57a20761144e, number: 3, par: 4, yardage: 215 }
+              - { id: 019f781c-5264-7fb4-9f5e-b6505170cf23, number: 4, par: 5, yardage: 392 }
+              - { id: 019f781c-5264-724c-82ca-d8e19ee3271b, number: 5, par: 4, yardage: 227 }
+              - { id: 019f781c-5264-7263-b4f0-e0cbc61a72c2, number: 6, par: 4, yardage: 240 }
+              - { id: 019f781c-5264-7e6a-a9ec-ef4f5b0eed9a, number: 7, par: 3, yardage: 105 }
+              - { id: 019f781c-5264-76c5-a07e-20199485aef3, number: 8, par: 4, yardage: 275 }
+              - { id: 019f781c-5264-7672-8cc3-a4aa7a78fa71, number: 9, par: 3, yardage: 115 }
+          - id: 019f781c-5264-714f-ac9c-a3dfd589095f
+            name: Blue
+            type: back
+            gender: f
+            course_rating: 39.1
+            slope_rating: 138
+            holes:
+              - { id: 019f781c-5264-79f4-a39d-c28d0286ef4f, number: 1, par: 4, yardage: 343 }
+              - { id: 019f781c-5264-7316-aa21-9781d1d78296, number: 2, par: 5, yardage: 510 }
+              - { id: 019f781c-5264-73f7-945c-eee45e36a139, number: 3, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-78e6-ba2e-8c51536a4f5e, number: 4, par: 5, yardage: 563 }
+              - { id: 019f781c-5264-7bf7-85d3-63ce35d0d4c5, number: 5, par: 4, yardage: 387 }
+              - { id: 019f781c-5264-7e5d-af34-11472a43f25e, number: 6, par: 4, yardage: 392 }
+              - { id: 019f781c-5264-77c4-a28d-76334ffa4aa7, number: 7, par: 3, yardage: 161 }
+              - { id: 019f781c-5264-7425-b4fb-d2701ca7d919, number: 8, par: 4, yardage: 432 }
+              - { id: 019f781c-5264-793e-af7a-5eb4c307a684, number: 9, par: 3, yardage: 207 }
+          - id: 019f781c-5264-7383-b5cd-49f886f1436a
+            name: White
+            type: standard
+            gender: f
+            course_rating: 38.3
+            slope_rating: 135
+            holes:
+              - { id: 019f781c-5264-7ba5-8dc7-30cd3748f7a0, number: 1, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-7b17-9cff-aae98553bc32, number: 2, par: 5, yardage: 475 }
+              - { id: 019f781c-5264-7884-9564-078751eba4a2, number: 3, par: 4, yardage: 322 }
+              - { id: 019f781c-5264-70dd-aa2b-6077c57a8643, number: 4, par: 5, yardage: 554 }
+              - { id: 019f781c-5264-7c11-bedf-cd5380844be1, number: 5, par: 4, yardage: 361 }
+              - { id: 019f781c-5264-78b5-b273-98c410bd0c86, number: 6, par: 4, yardage: 382 }
+              - { id: 019f781c-5264-7aa5-bfb6-f82b952f2950, number: 7, par: 3, yardage: 149 }
+              - { id: 019f781c-5264-7b10-88c0-43f6a2ea15fb, number: 8, par: 4, yardage: 410 }
+              - { id: 019f781c-5264-71d0-9b11-a1371509bb99, number: 9, par: 3, yardage: 199 }
+          - id: 019f781c-5264-73cf-88bf-ef80300adcb7
+            name: Gold
+            type: senior
+            gender: f
+            course_rating: 36.1
+            slope_rating: 126
+            holes:
+              - { id: 019f781c-5264-77d3-948c-412fade61c4f, number: 1, par: 4, yardage: 318 }
+              - { id: 019f781c-5264-71f8-a797-8005a65927c7, number: 2, par: 5, yardage: 440 }
+              - { id: 019f781c-5264-70fc-916c-3c09bacc8b9a, number: 3, par: 4, yardage: 278 }
+              - { id: 019f781c-5264-7117-ae80-660ccb5f7819, number: 4, par: 5, yardage: 489 }
+              - { id: 019f781c-5264-7d17-b8b1-2125176ef6e7, number: 5, par: 4, yardage: 310 }
+              - { id: 019f781c-5264-77c1-81f4-c8e225b6c171, number: 6, par: 4, yardage: 314 }
+              - { id: 019f781c-5264-76b2-857f-1e38009edc4d, number: 7, par: 3, yardage: 139 }
+              - { id: 019f781c-5264-7713-b13c-8f05779da855, number: 8, par: 4, yardage: 340 }
+              - { id: 019f781c-5264-77bc-99d0-889049d7366a, number: 9, par: 3, yardage: 166 }
+          - id: 019f781c-5264-78e0-8b0a-4d3b8c6b9999
+            name: Red
+            type: front
+            gender: f
+            course_rating: 35.2
+            slope_rating: 123
+            holes:
+              - { id: 019f781c-5264-7da0-a900-43f6bdfe672b, number: 1, par: 4, yardage: 263 }
+              - { id: 019f781c-5264-7972-a9cd-411ac63345c2, number: 2, par: 5, yardage: 430 }
+              - { id: 019f781c-5264-7841-85e5-e462fae85da1, number: 3, par: 4, yardage: 267 }
+              - { id: 019f781c-5264-7496-bf72-0fa39ea9286c, number: 4, par: 5, yardage: 480 }
+              - { id: 019f781c-5264-767b-a182-a4deb34d1113, number: 5, par: 4, yardage: 297 }
+              - { id: 019f781c-5264-78ab-8400-52dd2b74229e, number: 6, par: 4, yardage: 298 }
+              - { id: 019f781c-5264-7151-b7f3-e6232eefc36a, number: 7, par: 3, yardage: 129 }
+              - { id: 019f781c-5264-7a05-a142-e9d06d964699, number: 8, par: 4, yardage: 310 }
+              - { id: 019f781c-5264-7c2b-882f-237236f167f1, number: 9, par: 3, yardage: 156 }
+          - id: 019f781c-5264-7397-904f-f495582e5ceb
+            name: Green
+            type: junior
+            gender: f
+            course_rating: 32.4
+            slope_rating: 111
+            holes:
+              - { id: 019f781c-5264-721b-b036-7f2506c29deb, number: 1, par: 4, yardage: 196 }
+              - { id: 019f781c-5264-7543-bb5b-1c1782b3d04d, number: 2, par: 5, yardage: 372 }
+              - { id: 019f781c-5264-7817-a964-cfaa159ababc, number: 3, par: 4, yardage: 215 }
+              - { id: 019f781c-5264-702c-8046-9cb7ecc33ba3, number: 4, par: 5, yardage: 392 }
+              - { id: 019f781c-5264-797a-a6e7-f9bd38bdebf0, number: 5, par: 4, yardage: 227 }
+              - { id: 019f781c-5264-7916-8996-0338a2755aa4, number: 6, par: 4, yardage: 240 }
+              - { id: 019f781c-5264-718c-8d98-0df47575257a, number: 7, par: 3, yardage: 105 }
+              - { id: 019f781c-5264-7cbb-b84a-c564217fb241, number: 8, par: 4, yardage: 275 }
+              - { id: 019f781c-5264-7a42-83c0-6b0bc61f6544, number: 9, par: 3, yardage: 115 }
+          - id: 019f781c-5264-79e6-b621-49645620a892
+            name: Red/Green
+            type: null
+            gender: f
+            course_rating: null
+            slope_rating: null
+            holes:
+              - { id: 019f781c-5264-77f9-ba38-2faee960cbc5, number: 1, par: 4, yardage: 263 }
+              - { id: 019f781c-5264-7e31-a5f9-65f124327319, number: 2, par: 5, yardage: 430 }
+              - { id: 019f781c-5264-7b3d-89b9-ad84c085969d, number: 3, par: 4, yardage: 267 }
+              - { id: 019f781c-5264-7d8c-afdd-e627768e00d3, number: 4, par: 5, yardage: 392 }
+              - { id: 019f781c-5264-77eb-90d5-9d0653fac1a3, number: 5, par: 4, yardage: 227 }
+              - { id: 019f781c-5264-702b-82d1-07ce2b94f63e, number: 6, par: 4, yardage: 298 }
+              - { id: 019f781c-5264-7058-a51b-70bd71ca86f7, number: 7, par: 3, yardage: 129 }
+              - { id: 019f781c-5264-7657-97dd-7f5f812563bb, number: 8, par: 4, yardage: 275 }
+              - { id: 019f781c-5264-7e21-bacc-7e6a44066177, number: 9, par: 3, yardage: 156 }
+      - id: 019f781c-5264-7fbb-9ffd-9b03bbade992
         name: Blue Spruce
         usga_course_id: 21163
         usga_course_nine: front
         tees:
-          - id: 019f73ae-72d6-7995-b175-0027b7552bdd
+          - id: 019f781c-5264-7dfb-8326-b4565efdc84c
             name: Blue
             type: back
             gender: m
             course_rating: 35.6
             slope_rating: 131
             holes:
-              - { id: 019f762c-5602-7b44-b19d-c33b0e4e8bb1, number: 10, par: 4, yardage: 340 }
-              - { id: 019f762c-5602-79d5-97be-1ae6f9727139, number: 11, par: 4, yardage: 292 }
-              - { id: 019f762c-5602-73ef-9175-1c53588e3530, number: 12, par: 5, yardage: 488 }
-              - { id: 019f762c-5602-71a2-bc05-3edf6ea86099, number: 13, par: 5, yardage: 558 }
-              - { id: 019f762c-5602-7319-9b41-439fbad381b2, number: 14, par: 3, yardage: 168 }
-              - { id: 019f762c-5602-7a0b-b25b-62e2d1a777c4, number: 15, par: 4, yardage: 354 }
-              - { id: 019f762c-5602-7677-b39e-1528e135a0dc, number: 16, par: 3, yardage: 182 }
-              - { id: 019f762c-5602-7ca2-b43b-7369261aa20f, number: 17, par: 4, yardage: 440 }
-              - { id: 019f762c-5602-7b5e-8700-f4e176563b9c, number: 18, par: 4, yardage: 356 }
-          - id: 019f73ae-72d6-768c-8c9a-76fe482b9c12
+              - { id: 019f781c-5264-75e2-9fb0-3d031d04c3ae, number: 10, par: 4, yardage: 340 }
+              - { id: 019f781c-5264-76dc-9102-ee76cad21b66, number: 11, par: 4, yardage: 292 }
+              - { id: 019f781c-5264-7992-b8b4-991ba35670ed, number: 12, par: 5, yardage: 488 }
+              - { id: 019f781c-5264-7aaf-82b5-058478ec7c0b, number: 13, par: 5, yardage: 558 }
+              - { id: 019f781c-5264-785f-a3e8-4f88e242b9a3, number: 14, par: 3, yardage: 168 }
+              - { id: 019f781c-5264-72a6-a5d7-b8078cc411a5, number: 15, par: 4, yardage: 354 }
+              - { id: 019f781c-5264-7ed6-a225-0b68b3ef057c, number: 16, par: 3, yardage: 182 }
+              - { id: 019f781c-5264-712b-b837-fa41df359f2a, number: 17, par: 4, yardage: 440 }
+              - { id: 019f781c-5264-71bd-aff0-f884bef3aec9, number: 18, par: 4, yardage: 356 }
+          - id: 019f781c-5264-7c22-9fdd-7517daf71d86
+            name: Blue/White
+            type: null
+            gender: m
+            course_rating: 35.2
+            slope_rating: 126
+            holes:
+              - { id: 019f781c-5264-7324-996a-6913fb292253, number: 10, par: 4, yardage: 340 }
+              - { id: 019f781c-5264-73f4-871c-d882b305f175, number: 11, par: 4, yardage: 292 }
+              - { id: 019f781c-5264-7dff-946e-8c7e40f31883, number: 12, par: 5, yardage: 488 }
+              - { id: 019f781c-5264-725d-b2b3-63ec2eaecff2, number: 13, par: 5, yardage: 548 }
+              - { id: 019f781c-5264-7611-a361-4f3a697dc3b7, number: 14, par: 3, yardage: 144 }
+              - { id: 019f781c-5264-7795-b65f-1fa40334b771, number: 15, par: 4, yardage: 345 }
+              - { id: 019f781c-5264-7eec-8bcb-ba9ba40b4fd5, number: 16, par: 3, yardage: 182 }
+              - { id: 019f781c-5264-7d5c-a574-acef9f0fdca9, number: 17, par: 4, yardage: 400 }
+              - { id: 019f781c-5264-74e8-a07c-264e06779997, number: 18, par: 4, yardage: 356 }
+          - id: 019f781c-5264-79c7-9999-a4a6addb56f2
             name: White
             type: standard
             gender: m
             course_rating: 34.8
             slope_rating: 126
             holes:
-              - { id: 019f762c-5602-7fc4-8f3e-4131d58760d4, number: 10, par: 4, yardage: 335 }
-              - { id: 019f762c-5602-7b90-9c51-64b12487d4b8, number: 11, par: 4, yardage: 282 }
-              - { id: 019f762c-5602-7236-b248-050a5916047f, number: 12, par: 5, yardage: 458 }
-              - { id: 019f762c-5602-7c06-a6cb-9f42eb0f6672, number: 13, par: 5, yardage: 548 }
-              - { id: 019f762c-5602-71a5-a717-268646d97cb4, number: 14, par: 3, yardage: 144 }
-              - { id: 019f762c-5602-719b-bd82-f964af8fe8dc, number: 15, par: 4, yardage: 345 }
-              - { id: 019f762c-5602-76c2-8828-629999a4e7da, number: 16, par: 3, yardage: 172 }
-              - { id: 019f762c-5602-77aa-9fa9-11648249a1f4, number: 17, par: 4, yardage: 400 }
-              - { id: 019f762c-5602-7fd7-9eab-5dfb4d4e3922, number: 18, par: 4, yardage: 326 }
-          - id: 019f73b6-7eb8-706c-a8a4-91aaca68e95a
+              - { id: 019f781c-5264-77f3-b222-e9a638d01bfc, number: 10, par: 4, yardage: 335 }
+              - { id: 019f781c-5264-7f9f-87bb-f5b1f11e1abe, number: 11, par: 4, yardage: 282 }
+              - { id: 019f781c-5264-7405-a9f9-0e64033a9187, number: 12, par: 5, yardage: 458 }
+              - { id: 019f781c-5264-7299-9200-0bb380fdf1ca, number: 13, par: 5, yardage: 548 }
+              - { id: 019f781c-5264-781c-ac89-505c7c1d8981, number: 14, par: 3, yardage: 144 }
+              - { id: 019f781c-5264-7260-8e4a-118c86f59116, number: 15, par: 4, yardage: 345 }
+              - { id: 019f781c-5264-7af6-97ca-3f04bb1c3c03, number: 16, par: 3, yardage: 172 }
+              - { id: 019f781c-5264-7c45-a465-5398ea7373ca, number: 17, par: 4, yardage: 400 }
+              - { id: 019f781c-5264-7eb3-bcf8-5e1b075c5e43, number: 18, par: 4, yardage: 326 }
+          - id: 019f781c-5264-720a-8485-f8f8e8419a2d
+            name: White/Gold
+            type: null
+            gender: m
+            course_rating: 33.7
+            slope_rating: 119
+            holes:
+              - { id: 019f781c-5264-7b90-9bed-8420eacc4430, number: 10, par: 4, yardage: 304 }
+              - { id: 019f781c-5264-7680-9dc1-99fd98ca5f3b, number: 11, par: 4, yardage: 282 }
+              - { id: 019f781c-5264-7442-9cf4-d63950a1430e, number: 12, par: 5, yardage: 395 }
+              - { id: 019f781c-5264-74ed-81c9-e8c29a76fda4, number: 13, par: 5, yardage: 446 }
+              - { id: 019f781c-5264-7b7d-9d2d-bbd6ee3e86c7, number: 14, par: 3, yardage: 144 }
+              - { id: 019f781c-5264-723e-b945-4ef4ef641c26, number: 15, par: 4, yardage: 345 }
+              - { id: 019f781c-5264-7a46-ae55-c855f5e76b6e, number: 16, par: 3, yardage: 172 }
+              - { id: 019f781c-5264-7494-9d32-54d9f4aed554, number: 17, par: 4, yardage: 335 }
+              - { id: 019f781c-5264-7cc9-a4b1-ee010cf2c23c, number: 18, par: 4, yardage: 326 }
+          - id: 019f781c-5264-7a23-87f2-3869112e1e3e
             name: Gold
             type: senior
             gender: m
             course_rating: 33.3
             slope_rating: 115
             holes:
-              - { id: 019f762c-5602-7004-8a62-768b6efd7d03, number: 10, par: 4, yardage: 304 }
-              - { id: 019f762c-5602-7d7e-a26c-1c9cb993a60b, number: 11, par: 4, yardage: 243 }
-              - { id: 019f762c-5602-73ae-b0fe-f54e6590661f, number: 12, par: 5, yardage: 395 }
-              - { id: 019f762c-5602-7baf-bf56-b237d13254a8, number: 13, par: 5, yardage: 446 }
-              - { id: 019f762c-5602-7364-b609-b35178e31d4f, number: 14, par: 3, yardage: 129 }
-              - { id: 019f762c-5602-7a6b-9ace-eaa4feccfd5f, number: 15, par: 4, yardage: 327 }
-              - { id: 019f762c-5602-7e8d-8d56-286107f803ef, number: 16, par: 3, yardage: 165 }
-              - { id: 019f762c-5602-7eca-8856-9d841a964729, number: 17, par: 4, yardage: 335 }
-              - { id: 019f762c-5602-7b74-b6e8-b827e1706e68, number: 18, par: 4, yardage: 326 }
-          - id: 019f73ae-72d6-75e8-bd1f-db30e5d69f53
+              - { id: 019f781c-5264-7eb4-b1c2-4f67cb9eb678, number: 10, par: 4, yardage: 304 }
+              - { id: 019f781c-5264-71be-86a6-1e14f2030d55, number: 11, par: 4, yardage: 243 }
+              - { id: 019f781c-5264-709e-b4f0-aa6b61f06666, number: 12, par: 5, yardage: 395 }
+              - { id: 019f781c-5264-7765-a46b-e4f8ac9b188c, number: 13, par: 5, yardage: 446 }
+              - { id: 019f781c-5264-7278-8df1-b8983c480c88, number: 14, par: 3, yardage: 129 }
+              - { id: 019f781c-5264-7d5d-b7ef-4a2add8e8e83, number: 15, par: 4, yardage: 327 }
+              - { id: 019f781c-5264-7fd0-abc9-37aedf83a842, number: 16, par: 3, yardage: 165 }
+              - { id: 019f781c-5264-7ff8-9fef-82998b4f97db, number: 17, par: 4, yardage: 335 }
+              - { id: 019f781c-5264-7a76-a932-54e24a2486cb, number: 18, par: 4, yardage: 326 }
+          - id: 019f781c-5264-7350-acd3-0494864c79ff
             name: Red
             type: front
             gender: m
             course_rating: 32.5
             slope_rating: 112
             holes:
-              - { id: 019f762c-5602-7534-a7bc-4a28dff02fb9, number: 10, par: 4, yardage: 295 }
-              - { id: 019f762c-5602-7486-9e6e-204560cdc9d6, number: 11, par: 4, yardage: 224 }
-              - { id: 019f762c-5602-7369-abdd-255f5b50adb6, number: 12, par: 5, yardage: 366 }
-              - { id: 019f762c-5602-731c-8912-77466028d880, number: 13, par: 5, yardage: 440 }
-              - { id: 019f762c-5602-784e-8d21-11326ad3bf56, number: 14, par: 3, yardage: 120 }
-              - { id: 019f762c-5602-766d-8141-e0c8f96fe48d, number: 15, par: 4, yardage: 290 }
-              - { id: 019f762c-5602-7474-a5eb-951c111f6d99, number: 16, par: 3, yardage: 160 }
-              - { id: 019f762c-5602-70b1-ac09-a289011aabb7, number: 17, par: 4, yardage: 330 }
-              - { id: 019f762c-5602-75a2-84d8-a9155acce794, number: 18, par: 4, yardage: 271 }
-          - id: 019f73ae-72d6-7d7a-8be8-7f4fec5344c3
+              - { id: 019f781c-5264-73a5-b050-4312a27508b4, number: 10, par: 4, yardage: 295 }
+              - { id: 019f781c-5264-7223-bc4f-10cb906afb52, number: 11, par: 4, yardage: 224 }
+              - { id: 019f781c-5264-7850-ad3a-5577519cd061, number: 12, par: 5, yardage: 366 }
+              - { id: 019f781c-5264-702d-ab17-ca1b4b25b055, number: 13, par: 5, yardage: 440 }
+              - { id: 019f781c-5264-735b-9115-46cd17aa0c8a, number: 14, par: 3, yardage: 120 }
+              - { id: 019f781c-5264-7650-93e0-8f2d2a377947, number: 15, par: 4, yardage: 290 }
+              - { id: 019f781c-5264-7bff-bc40-fa9d826cd2f6, number: 16, par: 3, yardage: 160 }
+              - { id: 019f781c-5264-7434-b41b-30bdf2835d71, number: 17, par: 4, yardage: 330 }
+              - { id: 019f781c-5264-7431-be3a-33f7aec1e656, number: 18, par: 4, yardage: 271 }
+          - id: 019f781c-5264-7a7f-b2af-23ffefe58c7b
             name: Green
             type: junior
             gender: m
             course_rating: 30.4
             slope_rating: 105
             holes:
-              - { id: 019f762c-5602-7da7-a530-ca994e9f853a, number: 10, par: 4, yardage: 223 }
-              - { id: 019f762c-5602-76a5-817c-9346cc546310, number: 11, par: 4, yardage: 201 }
-              - { id: 019f762c-5602-7061-a17d-0e5b55f98e01, number: 12, par: 5, yardage: 290 }
-              - { id: 019f762c-5602-7fc8-b3d2-637ce00b4afd, number: 13, par: 5, yardage: 390 }
-              - { id: 019f762c-5602-7af1-85db-fd9b5c6c1365, number: 14, par: 3, yardage: 89 }
-              - { id: 019f762c-5602-700f-af2a-69e3cd339edc, number: 15, par: 4, yardage: 225 }
-              - { id: 019f762c-5602-782c-ae08-cbbe7db81555, number: 16, par: 3, yardage: 75 }
-              - { id: 019f762c-5602-768f-803c-90bcbb78ebe6, number: 17, par: 4, yardage: 238 }
-              - { id: 019f762c-5602-70d9-9274-667faaeb79a3, number: 18, par: 4, yardage: 239 }
-      - id: 019f7224-8600-758e-91f1-a0206f01191d
+              - { id: 019f781c-5264-7938-a696-abde9207e473, number: 10, par: 4, yardage: 223 }
+              - { id: 019f781c-5264-77cb-be97-97e4672ee194, number: 11, par: 4, yardage: 201 }
+              - { id: 019f781c-5264-7a86-aec1-90af7d3f4067, number: 12, par: 5, yardage: 290 }
+              - { id: 019f781c-5264-7bf8-8c2a-03fa0f4ab1b3, number: 13, par: 5, yardage: 390 }
+              - { id: 019f781c-5264-7693-bf9a-0bdbb79e87b4, number: 14, par: 3, yardage: 89 }
+              - { id: 019f781c-5264-7521-b1a9-e52850d03da2, number: 15, par: 4, yardage: 225 }
+              - { id: 019f781c-5264-7722-a19c-f66541b9d45a, number: 16, par: 3, yardage: 75 }
+              - { id: 019f781c-5264-76af-a8af-19c60eea5526, number: 17, par: 4, yardage: 238 }
+              - { id: 019f781c-5264-78b4-86c8-b6d8b5e717e4, number: 18, par: 4, yardage: 239 }
+          - id: 019f781c-5264-77ba-8b93-b374f13af5fa
+            name: Blue
+            type: back
+            gender: f
+            course_rating: 38.6
+            slope_rating: 146
+            holes:
+              - { id: 019f781c-5264-7f65-9d61-7f5a813b3d6a, number: 10, par: 4, yardage: 340 }
+              - { id: 019f781c-5264-7a37-b290-8dd410d2ca86, number: 11, par: 4, yardage: 292 }
+              - { id: 019f781c-5264-7e75-91cb-017298061c79, number: 12, par: 5, yardage: 488 }
+              - { id: 019f781c-5264-7b13-abec-ca8599910b9f, number: 13, par: 5, yardage: 558 }
+              - { id: 019f781c-5264-7229-97ce-c808e0eabfb3, number: 14, par: 3, yardage: 168 }
+              - { id: 019f781c-5264-7146-af8f-da4f9b2ff424, number: 15, par: 4, yardage: 354 }
+              - { id: 019f781c-5264-78c5-9fd9-b341749b2d82, number: 16, par: 3, yardage: 182 }
+              - { id: 019f781c-5264-7f09-9a1a-7b900eab7fee, number: 17, par: 4, yardage: 440 }
+              - { id: 019f781c-5264-737f-bb64-e654297b1bdd, number: 18, par: 4, yardage: 356 }
+          - id: 019f781c-5264-7392-9457-700dd3b3ea16
+            name: White
+            type: standard
+            gender: f
+            course_rating: 37.6
+            slope_rating: 142
+            holes:
+              - { id: 019f781c-5264-7fb1-9cd6-68dbb5932ea5, number: 10, par: 4, yardage: 335 }
+              - { id: 019f781c-5264-716d-bc2a-54ce52f613a1, number: 11, par: 4, yardage: 282 }
+              - { id: 019f781c-5264-73ee-84de-90ed5843d137, number: 12, par: 5, yardage: 458 }
+              - { id: 019f781c-5264-785b-9c48-e50a55255bfc, number: 13, par: 5, yardage: 548 }
+              - { id: 019f781c-5264-77f0-a8a3-cbc9e1f36434, number: 14, par: 3, yardage: 144 }
+              - { id: 019f781c-5264-7aa2-84d3-0c60e186ce67, number: 15, par: 4, yardage: 345 }
+              - { id: 019f781c-5264-705c-a781-eed3c6ac069a, number: 16, par: 3, yardage: 172 }
+              - { id: 019f781c-5264-751e-b1a5-393b8dfc8138, number: 17, par: 4, yardage: 400 }
+              - { id: 019f781c-5264-7243-8213-7a73235f819b, number: 18, par: 4, yardage: 326 }
+          - id: 019f781c-5264-7bb3-b916-c7799a1bff62
+            name: Gold
+            type: senior
+            gender: f
+            course_rating: 35.8
+            slope_rating: 133
+            holes:
+              - { id: 019f781c-5264-7089-af5f-559f51b04b1b, number: 10, par: 4, yardage: 304 }
+              - { id: 019f781c-5264-7524-808c-cafb3fb33e42, number: 11, par: 4, yardage: 243 }
+              - { id: 019f781c-5264-76b5-ad39-3d5bf588d4cf, number: 12, par: 5, yardage: 395 }
+              - { id: 019f781c-5264-7b8d-b962-242bb4c02c3e, number: 13, par: 5, yardage: 446 }
+              - { id: 019f781c-5264-7e5a-8017-250eb23e3a03, number: 14, par: 3, yardage: 129 }
+              - { id: 019f781c-5264-7934-8342-48f5e7a47caf, number: 15, par: 4, yardage: 327 }
+              - { id: 019f781c-5264-79aa-951e-c22b89c10fd2, number: 16, par: 3, yardage: 165 }
+              - { id: 019f781c-5264-7a4b-8f95-44e815680a9e, number: 17, par: 4, yardage: 335 }
+              - { id: 019f781c-5264-7d3c-a4fd-524c44242dac, number: 18, par: 4, yardage: 326 }
+          - id: 019f781c-5264-7fe9-aafc-c231dab0077f
+            name: Red
+            type: front
+            gender: f
+            course_rating: 34.8
+            slope_rating: 127
+            holes:
+              - { id: 019f781c-5264-74d3-ae99-74d86cfb9a96, number: 10, par: 4, yardage: 295 }
+              - { id: 019f781c-5264-7632-b93c-108485e698b4, number: 11, par: 4, yardage: 224 }
+              - { id: 019f781c-5264-7f7f-8b49-0b5ccf9cb14b, number: 12, par: 5, yardage: 366 }
+              - { id: 019f781c-5264-73bb-a754-58423b21ed76, number: 13, par: 5, yardage: 440 }
+              - { id: 019f781c-5264-71d2-bb57-72a9d3b212e6, number: 14, par: 3, yardage: 120 }
+              - { id: 019f781c-5264-77e3-8dcc-7dfa3297f489, number: 15, par: 4, yardage: 290 }
+              - { id: 019f781c-5264-7d64-9f4c-746c991a9fd7, number: 16, par: 3, yardage: 160 }
+              - { id: 019f781c-5264-74e1-beab-a5cc61058793, number: 17, par: 4, yardage: 330 }
+              - { id: 019f781c-5264-7af8-9e9b-01aaee3b8d7e, number: 18, par: 4, yardage: 271 }
+          - id: 019f781c-5264-731f-9a02-ef950624b29d
+            name: Green
+            type: junior
+            gender: f
+            course_rating: 31.8
+            slope_rating: 115
+            holes:
+              - { id: 019f781c-5264-776d-9596-51967f407b8b, number: 10, par: 4, yardage: 223 }
+              - { id: 019f781c-5264-7192-8362-95b29d0b00e2, number: 11, par: 4, yardage: 201 }
+              - { id: 019f781c-5264-7492-8638-45fd5ebf4c2f, number: 12, par: 5, yardage: 290 }
+              - { id: 019f781c-5264-7e5b-ba8a-79138831695e, number: 13, par: 5, yardage: 390 }
+              - { id: 019f781c-5264-7a81-ab86-fadc93bc1b6e, number: 14, par: 3, yardage: 89 }
+              - { id: 019f781c-5264-719a-9dd2-1be7015bddd4, number: 15, par: 4, yardage: 225 }
+              - { id: 019f781c-5264-76d4-be44-3d769886bc2e, number: 16, par: 3, yardage: 75 }
+              - { id: 019f781c-5264-7131-8347-09dc1ba4ab14, number: 17, par: 4, yardage: 238 }
+              - { id: 019f781c-5264-7b18-adf0-6e177fc4bfc5, number: 18, par: 4, yardage: 239 }
+          - id: 019f781c-5264-7e5d-9a65-46137cd25a87
+            name: Red/Green
+            type: null
+            gender: f
+            course_rating: null
+            slope_rating: null
+            holes:
+              - { id: 019f781c-5264-7a06-8dda-86100f6cc3b9, number: 10, par: 4, yardage: 223 }
+              - { id: 019f781c-5264-7432-b19c-96bde7396380, number: 11, par: 4, yardage: 224 }
+              - { id: 019f781c-5264-7313-ac99-caec9d0fff8c, number: 12, par: 5, yardage: 366 }
+              - { id: 019f781c-5264-75e0-9cb7-61dfdfe7f37f, number: 13, par: 5, yardage: 390 }
+              - { id: 019f781c-5264-7ff8-9b59-7b722ebada41, number: 14, par: 3, yardage: 120 }
+              - { id: 019f781c-5264-7a21-8fa6-ae67e2d38644, number: 15, par: 4, yardage: 290 }
+              - { id: 019f781c-5264-7d66-b86b-1693870d6dc5, number: 16, par: 3, yardage: 160 }
+              - { id: 019f781c-5264-7bf5-ac69-e2b9f57ad8d5, number: 17, par: 4, yardage: 238 }
+              - { id: 019f781c-5264-7d76-9732-c681ba2a2b42, number: 18, par: 4, yardage: 271 }
+      - id: 019f781c-5264-782c-9b76-21e6d95f967a
         name: Red Maple
         usga_course_id: 21164
         usga_course_nine: front
         tees:
-          - id: 019f73ae-72d6-7407-985d-ad6e65209718
+          - id: 019f781c-5264-789b-b4b4-2052bbb993ca
             name: Blue
             type: back
             gender: m
             course_rating: 33.8
             slope_rating: 121
             holes:
-              - { id: 019f762c-5602-7c44-b738-b0b352abfeef, number: 1, par: 3, yardage: 154 }
-              - { id: 019f762c-5602-724a-a9bb-7806ea113ec2, number: 2, par: 4, yardage: 398 }
-              - { id: 019f762c-5602-7386-95a6-229dcf0fe4ee, number: 3, par: 3, yardage: 156 }
-              - { id: 019f762c-5602-7540-8505-bace1bb0f6bb, number: 4, par: 4, yardage: 348 }
-              - { id: 019f762c-5602-7293-be86-b9e2c2a8fe2d, number: 5, par: 5, yardage: 419 }
-              - { id: 019f762c-5602-7e36-b2b8-f4417fd70348, number: 6, par: 5, yardage: 436 }
-              - { id: 019f762c-5602-7154-8a90-0015a88e7669, number: 7, par: 4, yardage: 354 }
-              - { id: 019f762c-5602-786b-bad5-97f91235efd4, number: 8, par: 5, yardage: 405 }
-              - { id: 019f762c-5602-7957-884d-a5a91c1e0359, number: 9, par: 3, yardage: 169 }
-          - id: 019f73ae-72d6-7812-a0d8-6874c9e2b3d6
+              - { id: 019f781c-5264-7389-b795-8928a0668f3f, number: 1, par: 3, yardage: 154 }
+              - { id: 019f781c-5264-75e1-8edd-01f23c787a83, number: 2, par: 4, yardage: 398 }
+              - { id: 019f781c-5264-784f-a640-fc92ef2a0bf1, number: 3, par: 3, yardage: 156 }
+              - { id: 019f781c-5264-7d60-9008-ea6c56b37bad, number: 4, par: 4, yardage: 348 }
+              - { id: 019f781c-5264-7c47-9d4f-1ad16c81b9da, number: 5, par: 4, yardage: 419 }
+              - { id: 019f781c-5264-76b6-965d-5b1f1f5b56d3, number: 6, par: 5, yardage: 436 }
+              - { id: 019f781c-5264-7782-9374-636ed49461f4, number: 7, par: 4, yardage: 354 }
+              - { id: 019f781c-5264-7b79-a867-78d9f74951b9, number: 8, par: 4, yardage: 405 }
+              - { id: 019f781c-5264-7e78-a9c7-2b86437ce7fc, number: 9, par: 3, yardage: 169 }
+          - id: 019f781c-5264-7eb2-bb5d-68c1eb80beaa
             name: White
             type: standard
             gender: m
             course_rating: 33.6
             slope_rating: 118
             holes:
-              - { id: 019f762c-5602-7191-9b07-6d445acf2dfa, number: 1, par: 3, yardage: 143 }
-              - { id: 019f762c-5602-7e96-8784-0294e81a9fdd, number: 2, par: 4, yardage: 388 }
-              - { id: 019f762c-5602-7a19-906b-6bf7bb0a1070, number: 3, par: 3, yardage: 150 }
-              - { id: 019f762c-5602-7fbe-8277-06e194e2dce3, number: 4, par: 4, yardage: 342 }
-              - { id: 019f762c-5602-703a-be17-7f3cdf09b7a7, number: 5, par: 5, yardage: 414 }
-              - { id: 019f762c-5602-7435-8dcd-9557e6a4517f, number: 6, par: 5, yardage: 434 }
-              - { id: 019f762c-5602-7c17-ad8e-05488523e3af, number: 7, par: 4, yardage: 342 }
-              - { id: 019f762c-5602-70b0-99bc-b60863f52dab, number: 8, par: 5, yardage: 399 }
-              - { id: 019f762c-5602-742c-b34d-d1697cfcf394, number: 9, par: 3, yardage: 164 }
-          - id: 019f73b6-7eb8-724c-84e2-e46a16f45c84
+              - { id: 019f781c-5264-7d8d-b3b4-8d69aa82f6f3, number: 1, par: 3, yardage: 143 }
+              - { id: 019f781c-5264-7b05-8c8f-8ed8e8cb1d28, number: 2, par: 4, yardage: 388 }
+              - { id: 019f781c-5264-7b72-98c7-de8280a24e11, number: 3, par: 3, yardage: 150 }
+              - { id: 019f781c-5264-771e-a2db-5c7c14f8b860, number: 4, par: 4, yardage: 342 }
+              - { id: 019f781c-5264-789c-82dd-74f9425807eb, number: 5, par: 4, yardage: 414 }
+              - { id: 019f781c-5264-7217-b726-e1c045d794af, number: 6, par: 5, yardage: 434 }
+              - { id: 019f781c-5264-770d-a1c2-b9a36178072a, number: 7, par: 4, yardage: 342 }
+              - { id: 019f781c-5264-7bbf-b574-2172ee9f438a, number: 8, par: 4, yardage: 399 }
+              - { id: 019f781c-5264-7a88-9203-f35ce5ba5302, number: 9, par: 3, yardage: 164 }
+          - id: 019f781c-5264-7bac-b8d7-ef6157c7e093
             name: Gold
             type: senior
             gender: m
             course_rating: 32.2
             slope_rating: 113
             holes:
-              - { id: 019f762c-5602-757f-9f76-9f8185641c9d, number: 1, par: 3, yardage: 138 }
-              - { id: 019f762c-5602-7055-9c20-5f0a88ae148c, number: 2, par: 4, yardage: 259 }
-              - { id: 019f762c-5602-77d8-9912-3919b9b9f1e5, number: 3, par: 3, yardage: 146 }
-              - { id: 019f762c-5602-7f6e-88af-843614d3f382, number: 4, par: 4, yardage: 336 }
-              - { id: 019f762c-5602-7c8a-afd7-41e487ac342e, number: 5, par: 4, yardage: 400 }
-              - { id: 019f762c-5602-7c3b-90b3-21696c01f3ae, number: 6, par: 5, yardage: 431 }
-              - { id: 019f762c-5602-794d-8a60-ba3dde7764d3, number: 7, par: 4, yardage: 274 }
-              - { id: 019f762c-5602-7a66-894f-98ba63c2b484, number: 8, par: 4, yardage: 397 }
-              - { id: 019f762c-5602-7dec-a0fd-7acbff05d13a, number: 9, par: 3, yardage: 131 }
-          - id: 019f73ae-72d6-7282-9caf-c8cd9dcc3e64
+              - { id: 019f781c-5264-73a8-a763-ccb0e85e6d29, number: 1, par: 3, yardage: 138 }
+              - { id: 019f781c-5264-7003-b85c-a71c685c304a, number: 2, par: 4, yardage: 259 }
+              - { id: 019f781c-5264-706a-a8ee-3195247a8626, number: 3, par: 3, yardage: 146 }
+              - { id: 019f781c-5264-7a8c-a051-60ca56174db1, number: 4, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-7fe5-86ff-d445922ad692, number: 5, par: 4, yardage: 400 }
+              - { id: 019f781c-5264-79d8-80bf-87b9b2b5b9fc, number: 6, par: 5, yardage: 431 }
+              - { id: 019f781c-5264-7e8e-b50e-db44502d8be2, number: 7, par: 4, yardage: 274 }
+              - { id: 019f781c-5264-7a0e-8123-067906c919cc, number: 8, par: 4, yardage: 397 }
+              - { id: 019f781c-5264-7c7e-b884-32b845d5200a, number: 9, par: 3, yardage: 131 }
+          - id: 019f781c-5264-71f2-acfb-73ab7eefe63c
             name: Red
             type: front
             gender: m
             course_rating: 31.7
             slope_rating: 110
             holes:
-              - { id: 019f762c-5602-76aa-832d-d4ba84d8ac3d, number: 1, par: 3, yardage: 138 }
-              - { id: 019f762c-5602-77ff-867d-16cf592d3616, number: 2, par: 4, yardage: 244 }
-              - { id: 019f762c-5602-7f72-acdc-3955d5592657, number: 3, par: 3, yardage: 146 }
-              - { id: 019f762c-5602-743a-93bc-4a56a8f3684a, number: 4, par: 4, yardage: 336 }
-              - { id: 019f762c-5602-7b0f-a05e-5654a549fa69, number: 5, par: 4, yardage: 335 }
-              - { id: 019f762c-5602-75d6-b561-61490ac106ca, number: 6, par: 5, yardage: 431 }
-              - { id: 019f762c-5602-7cdb-a6df-c94987b4f3b1, number: 7, par: 4, yardage: 274 }
-              - { id: 019f762c-5602-732f-ae02-8bff5ced5857, number: 8, par: 4, yardage: 397 }
-              - { id: 019f762c-5602-79b8-8b75-4d268646d46c, number: 9, par: 3, yardage: 94 }
-          - id: 019f73ae-72d6-75be-b0c6-b5090060d496
+              - { id: 019f781c-5264-70d7-b9e4-a8bb5f60a7a4, number: 1, par: 3, yardage: 138 }
+              - { id: 019f781c-5264-7753-8f79-ea15bb26907c, number: 2, par: 4, yardage: 244 }
+              - { id: 019f781c-5264-79e5-9b4f-0d7ac7e64c78, number: 3, par: 3, yardage: 146 }
+              - { id: 019f781c-5264-74a5-b641-0853341deaae, number: 4, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-73b2-86f7-af1ccd454e98, number: 5, par: 4, yardage: 335 }
+              - { id: 019f781c-5264-7e0f-8f54-13d47a079113, number: 6, par: 5, yardage: 431 }
+              - { id: 019f781c-5264-7114-a236-80c2b3dca4f7, number: 7, par: 4, yardage: 274 }
+              - { id: 019f781c-5264-7cfe-a913-84c4e449ae7a, number: 8, par: 4, yardage: 397 }
+              - { id: 019f781c-5264-7fad-89b5-ff6c199bb5c0, number: 9, par: 3, yardage: 94 }
+          - id: 019f781c-5264-732b-a205-1ee72e5e2eb2
             name: Green
             type: junior
             gender: m
             course_rating: 30.3
             slope_rating: 105
             holes:
-              - { id: 019f762c-5602-7ef3-86a1-a52188bc4942, number: 1, par: 3, yardage: 105 }
-              - { id: 019f762c-5602-782d-b1ef-5517dbbcb086, number: 2, par: 4, yardage: 244 }
-              - { id: 019f762c-5602-7f6d-a518-19f7244578af, number: 3, par: 3, yardage: 114 }
-              - { id: 019f762c-5602-742d-8981-81de581724e8, number: 4, par: 4, yardage: 255 }
-              - { id: 019f762c-5602-7d08-bda0-418e658e3705, number: 5, par: 4, yardage: 304 }
-              - { id: 019f762c-5602-7d38-8b16-193f9957b549, number: 6, par: 5, yardage: 338 }
-              - { id: 019f762c-5602-7045-ba06-8cff8d1facb0, number: 7, par: 4, yardage: 193 }
-              - { id: 019f762c-5602-730f-938b-5a08c2f00626, number: 8, par: 4, yardage: 387 }
-              - { id: 019f762c-5602-76ca-b1cc-f6b2623b939b, number: 9, par: 3, yardage: 94 }
+              - { id: 019f781c-5264-74fa-900f-83dbb8895304, number: 1, par: 3, yardage: 105 }
+              - { id: 019f781c-5264-7bc3-a251-6902cd7b0cce, number: 2, par: 4, yardage: 244 }
+              - { id: 019f781c-5264-761b-be1d-351a802fec50, number: 3, par: 3, yardage: 114 }
+              - { id: 019f781c-5264-7d1d-88c2-6017977c3074, number: 4, par: 4, yardage: 255 }
+              - { id: 019f781c-5264-7999-b815-f340d82ac218, number: 5, par: 4, yardage: 304 }
+              - { id: 019f781c-5264-7788-a1d9-614f141c52fe, number: 6, par: 5, yardage: 338 }
+              - { id: 019f781c-5264-73eb-88e5-82cd441c470e, number: 7, par: 4, yardage: 193 }
+              - { id: 019f781c-5264-74a5-a0f9-f016058dbbe9, number: 8, par: 4, yardage: 387 }
+              - { id: 019f781c-5264-73cc-9425-7439af163710, number: 9, par: 3, yardage: 94 }
+          - id: 019f781c-5264-7a49-a9ad-7b266cf1598a
+            name: Blue
+            type: back
+            gender: f
+            course_rating: 36.6
+            slope_rating: 130
+            holes:
+              - { id: 019f781c-5264-7817-8630-96e7b99b4712, number: 1, par: 3, yardage: 154 }
+              - { id: 019f781c-5264-71f1-8bbc-9726bec3d923, number: 2, par: 4, yardage: 398 }
+              - { id: 019f781c-5264-7b84-84c3-c52edaacf74f, number: 3, par: 3, yardage: 156 }
+              - { id: 019f781c-5264-7365-a0e5-81f97f7c304a, number: 4, par: 4, yardage: 348 }
+              - { id: 019f781c-5264-767e-b429-71a97ea139cd, number: 5, par: 5, yardage: 419 }
+              - { id: 019f781c-5264-776b-b26a-21e53e8ec76b, number: 6, par: 5, yardage: 436 }
+              - { id: 019f781c-5264-7e0d-b34b-301d8ff00cc2, number: 7, par: 4, yardage: 354 }
+              - { id: 019f781c-5264-7720-8222-2377ce4fae42, number: 8, par: 5, yardage: 405 }
+              - { id: 019f781c-5264-786f-816b-10ce075f3996, number: 9, par: 3, yardage: 169 }
+          - id: 019f781c-5264-756d-9a34-5d151fbb236d
+            name: White
+            type: standard
+            gender: f
+            course_rating: 36.2
+            slope_rating: 128
+            holes:
+              - { id: 019f781c-5264-7c1d-8638-996eccc004e3, number: 1, par: 3, yardage: 143 }
+              - { id: 019f781c-5264-75bc-8ede-f022e0659d45, number: 2, par: 4, yardage: 388 }
+              - { id: 019f781c-5264-710d-9c36-59cc3b3d4cc1, number: 3, par: 3, yardage: 150 }
+              - { id: 019f781c-5264-7509-99c3-2c46c1020b91, number: 4, par: 4, yardage: 342 }
+              - { id: 019f781c-5264-7583-ac42-f7b76244e562, number: 5, par: 5, yardage: 414 }
+              - { id: 019f781c-5264-716c-a89b-5d611695ea4a, number: 6, par: 5, yardage: 434 }
+              - { id: 019f781c-5264-7bf8-8c4e-0ccefb8e0bdf, number: 7, par: 4, yardage: 342 }
+              - { id: 019f781c-5264-7e7b-b61e-90a8726b4eb9, number: 8, par: 5, yardage: 399 }
+              - { id: 019f781c-5264-7ab8-98ef-32df16836beb, number: 9, par: 3, yardage: 164 }
+          - id: 019f781c-5264-7a16-a355-327d00d253cf
+            name: Gold
+            type: senior
+            gender: f
+            course_rating: 34.7
+            slope_rating: 122
+            holes:
+              - { id: 019f781c-5264-7347-bf38-87be0106c4d3, number: 1, par: 3, yardage: 138 }
+              - { id: 019f781c-5264-739b-a3e9-ce9fb7a74f69, number: 2, par: 4, yardage: 259 }
+              - { id: 019f781c-5264-7e2f-9551-96e86345e0d2, number: 3, par: 3, yardage: 146 }
+              - { id: 019f781c-5264-7ed4-9428-80f0c61d4538, number: 4, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-776a-af92-7be0e1899867, number: 5, par: 5, yardage: 400 }
+              - { id: 019f781c-5264-7ddd-a38f-8606eea8be21, number: 6, par: 5, yardage: 431 }
+              - { id: 019f781c-5264-78bf-83b1-61ca9fd705a8, number: 7, par: 4, yardage: 274 }
+              - { id: 019f781c-5264-7bf1-a957-256dce04e35c, number: 8, par: 5, yardage: 397 }
+              - { id: 019f781c-5264-79a7-92f2-78985823d1ad, number: 9, par: 3, yardage: 131 }
+          - id: 019f781c-5264-73f0-98ed-743384415577
+            name: Red
+            type: front
+            gender: f
+            course_rating: 34
+            slope_rating: 118
+            holes:
+              - { id: 019f781c-5264-7dba-8cc9-4b605e1e893e, number: 1, par: 3, yardage: 138 }
+              - { id: 019f781c-5264-77fa-bbee-68bde9dba43b, number: 2, par: 4, yardage: 244 }
+              - { id: 019f781c-5264-711d-866a-b6bf8af53937, number: 3, par: 3, yardage: 146 }
+              - { id: 019f781c-5264-7432-8c6b-b06320c5487e, number: 4, par: 4, yardage: 336 }
+              - { id: 019f781c-5264-7ff5-9dbe-451ef439ec6b, number: 5, par: 5, yardage: 335 }
+              - { id: 019f781c-5264-7e1a-b30a-ec4320df449a, number: 6, par: 5, yardage: 431 }
+              - { id: 019f781c-5264-7d54-9b62-29c796620e70, number: 7, par: 4, yardage: 274 }
+              - { id: 019f781c-5264-7e78-9fea-f82a411fbb9a, number: 8, par: 5, yardage: 397 }
+              - { id: 019f781c-5264-7462-914d-870f4d6bbca9, number: 9, par: 3, yardage: 94 }
+          - id: 019f781c-5264-75b5-93c7-3c5751edc460
+            name: Green
+            type: junior
+            gender: f
+            course_rating: 31.8
+            slope_rating: 110
+            holes:
+              - { id: 019f781c-5264-7e9e-be66-d05cbee8028b, number: 1, par: 3, yardage: 105 }
+              - { id: 019f781c-5264-7114-bccb-cda288db6f7d, number: 2, par: 4, yardage: 244 }
+              - { id: 019f781c-5264-73ec-8aa0-c7705d9b8398, number: 3, par: 3, yardage: 114 }
+              - { id: 019f781c-5264-7a81-abc5-6d7853578cba, number: 4, par: 4, yardage: 255 }
+              - { id: 019f781c-5264-7e74-b92e-adb781908aa9, number: 5, par: 5, yardage: 304 }
+              - { id: 019f781c-5264-74c0-844b-248c1e6ca6f1, number: 6, par: 5, yardage: 338 }
+              - { id: 019f781c-5264-7e01-9c68-e2775e916d44, number: 7, par: 4, yardage: 193 }
+              - { id: 019f781c-5264-7a76-bb18-905882529cf2, number: 8, par: 5, yardage: 387 }
+              - { id: 019f781c-5264-7854-8505-c60a93d6cf61, number: 9, par: 3, yardage: 94 }

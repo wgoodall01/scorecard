@@ -27,17 +27,11 @@ import {
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { CameraDialog, useLikelyHasCamera } from "@/components/camera-dialog";
 import { ImageExpand } from "@/components/image-expand";
+import { ResponsiveSelect } from "@/components/responsive-select";
 import { Stepper } from "@/components/stepper";
 import { useAuth } from "@/lib/auth-context";
 import { resizeImageForCapture } from "@/lib/image_resize";
@@ -807,8 +801,8 @@ function ReviewStep({
 // Editor
 // ---------------------------------------------------------------------------
 
-// Sentinel for the nullable Category select (Base UI needs a concrete option
-// value; this maps to null — "Other" — in the data).
+// Sentinel for the nullable Category picker (the picker keys options by a
+// concrete string value; this one maps to null — "Other" — in the data).
 const TYPE_OTHER = "__other__";
 
 function CourseEditor({
@@ -1078,30 +1072,20 @@ function TeeGroup({
             onChange={(event) => setName(event.target.value)}
           />
         </Field>
-        <Field label="Category">
-          <Select
-            // items lets Base UI's SelectValue render the label (not the raw
-            // value) for the closed trigger.
-            items={[
+        <Field label="Category" className="w-40 shrink-0">
+          <ResponsiveSelect
+            title="Tee category"
+            searchable={false}
+            disabled={readOnly}
+            options={[
               ...TEES.map((teeType) => ({ value: teeType, label: TEE_LABELS[teeType] })),
               { value: TYPE_OTHER, label: "Other" },
             ]}
-            disabled={readOnly}
             value={tee.type ?? TYPE_OTHER}
-            onValueChange={(next) => setType(next === TYPE_OTHER ? null : (next as Tee))}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TEES.map((teeType) => (
-                <SelectItem key={teeType} value={teeType}>
-                  {TEE_LABELS[teeType]}
-                </SelectItem>
-              ))}
-              <SelectItem value={TYPE_OTHER}>Other</SelectItem>
-            </SelectContent>
-          </Select>
+            onValueChange={(next) =>
+              setType(next == null || next === TYPE_OTHER ? null : (next as Tee))
+            }
+          />
         </Field>
       </div>
 

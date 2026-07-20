@@ -14,13 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ResponsiveSelect } from "@/components/responsive-select";
 import { GolfScore } from "@/components/golf-score";
 import { Score } from "@/components/score";
 import { ScorecardGallery } from "@/components/scorecard-gallery";
@@ -150,79 +144,52 @@ export function OutingsPage() {
             <Label htmlFor="filter-course" className="text-xs text-muted-foreground">
               Course
             </Label>
-            <Select
-              items={[
-                { value: null, label: "All courses" },
-                ...courses.map((course) => ({ value: course.id, label: course.name })),
-              ]}
+            <ResponsiveSelect
+              id="filter-course"
               value={courseId}
               onValueChange={(value) => {
-                setCourseId(value as string | null);
+                setCourseId(value);
                 setCourseSetId(null);
               }}
-            >
-              <SelectTrigger id="filter-course" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={null}>All courses</SelectItem>
-                {courses.map((course) => (
-                  <SelectItem key={course.id} value={course.id}>
-                    {course.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={courses.map((course) => ({ value: course.id, label: course.name }))}
+              searchable
+              clearable
+              placeholder="All courses"
+              title="Filter by course"
+              searchPlaceholder="Search courses…"
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="filter-set" className="text-xs text-muted-foreground">
               Nine
             </Label>
-            <Select
-              items={[
-                { value: null, label: "All nines" },
-                ...setOptions.map((set) => ({ value: set.id, label: set.label })),
-              ]}
+            <ResponsiveSelect
+              id="filter-set"
               value={courseSetId}
-              onValueChange={(value) => setCourseSetId(value as string | null)}
-            >
-              <SelectTrigger id="filter-set" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={null}>All nines</SelectItem>
-                {setOptions.map((set) => (
-                  <SelectItem key={set.id} value={set.id}>
-                    {set.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={(value) => setCourseSetId(value)}
+              options={setOptions.map((set) => ({ value: set.id, label: set.label }))}
+              searchable
+              clearable
+              placeholder="All nines"
+              title="Filter by nine"
+              searchPlaceholder="Search nines…"
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="filter-player" className="text-xs text-muted-foreground">
               Golfer
             </Label>
-            <Select
-              items={[
-                { value: null, label: "All golfers" },
-                ...players.map((player) => ({ value: player.id, label: playerLabel(player) })),
-              ]}
+            <ResponsiveSelect
+              id="filter-player"
               value={playerId}
-              onValueChange={(value) => setPlayerId(value as string | null)}
-            >
-              <SelectTrigger id="filter-player" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={null}>All golfers</SelectItem>
-                {players.map((player) => (
-                  <SelectItem key={player.id} value={player.id}>
-                    {playerLabel(player)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={(value) => setPlayerId(value)}
+              options={players.map((player) => ({ value: player.id, label: playerLabel(player) }))}
+              searchable
+              clearable
+              placeholder="All golfers"
+              title="Filter by golfer"
+              searchPlaceholder="Search golfers…"
+            />
           </div>
         </div>
 

@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "bun run --filter '*' --parallel --elide-lines=0 dev",
     "dev:web": "bun --filter web dev",
+    "dev:tunnel": "wrangler tunnel quick-start http://localhost:5173 & TUNNEL=$!; trap 'kill $TUNNEL 2>/dev/null' EXIT; bun run dev",
     "build": "bun --filter web build",
     "lint": "oxlint --type-aware --type-check",
     "fmt": "oxfmt --write",
@@ -25,6 +26,8 @@
     "db:generate": "bun --filter api db:generate",
     "db:migrate:local": "bun --filter api db:migrate:local",
     "db:migrate:remote": "bun --filter api db:migrate:remote",
+    "db:seed:local": "nu script/update_seed.nu --local",
+    "db:nuke": "rm -rf .wrangler/state && bun run db:migrate:local && bun run db:seed:local",
     "db:file": "nu script/db_file.nu",
     "prepare": "husky"
   },
