@@ -2,6 +2,8 @@ import { Fragment, useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Archive,
+  BarChart3,
+  ChevronDown,
   ChevronRight,
   EllipsisVertical,
   ExternalLink,
@@ -25,7 +27,7 @@ export type CourseTee = {
   type: Tee | null;
   courseRating: number | null;
   slopeRating: number | null;
-  holes: { id: string; number: number; par: number }[];
+  holes: { id: string; number: number; par: number; yardage: number | null }[];
 };
 
 export type CourseWithNines = {
@@ -56,6 +58,28 @@ export function teeLabel(tee: { name: string; gender: "m" | "f" | null }) {
 // Sort/group order for gender: men's, then women's, then ungendered.
 function genderOrder(gender: "m" | "f" | null): number {
   return gender === "m" ? 0 : gender === "f" ? 1 : 2;
+}
+
+// The tee to headline for THIS golfer on a nine: their preferred TYPE at their
+// gender if it exists, then that type at any gender, then a standard tee at
+// their gender, then any rated tee, then whatever's first. Mirrors how the
+// capture review defaults a golfer's tee.
+function preferredTeeFor(
+  tees: CourseTee[],
+  preferredType: Tee | null,
+  gender: "m" | "f" | null,
+): CourseTee | null {
+  const rated = tees.filter((tee) => tee.courseRating !== null);
+  return (
+    (preferredType != null &&
+      tees.find((tee) => tee.type === preferredType && tee.gender === gender)) ||
+    (preferredType != null && tees.find((tee) => tee.type === preferredType)) ||
+    (gender != null && tees.find((tee) => tee.type === "standard" && tee.gender === gender)) ||
+    tees.find((tee) => tee.type === "standard") ||
+    rated[0] ||
+    tees[0] ||
+    null
+  );
 }
 
 function useCourses() {
@@ -148,10 +172,32 @@ export function CoursesPage() {
 
 export function CourseDetailPage({ courseId }: { courseId: string }) {
   const { courses, error } = useCourses();
-  const { client, isAdmin } = useAuth();
+  const { client, isAdmin, profile } = useAuth();
   const navigate = useNavigate();
   const [archiving, setArchiving] = useState(false);
+  // The signed-in golfer's tee preference, so each nine can headline the
+  // rating/slope of the tee they'd actually play (the /me profile doesn't
+  // carry these, so fetch the full golfer row).
+  const [preferredType, setPreferredType] = useState<Tee | null>(null);
+  const [gender, setGender] = useState<"m" | "f" | null>(null);
   const course = courses?.find((entry) => entry.id === courseId) ?? null;
+
+  useEffect(() => {
+    if (!client || !profile) return;
+    let cancelled = false;
+    void client.api.golfers[":id"]
+      .$get({ param: { id: profile.id } })
+      .then(async (response) => {
+        if (cancelled || !response.ok) return;
+        const { golfer } = await response.json();
+        setPreferredType(golfer.preferredTee);
+        setGender(golfer.gender);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [client, profile]);
   // Editing goes through the facility-merge path (preserves ids), so it's only
   // offered for courses linked to a USGA facility.
   const canEdit = isAdmin && course?.ncrdbFacilityId != null;
@@ -286,12 +332,20 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
             const baselinePars = new Map(
               baseline?.holes.map((hole) => [hole.number, hole.par]) ?? [],
             );
-            const parExceptions = (tee: CourseTee) =>
-              [...tee.holes]
-                .filter((hole) => baselinePars.get(hole.number) !== hole.par)
-                .sort((a, b) => a.number - b.number)
-                .map((hole) => `Hole ${hole.number} is Par ${hole.par}`)
-                .join(", ");
+            // The tee to headline for this golfer, and the hole layout to list
+            // — its own pars where it has them, else the baseline.
+            const preferred = preferredTeeFor(tees, preferredType, gender);
+            const holeSource = preferred && preferred.holes.length > 0 ? preferred : baseline;
+            const holeParByNumber = new Map(
+              holeSource?.holes.map((hole) => [hole.number, hole.par]) ?? [],
+            );
+            const holeYardageByNumber = new Map(
+              holeSource?.holes.map((hole) => [hole.number, hole.yardage]) ?? [],
+            );
+            const setPar = holeNumbers.reduce(
+              (sum, number) => sum + (holeParByNumber.get(number) ?? baselinePars.get(number) ?? 0),
+              0,
+            );
             return (
               <section key={set.id} className="rounded-xl border bg-card">
                 <div className="flex items-start justify-between gap-3 border-b p-5">
@@ -315,66 +369,117 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
                   </div>
                   <Badge variant="secondary">{nineLabel(holeNumbers)}</Badge>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-muted-foreground">
-                        <th className="p-3 pl-5 font-medium">Hole</th>
-                        {holeNumbers.map((number) => (
-                          <th key={number} className="p-3 text-center font-medium">
-                            {number}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-t">
-                        <td className="p-3 pl-5 font-medium whitespace-nowrap">Par</td>
-                        {holeNumbers.map((number) => (
-                          <td key={number} className="p-3 text-center tabular-nums">
-                            {baselinePars.get(number) ?? "–"}
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+
+                {/* Above the fold: the rating/slope of the tee this golfer
+                    would play, plus par. Full per-tee ratings live in the
+                    accordion below. */}
+                <dl className="flex flex-wrap gap-x-8 gap-y-3 border-b p-5">
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium text-muted-foreground">Your tee</dt>
+                    <dd className="mt-0.5 font-medium">
+                      {preferred ? (
+                        <>
+                          {teeLabel(preferred)}
+                          {preferred.type !== null && (
+                            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                              {TEE_LABELS[preferred.type]}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-muted-foreground">Rating</dt>
+                    <dd className="mt-0.5 font-medium tabular-nums">
+                      {preferred?.courseRating != null
+                        ? preferred.courseRating.toFixed(1)
+                        : "Unrated"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-muted-foreground">Slope</dt>
+                    <dd className="mt-0.5 font-medium tabular-nums">
+                      {preferred?.slopeRating != null ? preferred.slopeRating : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-muted-foreground">Par</dt>
+                    <dd className="mt-0.5 font-medium tabular-nums">{setPar || "—"}</dd>
+                  </div>
+                </dl>
+
+                {/* The focus: holes and pars, each linking to its stats. */}
+                <ul>
+                  {holeNumbers.map((number) => (
+                    <li key={number} className="border-b last:border-b-0">
+                      <Link
+                        to="/sets/$setId/holes/$number"
+                        params={{ setId: set.id, number: String(number) }}
+                        className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/50"
+                      >
+                        <span className="flex items-baseline gap-4">
+                          <span className="w-16 text-sm font-medium">Hole {number}</span>
+                          <span className="text-sm text-muted-foreground tabular-nums">
+                            Par {holeParByNumber.get(number) ?? baselinePars.get(number) ?? "–"}
+                            {holeYardageByNumber.get(number) != null &&
+                              ` · ${holeYardageByNumber.get(number)} yds`}
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <BarChart3 aria-hidden="true" className="size-4" />
+                          <span className="hidden sm:inline">Statistics</span>
+                          <ChevronRight aria-hidden="true" className="size-4" />
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Below the fold: every tee's ratings, slopes, and per-tee
+                    par deviations. */}
                 {tees.length > 0 && (
-                  // Columns: gender (M/F, printed once per group), tee, its
-                  // app-level type (unlabeled), rating, slope, and any par
-                  // deviations from the baseline layout above.
-                  <dl className="grid grid-cols-[auto_auto_auto_auto_auto_1fr] items-baseline gap-x-6 gap-y-1.5 border-t p-5 text-sm">
-                    <dd aria-hidden="true" />
-                    <dt className="text-xs font-medium text-muted-foreground">Tee</dt>
-                    <dd aria-hidden="true" />
-                    <dd className="text-xs font-medium text-muted-foreground">Rating</dd>
-                    <dd className="text-xs font-medium text-muted-foreground">Slope</dd>
-                    <dd aria-hidden="true" />
-                    {tees.map((tee, index) => {
-                      // Only the first tee of each gender group prints the label.
-                      const firstOfGender = index === 0 || tees[index - 1].gender !== tee.gender;
-                      return (
-                        <Fragment key={tee.id}>
-                          <dd className="text-xs font-medium whitespace-nowrap text-muted-foreground">
-                            {firstOfGender && tee.gender !== null ? tee.gender.toUpperCase() : ""}
-                          </dd>
-                          <dt className="whitespace-nowrap text-muted-foreground">{tee.name}</dt>
-                          <dd className="whitespace-nowrap text-xs text-muted-foreground">
-                            {tee.type !== null && TEE_LABELS[tee.type]}
-                          </dd>
-                          <dd className="tabular-nums">
-                            {tee.courseRating !== null ? tee.courseRating.toFixed(1) : "Unrated"}
-                          </dd>
-                          <dd className="tabular-nums text-muted-foreground">
-                            {tee.slopeRating !== null ? tee.slopeRating : ""}
-                          </dd>
-                          <dd className="min-w-0 text-xs text-muted-foreground">
-                            {parExceptions(tee)}
-                          </dd>
-                        </Fragment>
-                      );
-                    })}
-                  </dl>
+                  <details className="group border-t">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+                      All tees &amp; ratings
+                      <ChevronDown
+                        aria-hidden="true"
+                        className="size-4 transition-transform group-open:rotate-180"
+                      />
+                    </summary>
+                    {/* Columns: gender (M/F, printed once per group), tee, its
+                        app-level type (unlabeled), rating, slope. */}
+                    <dl className="grid grid-cols-[auto_auto_auto_auto_auto] items-baseline gap-x-6 gap-y-1.5 border-t p-5 text-sm">
+                      <dd aria-hidden="true" />
+                      <dt className="text-xs font-medium text-muted-foreground">Tee</dt>
+                      <dd aria-hidden="true" />
+                      <dd className="text-xs font-medium text-muted-foreground">Rating</dd>
+                      <dd className="text-xs font-medium text-muted-foreground">Slope</dd>
+                      {tees.map((tee, index) => {
+                        // Only the first tee of each gender group prints the label.
+                        const firstOfGender = index === 0 || tees[index - 1].gender !== tee.gender;
+                        return (
+                          <Fragment key={tee.id}>
+                            <dd className="text-xs font-medium whitespace-nowrap text-muted-foreground">
+                              {firstOfGender && tee.gender !== null ? tee.gender.toUpperCase() : ""}
+                            </dd>
+                            <dt className="whitespace-nowrap text-muted-foreground">{tee.name}</dt>
+                            <dd className="whitespace-nowrap text-xs text-muted-foreground">
+                              {tee.type !== null && TEE_LABELS[tee.type]}
+                            </dd>
+                            <dd className="tabular-nums">
+                              {tee.courseRating !== null ? tee.courseRating.toFixed(1) : "Unrated"}
+                            </dd>
+                            <dd className="tabular-nums text-muted-foreground">
+                              {tee.slopeRating !== null ? tee.slopeRating : ""}
+                            </dd>
+                          </Fragment>
+                        );
+                      })}
+                    </dl>
+                  </details>
                 )}
               </section>
             );

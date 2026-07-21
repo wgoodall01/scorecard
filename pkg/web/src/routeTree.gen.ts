@@ -24,6 +24,7 @@ import { Route as OutingsIdRouteImport } from './routes/outings_.$id'
 import { Route as GolfersIdRouteImport } from './routes/golfers_.$id'
 import { Route as CoursesCreateRouteImport } from './routes/courses_.create'
 import { Route as CoursesIdRouteImport } from './routes/courses_.$id'
+import { Route as SetsSetIdHolesNumberRouteImport } from './routes/sets_.$setId.holes.$number'
 
 const ScorecardsRoute = ScorecardsRouteImport.update({
   id: '/scorecards',
@@ -100,6 +101,11 @@ const CoursesIdRoute = CoursesIdRouteImport.update({
   path: '/courses/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SetsSetIdHolesNumberRoute = SetsSetIdHolesNumberRouteImport.update({
+  id: '/sets_/$setId/holes/$number',
+  path: '/sets/$setId/holes/$number',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/golfers/$id': typeof GolfersIdRoute
   '/outings/$id': typeof OutingsIdRoute
   '/scorecards/$id': typeof ScorecardsIdRoute
+  '/sets/$setId/holes/$number': typeof SetsSetIdHolesNumberRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -134,6 +141,7 @@ export interface FileRoutesByTo {
   '/golfers/$id': typeof GolfersIdRoute
   '/outings/$id': typeof OutingsIdRoute
   '/scorecards/$id': typeof ScorecardsIdRoute
+  '/sets/$setId/holes/$number': typeof SetsSetIdHolesNumberRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/golfers_/$id': typeof GolfersIdRoute
   '/outings_/$id': typeof OutingsIdRoute
   '/scorecards_/$id': typeof ScorecardsIdRoute
+  '/sets_/$setId/holes/$number': typeof SetsSetIdHolesNumberRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/golfers/$id'
     | '/outings/$id'
     | '/scorecards/$id'
+    | '/sets/$setId/holes/$number'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/golfers/$id'
     | '/outings/$id'
     | '/scorecards/$id'
+    | '/sets/$setId/holes/$number'
   id:
     | '__root__'
     | '/'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/golfers_/$id'
     | '/outings_/$id'
     | '/scorecards_/$id'
+    | '/sets_/$setId/holes/$number'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -223,6 +235,7 @@ export interface RootRouteChildren {
   GolfersIdRoute: typeof GolfersIdRoute
   OutingsIdRoute: typeof OutingsIdRoute
   ScorecardsIdRoute: typeof ScorecardsIdRoute
+  SetsSetIdHolesNumberRoute: typeof SetsSetIdHolesNumberRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CoursesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sets_/$setId/holes/$number': {
+      id: '/sets_/$setId/holes/$number'
+      path: '/sets/$setId/holes/$number'
+      fullPath: '/sets/$setId/holes/$number'
+      preLoaderRoute: typeof SetsSetIdHolesNumberRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -351,6 +371,7 @@ const rootRouteChildren: RootRouteChildren = {
   GolfersIdRoute: GolfersIdRoute,
   OutingsIdRoute: OutingsIdRoute,
   ScorecardsIdRoute: ScorecardsIdRoute,
+  SetsSetIdHolesNumberRoute: SetsSetIdHolesNumberRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

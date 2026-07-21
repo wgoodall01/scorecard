@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
-import { course, courseSet, courseSetTee, outing, score, scoreSet, uuidv7 } from "../schema";
+import { course, courseSet, courseSetTee, hole, outing, score, scoreSet, uuidv7 } from "../schema";
 import { requireAdmin, requireAuth, zodBody, zodQuery } from "./shared";
 
 const NaiveDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -221,6 +221,117 @@ export const outingRoutes = new Hono<Env>()
       },
     });
     return c.json({ courses });
+  })
+  // Every score ever recorded on ONE hole of a nine — where a "hole" is a
+  // (course set, hole number) pair, spanning the per-tee `hole` rows that
+  // share that number (par can differ by tee, so each score carries the par
+  // of the tee it was played from). Drives the hole-statistics page; stats
+  // (distribution, best/worst, consistency) are derived client-side from
+  // this flat list, since it's one league's data.
+  .get("/course-sets/:setId/holes/:number", requireAuth, async (c) => {
+    const db = getDb(c.env.DB);
+    const setId = c.req.param("setId");
+    const holeNumber = Number(c.req.param("number"));
+    if (!Number.isInteger(holeNumber) || holeNumber < 1 || holeNumber > 18) {
+      return c.json({ error: "Invalid hole number" }, 400);
+    }
+
+    const set = await db.query.courseSet.findFirst({
+      where: eq(courseSet.id, setId),
+      columns: { id: true, name: true },
+      with: {
+        course: { columns: { id: true, name: true } },
+        tees: {
+          columns: { id: true, name: true, gender: true, type: true },
+          with: {
+            holes: {
+              where: eq(hole.number, holeNumber),
+              columns: { id: true, par: true, yardage: true },
+            },
+          },
+        },
+      },
+    });
+    if (!set) return c.json({ error: "Course set not found" }, 404);
+
+    // Map each per-tee `hole` row for this number to its tee and par.
+    const holeMeta = new Map<string, { par: number; teeId: string; teeName: string }>();
+    for (const tee of set.tees) {
+      for (const teeHole of tee.holes) {
+        holeMeta.set(teeHole.id, { par: teeHole.par, teeId: tee.id, teeName: tee.name });
+      }
+    }
+    const holeIds = [...holeMeta.keys()];
+
+    // Baseline par for display: the men's-standard tee where one exists (the
+    // same choice the course registry's Par row makes), else any tee.
+    const baselineTee =
+      set.tees.find(
+        (tee) => tee.type === "standard" && tee.gender === "m" && tee.holes.length > 0,
+      ) ??
+      set.tees.find((tee) => tee.type === "standard" && tee.holes.length > 0) ??
+      set.tees.find((tee) => tee.holes.length > 0);
+    const pars = [...new Set([...holeMeta.values()].map((meta) => meta.par))].sort((a, b) => a - b);
+    const par = baselineTee?.holes[0]?.par ?? pars[0] ?? null;
+
+    // Each tee's yardage/par on THIS hole, longest first (nulls last).
+    const tees = set.tees
+      .filter((tee) => tee.holes.length > 0)
+      .map((tee) => ({
+        id: tee.id,
+        name: tee.name,
+        gender: tee.gender,
+        type: tee.type,
+        par: tee.holes[0].par,
+        yardage: tee.holes[0].yardage,
+      }))
+      .sort((a, b) => (b.yardage ?? -1) - (a.yardage ?? -1) || a.name.localeCompare(b.name));
+
+    const scoreRows =
+      holeIds.length === 0
+        ? []
+        : await db.query.score.findMany({
+            where: inArray(score.holeId, holeIds),
+            columns: { holeId: true, score: true },
+            with: {
+              scoreSet: {
+                columns: {},
+                with: {
+                  outing: { columns: { id: true, date: true } },
+                  player: { columns: { id: true, name: true, email: true } },
+                },
+              },
+            },
+          });
+
+    const scores = scoreRows.map((row) => {
+      const meta = holeMeta.get(row.holeId)!;
+      return {
+        playerId: row.scoreSet.player.id,
+        playerName: row.scoreSet.player.name,
+        playerEmail: row.scoreSet.player.email,
+        outingId: row.scoreSet.outing.id,
+        date: row.scoreSet.outing.date,
+        teeId: meta.teeId,
+        teeName: meta.teeName,
+        par: meta.par,
+        strokes: row.score,
+      };
+    });
+
+    return c.json({
+      hole: {
+        number: holeNumber,
+        courseId: set.course.id,
+        courseName: set.course.name,
+        setId: set.id,
+        setName: set.name,
+        pars,
+        par,
+      },
+      tees,
+      scores,
+    });
   })
   .get(
     "/outings",
