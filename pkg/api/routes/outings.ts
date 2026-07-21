@@ -4,9 +4,7 @@ import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
 import { course, courseSet, courseSetTee, hole, outing, score, scoreSet, uuidv7 } from "../schema";
-import { requireAdmin, requireAuth, zodBody, zodQuery } from "./shared";
-
-const NaiveDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+import { NaiveDate, requireAdmin, requireAuth, zodBody, zodQuery } from "./shared";
 
 export const SubmitPlayerScores = z.object({
   playerId: z.string().min(1),

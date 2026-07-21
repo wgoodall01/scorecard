@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "bun run --filter '*' --parallel --elide-lines=0 dev",
     "dev:web": "bun --filter web dev",
-    "dev:tunnel": "wrangler tunnel quick-start http://localhost:5173 & TUNNEL=$!; trap 'kill $TUNNEL 2>/dev/null' EXIT; bun run dev",
+    "dev:tunnel": "ngrok http http://localhost:5173 --log stdout --log-format term & TUNNEL=$!; trap 'kill $TUNNEL 2>/dev/null' EXIT; bun run dev",
     "build": "bun --filter web build",
     "lint": "oxlint --type-aware --type-check",
     "fmt": "oxfmt --write",

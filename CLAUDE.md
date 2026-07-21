@@ -227,21 +227,34 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   `holes` (par differs by tee on some holes; the script seeds id/number/par —
   `yardage` in the YAML is documentation only, not applied).
 - `pkg/api/routes/honors.ts` + `pkg/api/src/honors.ts`: the honors board.
-  `computeHonors(db, since)` runs ONE SQLite query (CTEs + window functions;
-  raw D1, deliberately not Drizzle) over the recent window
-  (`HONOR_WINDOW_DAYS`, 90 days). The query emits a single row with one
-  `json_object` column per honor slug (NULL = unawarded) — scalar-subquery
-  columns rather than a UNION ALL arm per honor because D1 caps
-  compound-SELECT terms — and the app code is a bind + JSON.parse into the
-  `Honor` discriminated union (medalist, hot-nine, birdie-machine,
-  par-machine, metronome, iron-golfer, comeback-kid, crater, snowman,
-  anchor). One holder per honor; tie-breaks favor the most recent
-  achievement; rate honors need ≥18 holes in the window; the anchor needs
-  ≥2 eligible players. `GET /honors` recomputes on every request.
+  `computeHonors(db, from, to)` runs ONE SQLite query (CTEs + window
+  functions; raw D1, deliberately not Drizzle) over an INCLUSIVE naive date
+  range of outings. The query emits a single row with one `json_object`
+  column per honor slug (NULL = unawarded) — scalar-subquery columns rather
+  than a UNION ALL arm per honor because D1 caps compound-SELECT terms — and
+  the app code is a bind + JSON.parse into the `Honor` discriminated union
+  (medalist, hot-nine, birdie-machine, par-machine, metronome, iron-golfer,
+  comeback-kid, crater, snowman, anchor, plus the four STREAK honors:
+  hot-streak = most consecutive holes at par or better, cold-streak = most
+  consecutive at bogey or worse, groundhog-day = most consecutive with the
+  same score to par, broken-record = most consecutive with the same raw
+  score). Streaks are gaps-and-islands over each player's holes in play
+  order (date, outing, nine — nines ordered by first hole number, then
+  score_set uuidv7 = submission order for same-numbered nines — then hole
+  number), CARRY ACROSS consecutive outings, and need ≥2 holes; their
+  "latest" outing ref is the streak's last hole, via SQLite's
+  bare-column-with-MAX() rule. One holder per honor; tie-breaks favor the
+  most recent achievement; rate honors need ≥18 holes in the window; the
+  anchor needs ≥2 eligible players. `GET /honors?from&to` recomputes on
+  every request and defaults to the current calendar year.
   `src/honors.test.ts` seeds the test D1 and asserts the board. The web's
   Honors tab (`pkg/web/src/pages/honors.tsx`) renders every slug — claimed
   cards get per-honor custom stat/story UI, unclaimed ones a dimmed
-  placeholder.
+  placeholder — in three sections (laurels, Streaks, Dishonors), with a
+  calendar button in the page heading opening a `ResponsiveModal` date-range
+  picker (quick buttons for the current + 3 previous years, plus free-form
+  from/to date inputs); the range rides the route's `from`/`to` search
+  params (validated zod, absent = current year for a clean URL).
 - `pkg/api/routes/scorecard.ts`: routes only — POST `/scorecard` uploads the
   image to R2, `submit`s an `extract_score` job per requested extraction (the
   multipart `extract` field is JSON like `{"scores": true}`; a course-metadata
@@ -399,17 +412,22 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   front end.
 - `bun dev:web`: run only Vite locally; its `/api` requests proxy to the Worker
   (which must already be running separately in another terminal).
-- `bun dev:tunnel`: `bun dev` plus a Cloudflare quick tunnel
-  (`wrangler tunnel quick-start http://localhost:5173`) so a phone can reach the
-  app over HTTPS. It prints a `https://<name>.trycloudflare.com` URL and kills
-  the tunnel on exit. Vite's port is pinned to 5173 (`strictPort`) so the tunnel
-  target always lines up, and `.trycloudflare.com` is in Vite's `allowedHosts`.
-  The URL is random per run, so it is NOT a registered WebAuthn origin — pair it
-  with the dev sign-in bypass below (no passkey needed), not the passkey
-  ceremony. When handing the tunnel URL to the user, ALWAYS also give the
-  one-click dev-login link `<tunnel-url>/login?devLoginOverride=<email>` using a
-  seeded golfer's email (default the admin `wgoodall01@gmail.com`), so they land
-  signed in with a single tap.
+- `bun dev:tunnel`: `bun dev` plus an ngrok tunnel
+  (`ngrok http http://localhost:5173 --log stdout --log-format term`) so a
+  phone can reach the app over HTTPS. Authenticate via the `NGROK_AUTHTOKEN`
+  env var (the ngrok agent reads it directly; alternatively
+  `ngrok config add-authtoken …` once). The tunnel URL is in the
+  `started tunnel … url=https://<name>.ngrok-free.app` log line, and the
+  tunnel is killed on exit. Vite's port is pinned to 5173 (`strictPort`) so
+  the tunnel target always lines up, and `.ngrok-free.app` /
+  `.ngrok.app` / `.ngrok.dev` are in Vite's `allowedHosts`. The URL is
+  random per run (free-plan ngrok), so it is NOT a registered WebAuthn
+  origin — pair it with the dev sign-in bypass below (no passkey needed),
+  not the passkey ceremony. When handing the tunnel URL to the user, ALWAYS
+  also give the one-click dev-login link
+  `<tunnel-url>/login?devLoginOverride=<email>` using a seeded golfer's
+  email (default the admin `wgoodall01@gmail.com`), so they land signed in
+  with a single tap.
 - Sign in locally without a passkey (DEV ONLY): the `/login` page shows a
   caution-striped form (`<CautionStripe>`) to sign in as any existing golfer by
   email, and `/login?devLoginOverride=<email>` does it immediately on load. Both
@@ -468,7 +486,7 @@ ORDER BY created_at DESC LIMIT 1"`.
   expressions).
 - `bun db:migrate:local` / `bun db:migrate:remote`: apply migrations.
 - `bun db:seed:local`: upsert `seed/*.yaml` into the LOCAL D1 (`nu
-  script/update_seed.nu --local`).
+script/update_seed.nu --local`).
 - `bun db:nuke`: wipe ALL local Miniflare state (`rm -rf .wrangler/state` — D1,
   KV, R2, cache, images, workflows), then re-migrate and re-seed local from
   scratch. Stop `bun dev` first (it holds the state open) and restart it after.

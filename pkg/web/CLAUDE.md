@@ -37,30 +37,31 @@ the whole app's popovers/sheets feel like one system.
 
 ```tsx
 <ResponsiveSelect
-  value={value}                       // T | null  (null = nothing selected)
-  onValueChange={setValue}            // (T | null) => void
-  options={items.map(x => ({ value: x.id, label: x.name }))}  // or null = loading
+  value={value} // T | null  (null = nothing selected)
+  onValueChange={setValue} // (T | null) => void
+  options={items.map((x) => ({ value: x.id, label: x.name }))} // or null = loading
   // — turn features on as the case needs —
-  searchable                          // client-side filter box (label + keywords)
-  clearable placeholder="All courses" // adds a null row; null shows the placeholder
-  invalid={value === null}            // red ring when a required pick is empty
-  ariaLabel="Course"                  // accessible name when there's no <Label htmlFor>
-  title="Filter by course"            // mobile sheet header (defaults to placeholder)
+  searchable // client-side filter box (label + keywords)
+  clearable
+  placeholder="All courses" // adds a null row; null shows the placeholder
+  invalid={value === null} // red ring when a required pick is empty
+  ariaLabel="Course" // accessible name when there's no <Label htmlFor>
+  title="Filter by course" // mobile sheet header (defaults to placeholder)
 />
 ```
 
 Decide per call site:
 
-| Need | Prop |
-|------|------|
-| Long list (golfers, courses, players) | `searchable` |
-| Server-side search (query → fetch) | `onSearch` (disables the client filter; parent supplies filtered `options`) |
-| Async options loaded on open | `options={loaded ? [...] : null}` + `onOpen` (spinner while null) |
-| A "none" / "All X" choice | `clearable` + set `placeholder` to the null text |
-| Custom row (extra info, badges) | `renderItem={(opt,{selected}) => …}` (trigger still shows `label`; see the nine picker in `review-round.tsx` for the muted-suffix pattern) |
-| Custom trigger text | `renderValue={(opt) => …}` |
-| Extra filter terms beyond the label | `option.keywords` |
-| No visible label | `ariaLabel` (else associate a `<Label htmlFor={id}>`) |
+| Need                                  | Prop                                                                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Long list (golfers, courses, players) | `searchable`                                                                                                                               |
+| Server-side search (query → fetch)    | `onSearch` (disables the client filter; parent supplies filtered `options`)                                                                |
+| Async options loaded on open          | `options={loaded ? [...] : null}` + `onOpen` (spinner while null)                                                                          |
+| A "none" / "All X" choice             | `clearable` + set `placeholder` to the null text                                                                                           |
+| Custom row (extra info, badges)       | `renderItem={(opt,{selected}) => …}` (trigger still shows `label`; see the nine picker in `review-round.tsx` for the muted-suffix pattern) |
+| Custom trigger text                   | `renderValue={(opt) => …}`                                                                                                                 |
+| Extra filter terms beyond the label   | `option.keywords`                                                                                                                          |
+| No visible label                      | `ariaLabel` (else associate a `<Label htmlFor={id}>`)                                                                                      |
 
 Options are `{ value, label, description?, keywords?, disabled? }`. `description`
 renders as a muted second line in the default row. Prefer stable ids as `value`
@@ -102,8 +103,8 @@ and let the label/keywords drive filtering (never a label-as-value).
 
 ## Commands (from repo root)
 
-- `bun dev` / `bun dev:tunnel` — dev servers (± a Cloudflare quick tunnel for
-  phones). See root CLAUDE.md.
+- `bun dev` / `bun dev:tunnel` — dev servers (± an ngrok tunnel for phones).
+  See root CLAUDE.md.
 - `bun run build` — `tsr generate && tsc -b && vite build`. `tsc` here compiles
   the imported API sources too, so a type error in `pkg/api` can fail the web
   build; fix it portably rather than isolating the packages.

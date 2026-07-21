@@ -71,7 +71,7 @@ async function seedRound(outingId: string, date: string, playerId: string, delta
 }
 
 function board() {
-  return computeHonors(env.DB, "2000-01-01");
+  return computeHonors(env.DB, "2000-01-01", "2100-12-31");
 }
 
 function honor<TSlug extends HonorSlug>(honors: Honor[], slug: TSlug) {
@@ -299,10 +299,90 @@ describe("computeHonors", () => {
     expect(anchor?.holes).toBe(18);
   });
 
-  it("ignores scores from outings before the window", async () => {
+  it("awards the hot streak for consecutive holes at or under par", async () => {
+    await seedBase();
+    // Alice: holes 2–5 at or under par (her longest run of 4).
+    await seedRound("o1", "2026-07-01", "alice", [1, 0, 0, -1, 0, 1, 0, 1, 1]);
+    // Bob: best run is 3 (holes 4–6).
+    await seedRound("o1", "2026-07-01", "bob", [0, 0, 1, 0, 0, 0, 1, 1, 1]);
+    const hotStreak = honor(await board(), "hot-streak");
+    expect(hotStreak?.holder.id).toBe("alice");
+    expect(hotStreak?.holes).toBe(4);
+    expect(hotStreak?.outings).toBe(1);
+    expect(hotStreak?.latest.id).toBe("o1");
+  });
+
+  it("awards the cold streak for consecutive holes at bogey or worse", async () => {
+    await seedBase();
+    await seedRound("o1", "2026-07-01", "alice", [0, 1, 2, 3, 0, 0, 0, 0, 0]);
+    await seedRound("o1", "2026-07-01", "bob", [0, 0, 1, 1, 0, 0, 0, 0, 0]);
+    const coldStreak = honor(await board(), "cold-streak");
+    expect(coldStreak?.holder.id).toBe("alice");
+    expect(coldStreak?.holes).toBe(3);
+  });
+
+  it("carries streaks across consecutive outings", async () => {
+    await seedBase();
+    // Two pars to close the first outing, two to open the next: a 4-streak.
+    await seedRound("o1", "2026-07-01", "alice", [1, 1, 1, 1, 1, 1, 1, 0, 0]);
+    await seedRound("o2", "2026-07-08", "alice", [0, 0, 1, 1, 1, 1, 1, 1, 1]);
+    const hotStreak = honor(await board(), "hot-streak");
+    expect(hotStreak?.holder.id).toBe("alice");
+    expect(hotStreak?.holes).toBe(4);
+    expect(hotStreak?.outings).toBe(2);
+    expect(hotStreak?.latest.id).toBe("o2");
+  });
+
+  it("needs at least two holes in a row for every streak honor", async () => {
+    await seedBase();
+    // Strict alternation: every island (condition, to-par, and raw score) is
+    // one hole long, so nothing qualifies.
+    await seedRound("o1", "2026-07-01", "alice", [0, 1, 0, 1, 0, 1, 0, 1, 0]);
+    const honors = await board();
+    expect(honor(honors, "hot-streak")).toBeUndefined();
+    expect(honor(honors, "cold-streak")).toBeUndefined();
+    expect(honor(honors, "groundhog-day")).toBeUndefined();
+    expect(honor(honors, "broken-record")).toBeUndefined();
+  });
+
+  it("awards groundhog day for repeating the same score to par", async () => {
+    await seedBase();
+    // Alice: bogey, bogey, bogey to open.
+    await seedRound("o1", "2026-07-01", "alice", [1, 1, 1, 0, 0, -1, 2, 0, 1]);
+    await seedRound("o1", "2026-07-01", "bob", [0, 0, 2, 2, 1, 0, 2, 1, 0]);
+    const groundhog = honor(await board(), "groundhog-day");
+    expect(groundhog?.holder.id).toBe("alice");
+    expect(groundhog?.toPar).toBe(1);
+    expect(groundhog?.holes).toBe(3);
+  });
+
+  it("tracks the broken record by raw score even across differing pars", async () => {
+    await seedBase();
+    // Vary the pars so a same-score run is not a same-to-par run: holes 1–3
+    // become par 4/5/3, and Alice cards a 4 on all three (seedRound's deltas
+    // are relative to the original par 4, so a 0 delta is always a 4).
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE hole SET par = 5 WHERE id = 'h2'`),
+      env.DB.prepare(`UPDATE hole SET par = 3 WHERE id = 'h3'`),
+    ]);
+    await seedRound("o1", "2026-07-01", "alice", [0, 0, 0, 1, 2, 1, 2, 1, 2]);
+    const honors = await board();
+    const brokenRecord = honor(honors, "broken-record");
+    expect(brokenRecord?.holder.id).toBe("alice");
+    expect(brokenRecord?.strokes).toBe(4);
+    expect(brokenRecord?.holes).toBe(3);
+    // ...while her longest same-to-par run is just the two +1s on holes 3–4.
+    const groundhog = honor(honors, "groundhog-day");
+    expect(groundhog?.toPar).toBe(1);
+    expect(groundhog?.holes).toBe(2);
+  });
+
+  it("ignores scores from outings outside the date range", async () => {
     await seedBase();
     await seedRound("o1", "2026-07-01", "alice", flat);
-    const honors = await computeHonors(env.DB, "2026-07-02");
-    expect(honors).toEqual([]);
+    expect(await computeHonors(env.DB, "2026-07-02", "2100-12-31")).toEqual([]);
+    expect(await computeHonors(env.DB, "2000-01-01", "2026-06-30")).toEqual([]);
+    const inclusive = await computeHonors(env.DB, "2026-07-01", "2026-07-01");
+    expect(honor(inclusive, "medalist")?.holder.id).toBe("alice");
   });
 });

@@ -13,6 +13,10 @@ const TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const Email = z.string().trim().toLowerCase().email();
 export type EmailSchema = z.infer<typeof Email>;
 
+// A naive "YYYY-MM-DD" calendar date, the app's date-of-play currency.
+export const NaiveDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export type NaiveDateSchema = z.infer<typeof NaiveDate>;
+
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
