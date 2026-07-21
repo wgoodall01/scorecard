@@ -6,3 +6,4 @@ pkg/web/dist
 .dev.vars
 pkg/api/src/agent/*/eval/results/
 .DS_Store
+wrangler.dev-noai.toml
