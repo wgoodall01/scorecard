@@ -26,12 +26,13 @@
     "db:generate": "bun --filter api db:generate",
     "db:migrate:local": "bun --filter api db:migrate:local",
     "db:migrate:remote": "bun --filter api db:migrate:remote",
-    "db:seed:local": "nu script/update_seed.nu --local",
+    "db:seed:local": "bun script/update_seed.ts --local",
     "db:nuke": "rm -rf .wrangler/state && bun run db:migrate:local && bun run db:seed:local",
-    "db:file": "nu script/db_file.nu",
+    "db:file": "bun script/db_file.ts",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.14",
     "husky": "^9.1.7",
     "lint-staged": "^17.1.0",
     "oxfmt": "^0.59.0",

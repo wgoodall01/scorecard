@@ -9,8 +9,8 @@
     "search": "bun ncrdb.ts search",
     "describe": "bun ncrdb.ts describe",
     "test": "bun test",
-    "sync:local": "nu scripts/sync.nu --local",
-    "sync:remote": "nu scripts/sync.nu --remote"
+    "sync:local": "bun scripts/sync.ts --local",
+    "sync:remote": "bun scripts/sync.ts --remote"
   },
   "devDependencies": {
     "@types/bun": "^1.3.9"

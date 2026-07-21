@@ -30,15 +30,15 @@ The sweep runs two passes into `./output/` (gitignored), each resumable via
 
 ## Sync into D1
 
-`scripts/sync.nu` upserts the scraped JSONL into the `scorecard` D1 database.
+`scripts/sync.ts` upserts the scraped JSONL into the `scorecard` D1 database.
 It is the **sole writer** of the `usga_facility` / `usga_course` / `usga_tee`
 tables (the app only reads them). Run the schema migration first
 (`bun db:migrate:local` / `:remote` from the repo root).
 
 ```sh
-nu scripts/sync.nu --local                       # from ./output
-nu scripts/sync.nu --local --remote              # both databases
-nu scripts/sync.nu --remote --dir /path/to/output
+bun scripts/sync.ts --local                       # from ./output
+bun scripts/sync.ts --local --remote              # both databases
+bun scripts/sync.ts --remote --dir /path/to/output
 ```
 
 Flags: `--dir` (JSONL location, default `./output`), `--batch` (rows per

@@ -6,10 +6,9 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
 
 ## Required tools
 
-- `bun` — runtime and package manager; every script in the repo runs through it
-  (wrangler, vitest, vite all come from `node_modules`).
-- `nushell` (`nu`) — runs the database scripts (`script/update_seed.nu`,
-  `script/db_file.nu`, i.e. `bun db:seed:local` / `bun db:nuke` / `bun db:file`).
+- `bun` — runtime and package manager; EVERYTHING in the repo runs through it
+  (wrangler, vitest, and vite come from `node_modules`, and the repo scripts —
+  `script/*.ts`, the scraper's `scripts/sync.ts` — are plain Bun scripts).
 
 ## Architecture
 
@@ -490,14 +489,14 @@ ORDER BY created_at DESC LIMIT 1"`.
   hand-fix the generated SQL (pragmas → `defer_foreign_keys`; multi-arg index
   expressions).
 - `bun db:migrate:local` / `bun db:migrate:remote`: apply migrations.
-- `bun db:seed:local`: upsert `seed/*.yaml` into the LOCAL D1 (`nu
-script/update_seed.nu --local`).
+- `bun db:seed:local`: upsert `seed/*.yaml` into the LOCAL D1 (`bun
+script/update_seed.ts --local`).
 - `bun db:nuke`: wipe ALL local Miniflare state (`rm -rf .wrangler/state` — D1,
   KV, R2, cache, images, workflows), then re-migrate and re-seed local from
   scratch. Stop `bun dev` first (it holds the state open) and restart it after.
   A clean-slate reset — handy when local rows have drifted from the seed (e.g.
   nickname/course natural-key collisions).
-- `nu script/update_seed.nu --local --remote`: upsert the seed data in
+- `bun script/update_seed.ts --local --remote`: upsert the seed data in
   `seed/*.yaml` (golfers + nicknames, courses + sets + tees + holes) into
   D1. The baked-in uuidv7s are CANONICAL for users, nicknames, and courses
   (upserted by id — a pre-existing row with the same unique email under a
