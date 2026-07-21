@@ -46,7 +46,7 @@ allowed_sender_addresses = ["noreply@scorecard.wg.gay"]
 # Weekly cleanup: the scheduled handler in pkg/api/index.ts prunes expired
 # invite rows (Sundays 00:00 UTC).
 [triggers]
-crons = ["0 0 * * 0"]
+crons = ["0 0 * * *"]
 
 [[queues.producers]]
 binding = "JOB_QUEUE"
