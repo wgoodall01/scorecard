@@ -4,6 +4,13 @@ Scorecard ingests golf-scorecard images, stores them in R2, extracts round data,
 matches it against the database (players, courses), and records outings and
 scores that the app browses and will use for golf metrics, prizes, and awards.
 
+## Required tools
+
+- `bun` — runtime and package manager; every script in the repo runs through it
+  (wrangler, vitest, vite all come from `node_modules`).
+- `nushell` (`nu`) — runs the database scripts (`script/update_seed.nu`,
+  `script/db_file.nu`, i.e. `bun db:seed:local` / `bun db:nuke` / `bun db:file`).
+
 ## Architecture
 
 - `pkg/web`: Vite + React + TypeScript front end, styled with Tailwind and
@@ -418,7 +425,14 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   ceremony. When handing the tunnel URL to the user, ALWAYS also give the
   one-click dev-login link `<tunnel-url>/login?devLoginOverride=<email>` using a
   seeded golfer's email (default the admin `wgoodall01@gmail.com`), so they land
-  signed in with a single tap.
+  signed in with a single tap. Wrangler needs Cloudflare credentials for parts
+  of dev (notably the remote `AI` binding); if there's no wrangler access (no
+  `wrangler whoami`, no `CLOUDFLARE_API_TOKEN`), do NOT silently skip or stub —
+  get the user to complete a login: run `wrangler login --browser=false`, hand
+  them the printed URL, and have them either paste back the failed
+  `http://localhost:8976/oauth/callback?...` redirect URL (curl it locally to
+  finish the handshake) or supply an API token to set as
+  `CLOUDFLARE_API_TOKEN`.
 - Sign in locally without a passkey (DEV ONLY): the `/login` page shows a
   caution-striped form (`<CautionStripe>`) to sign in as any existing golfer by
   email, and `/login?devLoginOverride=<email>` does it immediately on load. Both
