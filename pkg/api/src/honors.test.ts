@@ -71,7 +71,7 @@ async function seedRound(outingId: string, date: string, playerId: string, delta
 }
 
 function board() {
-  return computeHonors(env.DB, "2000-01-01");
+  return computeHonors(env.DB, "2000-01-01", "2999-12-31");
 }
 
 function honor<TSlug extends HonorSlug>(honors: Honor[], slug: TSlug) {
@@ -299,10 +299,69 @@ describe("computeHonors", () => {
     expect(anchor?.holes).toBe(18);
   });
 
+  it("runs the par train across consecutive outings", async () => {
+    await seedBase();
+    // Three closing pars on July 1 plus two opening pars a week later: one
+    // streak of five, ending at the later outing.
+    await seedRound("o1", "2026-07-01", "alice", [1, 1, 1, 1, 1, 1, 0, 0, 0]);
+    await seedRound("o2", "2026-07-08", "alice", [0, 0, 1, 1, 1, 1, 1, 1, 1]);
+    const parTrain = honor(await board(), "par-train");
+    expect(parTrain?.holder.id).toBe("alice");
+    expect(parTrain?.holes).toBe(5);
+    expect(parTrain?.startDate).toBe("2026-07-01");
+    expect(parTrain?.latest.id).toBe("o2");
+  });
+
+  it("runs the bogey train on consecutive holes at bogey or worse", async () => {
+    await seedBase();
+    await seedRound("o1", "2026-07-01", "alice", [0, 1, 3, 1, 2, 0, 0, 1, 0]);
+    const bogeyTrain = honor(await board(), "bogey-train");
+    expect(bogeyTrain?.holder.id).toBe("alice");
+    expect(bogeyTrain?.holes).toBe(4);
+    expect(bogeyTrain?.latest.id).toBe("o1");
+  });
+
+  it("awards groundhog day for repeating the same score to par", async () => {
+    await seedBase();
+    // Four straight double bogeys beat the runs of pars (3) and bogeys (2).
+    await seedRound("o1", "2026-07-01", "alice", [0, 0, 0, 2, 2, 2, 2, 1, 1]);
+    const groundhog = honor(await board(), "groundhog-day");
+    expect(groundhog?.holder.id).toBe("alice");
+    expect(groundhog?.holes).toBe(4);
+    expect(groundhog?.toPar).toBe(2);
+  });
+
+  it("awards the broken record for repeating the exact same score", async () => {
+    await seedBase();
+    await seedRound("o1", "2026-07-01", "alice", [1, 1, 1, 1, 1, 0, 2, 1, 0]);
+    const brokenRecord = honor(await board(), "broken-record");
+    expect(brokenRecord?.holder.id).toBe("alice");
+    expect(brokenRecord?.holes).toBe(5);
+    expect(brokenRecord?.score).toBe(5);
+  });
+
+  it("does not award streaks shorter than three holes", async () => {
+    await seedBase();
+    // Alternating pars and bogeys: no run of anything reaches three.
+    await seedRound("o1", "2026-07-01", "alice", [0, 1, 0, 1, 0, 1, 0, 1, 0]);
+    const honors = await board();
+    expect(honor(honors, "par-train")).toBeUndefined();
+    expect(honor(honors, "bogey-train")).toBeUndefined();
+    expect(honor(honors, "groundhog-day")).toBeUndefined();
+    expect(honor(honors, "broken-record")).toBeUndefined();
+  });
+
   it("ignores scores from outings before the window", async () => {
     await seedBase();
     await seedRound("o1", "2026-07-01", "alice", flat);
-    const honors = await computeHonors(env.DB, "2026-07-02");
+    const honors = await computeHonors(env.DB, "2026-07-02", "2999-12-31");
+    expect(honors).toEqual([]);
+  });
+
+  it("ignores scores from outings after the window", async () => {
+    await seedBase();
+    await seedRound("o1", "2026-07-01", "alice", flat);
+    const honors = await computeHonors(env.DB, "2000-01-01", "2026-06-30");
     expect(honors).toEqual([]);
   });
 });

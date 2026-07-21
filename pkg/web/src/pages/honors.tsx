@@ -1,20 +1,29 @@
 import { useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   Anchor,
   Bird,
   Bomb,
   CalendarHeart,
+  CalendarRange,
+  Disc3,
   Flame,
   Medal,
+  Repeat,
   Rocket,
   Snowflake,
   Target,
+  TrainFront,
+  TrainTrack,
   type LucideIcon,
 } from "lucide-react";
 import type { Honor, HonorOutingRef, HonorSlug } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ResponsiveModal } from "@/components/responsive-modal";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { formatOutingDate, playerLabel } from "@/pages/outings";
@@ -87,6 +96,30 @@ const HONOR_METAS: HonorMeta[] = [
     chip: "bg-green-500/15 text-green-600 dark:text-green-400",
   },
   {
+    slug: "par-train",
+    title: "The Par Train",
+    tagline: "Longest streak of holes at par or better.",
+    unclaimed: "Three par-or-better holes in a row starts the engine.",
+    icon: TrainFront,
+    chip: "bg-teal-500/15 text-teal-600 dark:text-teal-400",
+  },
+  {
+    slug: "groundhog-day",
+    title: "Groundhog Day",
+    tagline: "Longest streak of the same score to par.",
+    unclaimed: "Nobody has repeated themselves three holes running.",
+    icon: Repeat,
+    chip: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400",
+  },
+  {
+    slug: "broken-record",
+    title: "Broken Record",
+    tagline: "Longest streak of the exact same score.",
+    unclaimed: "No number has come up three times in a row yet.",
+    icon: Disc3,
+    chip: "bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400",
+  },
+  {
     slug: "crater",
     title: "The Crater",
     tagline: "Worst single hole. Triple bogey territory.",
@@ -102,6 +135,15 @@ const HONOR_METAS: HonorMeta[] = [
     unclaimed: "No snowmen this season. Unseasonably warm.",
     icon: Snowflake,
     chip: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+    dishonor: true,
+  },
+  {
+    slug: "bogey-train",
+    title: "The Bogey Train",
+    tagline: "Longest streak of holes at bogey or worse.",
+    unclaimed: "No three-hole slide recorded. The brakes are holding.",
+    icon: TrainTrack,
+    chip: "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400",
     dishonor: true,
   },
   {
@@ -121,6 +163,22 @@ function formatToPar(toPar: number) {
 
 function ordinal(n: number) {
   return `${n}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"}`;
+}
+
+// Plural name of a score class ("bogeys", "pars") for the groundhog story.
+function toParNoun(toPar: number) {
+  if (toPar <= -3) return "albatrosses";
+  if (toPar === -2) return "eagles";
+  if (toPar === -1) return "birdies";
+  if (toPar === 0) return "pars";
+  if (toPar === 1) return "bogeys";
+  if (toPar === 2) return "double bogeys";
+  return `+${toPar}s`;
+}
+
+// Streaks may carry across consecutive outings; flag it when they do.
+function streakSpan(honor: { startDate: string; latest: HonorOutingRef }) {
+  return honor.startDate !== honor.latest.date ? ", carried across outings" : "";
 }
 
 function OutingLink({ outing }: { outing: HonorOutingRef }) {
@@ -205,6 +263,46 @@ function honorDetail(honor: Honor): {
         ),
         outing: honor.outing,
       };
+    case "par-train":
+      return {
+        stat: `×${honor.holes}`,
+        story: (
+          <>
+            {honor.holes} straight holes at par or better{streakSpan(honor)} — ending:
+          </>
+        ),
+        outing: honor.latest,
+      };
+    case "groundhog-day":
+      return {
+        stat: `×${honor.holes}`,
+        story: (
+          <>
+            {honor.holes} {toParNoun(honor.toPar)} in a row{streakSpan(honor)} — ending:
+          </>
+        ),
+        outing: honor.latest,
+      };
+    case "broken-record":
+      return {
+        stat: `×${honor.holes}`,
+        story: (
+          <>
+            Wrote down a {honor.score} on {honor.holes} straight holes{streakSpan(honor)} — ending:
+          </>
+        ),
+        outing: honor.latest,
+      };
+    case "bogey-train":
+      return {
+        stat: `×${honor.holes}`,
+        story: (
+          <>
+            {honor.holes} straight holes at bogey or worse{streakSpan(honor)} — ending:
+          </>
+        ),
+        outing: honor.latest,
+      };
     case "crater":
       return {
         stat: `+${honor.overPar}`,
@@ -287,16 +385,124 @@ function HonorCard({ meta, honor }: { meta: HonorMeta; honor: Honor | undefined 
   );
 }
 
-export function HonorsPage() {
+function yearRange(year: number) {
+  return { since: `${year}-01-01`, until: `${year}-12-31` };
+}
+
+// The calendar year a range covers exactly, or null for a custom range.
+function rangeYear(since: string, until: string) {
+  const year = Number(since.slice(0, 4));
+  const full = yearRange(year);
+  return since === full.since && until === full.until ? year : null;
+}
+
+function formatRangeDate(date: string) {
+  // Naive "YYYY-MM-DD"; anchor to noon so the formatter never slides it
+  // across midnight into a neighboring day.
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// iOS gives date inputs UA styling (extra height, centered value); strip it
+// so the fields match the buttons around them. Same recipe as review-round.
+const DATE_INPUT_CLASS =
+  "h-9 appearance-none justify-start text-left [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:text-left";
+
+// The calendar button at the top of the board: opens a ResponsiveModal
+// (popover-style dialog on desktop, bottom sheet on phones) with quick
+// buttons for the current and three previous years plus a custom from/to.
+function DateRangeControl({
+  since,
+  until,
+  onChange,
+}: {
+  since: string;
+  until: string;
+  onChange: (range: { since: string; until: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 4 }, (_, index) => currentYear - index);
+  const activeYear = rangeYear(since, until);
+
+  return (
+    <>
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        <CalendarRange data-icon="inline-start" aria-hidden="true" />
+        {activeYear ?? `${formatRangeDate(since)} – ${formatRangeDate(until)}`}
+      </Button>
+      <ResponsiveModal
+        open={open}
+        onOpenChange={setOpen}
+        title="Date range"
+        description="Honors are tallied from outings in this window."
+      >
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-4 gap-2">
+            {years.map((year) => (
+              <Button
+                key={year}
+                variant={year === activeYear ? "default" : "outline"}
+                onClick={() => {
+                  onChange(yearRange(year));
+                  setOpen(false);
+                }}
+              >
+                {year}
+              </Button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="honors-since">From</Label>
+              <Input
+                id="honors-since"
+                type="date"
+                value={since}
+                max={until}
+                onChange={(event) => {
+                  if (event.target.value) onChange({ since: event.target.value, until });
+                }}
+                className={DATE_INPUT_CLASS}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="honors-until">To</Label>
+              <Input
+                id="honors-until"
+                type="date"
+                value={until}
+                min={since}
+                onChange={(event) => {
+                  if (event.target.value) onChange({ since, until: event.target.value });
+                }}
+                className={DATE_INPUT_CLASS}
+              />
+            </div>
+          </div>
+        </div>
+      </ResponsiveModal>
+    </>
+  );
+}
+
+export function HonorsPage({ since, until }: { since?: string; until?: string }) {
   const { client } = useAuth();
+  const navigate = useNavigate();
+  const defaults = yearRange(new Date().getFullYear());
+  const range = { since: since ?? defaults.since, until: until ?? defaults.until };
   const [honors, setHonors] = useState<Honor[] | null>(null);
-  const [windowDays, setWindowDays] = useState(90);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!client) return;
     let cancelled = false;
-    void client.api.honors.$get().then(
+    setHonors(null);
+    setError(null);
+    void client.api.honors.$get({ query: { since: range.since, until: range.until } }).then(
       async (response) => {
         if (cancelled) return;
         if (!response.ok) {
@@ -305,7 +511,6 @@ export function HonorsPage() {
         }
         const data = await response.json();
         setHonors(data.honors);
-        setWindowDays(data.windowDays);
       },
       () => {
         if (!cancelled) setError("Unable to load the honors board.");
@@ -314,18 +519,30 @@ export function HonorsPage() {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, range.since, range.until]);
+
+  function applyRange(next: { since: string; until: string }) {
+    // Normalize a backwards pair (from > to) instead of rejecting it.
+    const ordered = next.since <= next.until ? next : { since: next.until, until: next.since };
+    void navigate({ to: "/honors", search: ordered });
+  }
 
   const bySlug = new Map((honors ?? []).map((entry) => [entry.slug, entry]));
   const laurels = HONOR_METAS.filter((meta) => !meta.dishonor);
   const dishonors = HONOR_METAS.filter((meta) => meta.dishonor);
+  const activeYear = rangeYear(range.since, range.until);
 
   return (
     <AppShell>
       <PageTitle>Honors · Scorecard</PageTitle>
       <PageHeading
         title="Honors"
-        description={`Bragging rights (and public shame) from the last ${windowDays} days.`}
+        description={
+          activeYear
+            ? `Bragging rights (and public shame) from the ${activeYear} season.`
+            : `Bragging rights (and public shame) from ${formatRangeDate(range.since)} to ${formatRangeDate(range.until)}.`
+        }
+        actions={<DateRangeControl since={range.since} until={range.until} onChange={applyRange} />}
       />
       {error && <p className="text-sm text-destructive">{error}</p>}
       {!honors && !error && <p className="text-sm text-muted-foreground">Tallying the board…</p>}

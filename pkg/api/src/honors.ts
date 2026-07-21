@@ -1,12 +1,13 @@
 // Honors: bragging rights (and dishonors) derived on demand from the scores
-// in a recent window of outings. No new tables, and no in-memory scoring:
+// in a date range of outings. No new tables, and no in-memory scoring:
 // the entire board is ONE SQLite query (CTEs + window functions) that emits
 // a single row with one json_object column per honor slug (NULL when
 // unawarded — D1 caps compound-SELECT terms, so scalar-subquery columns
 // instead of a UNION ALL arm per honor), and the app code is just a bind, a
 // JSON.parse, and the Honor types below.
 
-export const HONOR_WINDOW_DAYS = 90;
+// A run of holes only counts as a streak honor from this length up.
+export const MIN_STREAK = 3;
 
 export type HonorHolder = { id: string; name: string | null; email: string | null };
 export type HonorOutingRef = { id: string; date: string; courseName: string };
@@ -53,6 +54,36 @@ export type Honor =
       overPar: number;
     }
   | {
+      slug: "par-train";
+      holder: HonorHolder;
+      holes: number;
+      startDate: string;
+      latest: HonorOutingRef;
+    }
+  | {
+      slug: "groundhog-day";
+      holder: HonorHolder;
+      holes: number;
+      toPar: number;
+      startDate: string;
+      latest: HonorOutingRef;
+    }
+  | {
+      slug: "broken-record";
+      holder: HonorHolder;
+      holes: number;
+      score: number;
+      startDate: string;
+      latest: HonorOutingRef;
+    }
+  | {
+      slug: "bogey-train";
+      holder: HonorHolder;
+      holes: number;
+      startDate: string;
+      latest: HonorOutingRef;
+    }
+  | {
       slug: "snowman";
       holder: HonorHolder;
       count: number;
@@ -69,6 +100,10 @@ export type HonorSlug = Honor["slug"];
 // - Rate/consistency honors (par-machine, metronome, anchor) need >= 18
 //   holes in the window; the anchor also needs >= 2 eligible players.
 // - A "crater" is triple bogey or worse; a "snowman" is the classic 8+.
+// - Streaks (par-train, bogey-train, groundhog-day, broken-record) run over
+//   each player's holes in played order — date, then outing, then hole
+//   number — so a streak carries across consecutive outings; they need
+//   MIN_STREAK holes to count.
 //
 // Shape notes: `cells` is one row per recorded score with its hole, nine,
 // outing, and player denormalized; `rounds` is per player-outing (with
@@ -76,7 +111,11 @@ export type HonorSlug = Honor["slug"];
 // `rated` is per player over the whole window (population stdev via
 // sqrt(E[x^2] - E[x]^2), clamped for float error). ROW_NUMBER picks each
 // player's most recent qualifying cell so "latest" outing refs come along
-// for the ride.
+// for the ride. The `*_streaks` CTEs are gaps-and-islands: `seq` numbers a
+// player's holes in played order, `grp` (seq minus a per-condition row
+// number) is constant within a run, the `island` window aggregates the run,
+// and pos = 1 keeps only its final cell — whose outing is the streak's
+// "latest" ref.
 const HONORS_SQL = /* sql */ `
 WITH cells AS (
   SELECT
@@ -99,7 +138,7 @@ WITH cells AS (
   JOIN hole h           ON h.id = s.hole_id
   JOIN course_set_tee t ON t.id = h.course_set_tee_id
   JOIN course_set cs    ON cs.id = t.course_set_id
-  WHERE o.date >= ?1
+  WHERE o.date >= ?1 AND o.date <= ?2
 ),
 rounds AS (
   SELECT
@@ -162,6 +201,63 @@ snowmen AS (
     ROW_NUMBER()  OVER (PARTITION BY player_id ORDER BY date DESC, outing_id DESC) AS recency
   FROM cells
   WHERE strokes >= 8
+),
+seq_cells AS (
+  SELECT *,
+    ROW_NUMBER() OVER (
+      PARTITION BY player_id ORDER BY date, outing_id, hole_number, set_id
+    ) AS seq
+  FROM cells
+),
+par_streaks AS (
+  SELECT
+    player_id, player_name, player_email, outing_id, date, course_name,
+    COUNT(*)     OVER island AS streak,
+    MIN(date)    OVER island AS start_date,
+    ROW_NUMBER() OVER (PARTITION BY player_id, grp ORDER BY seq DESC) AS pos
+  FROM (
+    SELECT *, seq - ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY seq) AS grp
+    FROM seq_cells WHERE strokes <= par
+  )
+  WINDOW island AS (PARTITION BY player_id, grp)
+),
+bogey_streaks AS (
+  SELECT
+    player_id, player_name, player_email, outing_id, date, course_name,
+    COUNT(*)     OVER island AS streak,
+    MIN(date)    OVER island AS start_date,
+    ROW_NUMBER() OVER (PARTITION BY player_id, grp ORDER BY seq DESC) AS pos
+  FROM (
+    SELECT *, seq - ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY seq) AS grp
+    FROM seq_cells WHERE strokes >= par + 1
+  )
+  WINDOW island AS (PARTITION BY player_id, grp)
+),
+level_streaks AS (
+  SELECT
+    player_id, player_name, player_email, outing_id, date, course_name,
+    strokes - par AS to_par,
+    COUNT(*)     OVER island AS streak,
+    MIN(date)    OVER island AS start_date,
+    ROW_NUMBER() OVER (PARTITION BY player_id, strokes - par, grp ORDER BY seq DESC) AS pos
+  FROM (
+    SELECT *, seq - ROW_NUMBER() OVER (PARTITION BY player_id, strokes - par ORDER BY seq) AS grp
+    FROM seq_cells
+  )
+  WINDOW island AS (PARTITION BY player_id, strokes - par, grp)
+),
+score_streaks AS (
+  SELECT
+    player_id, player_name, player_email, outing_id, date, course_name,
+    strokes,
+    COUNT(*)     OVER island AS streak,
+    MIN(date)    OVER island AS start_date,
+    ROW_NUMBER() OVER (PARTITION BY player_id, strokes, grp ORDER BY seq DESC) AS pos
+  FROM (
+    SELECT *, seq - ROW_NUMBER() OVER (PARTITION BY player_id, strokes ORDER BY seq) AS grp
+    FROM seq_cells
+  )
+  WINDOW island AS (PARTITION BY player_id, strokes, grp)
 )
 
 SELECT
@@ -246,6 +342,50 @@ SELECT
 
   (SELECT json_object(
       'holder', json_object('id', player_id, 'name', player_name, 'email', player_email),
+      'holes', streak, 'startDate', start_date,
+      'latest', json_object('id', outing_id, 'date', date, 'courseName', course_name)
+    )
+    FROM (
+      SELECT * FROM par_streaks WHERE pos = 1 AND streak >= ${MIN_STREAK}
+      ORDER BY streak DESC, date DESC, COALESCE(player_name, player_email, '') ASC LIMIT 1
+    )
+  ) AS "par-train",
+
+  (SELECT json_object(
+      'holder', json_object('id', player_id, 'name', player_name, 'email', player_email),
+      'holes', streak, 'toPar', to_par, 'startDate', start_date,
+      'latest', json_object('id', outing_id, 'date', date, 'courseName', course_name)
+    )
+    FROM (
+      SELECT * FROM level_streaks WHERE pos = 1 AND streak >= ${MIN_STREAK}
+      ORDER BY streak DESC, date DESC, COALESCE(player_name, player_email, '') ASC LIMIT 1
+    )
+  ) AS "groundhog-day",
+
+  (SELECT json_object(
+      'holder', json_object('id', player_id, 'name', player_name, 'email', player_email),
+      'holes', streak, 'score', strokes, 'startDate', start_date,
+      'latest', json_object('id', outing_id, 'date', date, 'courseName', course_name)
+    )
+    FROM (
+      SELECT * FROM score_streaks WHERE pos = 1 AND streak >= ${MIN_STREAK}
+      ORDER BY streak DESC, date DESC, COALESCE(player_name, player_email, '') ASC LIMIT 1
+    )
+  ) AS "broken-record",
+
+  (SELECT json_object(
+      'holder', json_object('id', player_id, 'name', player_name, 'email', player_email),
+      'holes', streak, 'startDate', start_date,
+      'latest', json_object('id', outing_id, 'date', date, 'courseName', course_name)
+    )
+    FROM (
+      SELECT * FROM bogey_streaks WHERE pos = 1 AND streak >= ${MIN_STREAK}
+      ORDER BY streak DESC, date DESC, COALESCE(player_name, player_email, '') ASC LIMIT 1
+    )
+  ) AS "bogey-train",
+
+  (SELECT json_object(
+      'holder', json_object('id', player_id, 'name', player_name, 'email', player_email),
       'outing', json_object('id', outing_id, 'date', date, 'courseName', course_name),
       'holeNumber', hole_number, 'nineName', set_name, 'par', par,
       'strokes', strokes, 'overPar', strokes - par
@@ -281,8 +421,16 @@ SELECT
   ) AS "anchor"
 `;
 
-export async function computeHonors(db: D1Database, since: string): Promise<Honor[]> {
-  const row = await db.prepare(HONORS_SQL).bind(since).first<Record<HonorSlug, string | null>>();
+// `since`/`until` are inclusive naive "YYYY-MM-DD" bounds on the outing date.
+export async function computeHonors(
+  db: D1Database,
+  since: string,
+  until: string,
+): Promise<Honor[]> {
+  const row = await db
+    .prepare(HONORS_SQL)
+    .bind(since, until)
+    .first<Record<HonorSlug, string | null>>();
   if (!row) return [];
   return Object.entries(row).flatMap(([slug, data]) =>
     data === null ? [] : [{ slug, ...JSON.parse(data) } as Honor],

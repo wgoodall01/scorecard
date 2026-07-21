@@ -227,21 +227,30 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   `holes` (par differs by tee on some holes; the script seeds id/number/par —
   `yardage` in the YAML is documentation only, not applied).
 - `pkg/api/routes/honors.ts` + `pkg/api/src/honors.ts`: the honors board.
-  `computeHonors(db, since)` runs ONE SQLite query (CTEs + window functions;
-  raw D1, deliberately not Drizzle) over the recent window
-  (`HONOR_WINDOW_DAYS`, 90 days). The query emits a single row with one
+  `computeHonors(db, since, until)` runs ONE SQLite query (CTEs + window
+  functions; raw D1, deliberately not Drizzle) over an inclusive naive date
+  range. The query emits a single row with one
   `json_object` column per honor slug (NULL = unawarded) — scalar-subquery
   columns rather than a UNION ALL arm per honor because D1 caps
   compound-SELECT terms — and the app code is a bind + JSON.parse into the
   `Honor` discriminated union (medalist, hot-nine, birdie-machine,
-  par-machine, metronome, iron-golfer, comeback-kid, crater, snowman,
-  anchor). One holder per honor; tie-breaks favor the most recent
+  par-machine, metronome, iron-golfer, comeback-kid, par-train,
+  groundhog-day, broken-record, crater, snowman, bogey-train, anchor). One
+  holder per honor; tie-breaks favor the most recent
   achievement; rate honors need ≥18 holes in the window; the anchor needs
-  ≥2 eligible players. `GET /honors` recomputes on every request.
-  `src/honors.test.ts` seeds the test D1 and asserts the board. The web's
-  Honors tab (`pkg/web/src/pages/honors.tsx`) renders every slug — claimed
-  cards get per-honor custom stat/story UI, unclaimed ones a dimmed
-  placeholder.
+  ≥2 eligible players. The four streak honors (par-or-better run, same
+  score-to-par run, identical-score run, bogey-or-worse run) are
+  gaps-and-islands over each player's holes in played order — date, outing,
+  hole number — so a streak carries across consecutive outings, and need
+  `MIN_STREAK` (3) holes. `GET /honors` recomputes on every request; its
+  optional `since`/`until` query params default to the current calendar
+  year. `src/honors.test.ts` seeds the test D1 and asserts the board. The
+  web's Honors tab (`pkg/web/src/pages/honors.tsx`) renders every slug —
+  claimed cards get per-honor custom stat/story UI, unclaimed ones a dimmed
+  placeholder — and keeps the range in `?since`/`?until` search params
+  (validated in `routes/honors.tsx`), edited via a calendar button in the
+  page heading that opens a ResponsiveModal with quick buttons for the
+  current + 3 previous years and custom from/to date inputs.
 - `pkg/api/routes/scorecard.ts`: routes only — POST `/scorecard` uploads the
   image to R2, `submit`s an `extract_score` job per requested extraction (the
   multipart `extract` field is JSON like `{"scores": true}`; a course-metadata
@@ -468,7 +477,7 @@ ORDER BY created_at DESC LIMIT 1"`.
   expressions).
 - `bun db:migrate:local` / `bun db:migrate:remote`: apply migrations.
 - `bun db:seed:local`: upsert `seed/*.yaml` into the LOCAL D1 (`nu
-  script/update_seed.nu --local`).
+script/update_seed.nu --local`).
 - `bun db:nuke`: wipe ALL local Miniflare state (`rm -rf .wrangler/state` — D1,
   KV, R2, cache, images, workflows), then re-migrate and re-seed local from
   scratch. Stop `bun dev` first (it holds the state open) and restart it after.
