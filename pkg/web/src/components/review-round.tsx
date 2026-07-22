@@ -9,6 +9,7 @@ import {
   RefreshCcw,
   Send,
   TriangleAlert,
+  Trophy,
   X,
 } from "lucide-react";
 import type {
@@ -676,6 +677,57 @@ export function ReviewRound({
     }));
   const roundNeedsCheck = roundRows.some((row) => row.written !== null);
 
+  // The nines step's round leaderboard, mirroring the outing page's golfers
+  // table: one row per distinct golfer (ignored names excluded), strokes
+  // summed across every nine that will be recorded. The best complete round
+  // wins the trophy (ties share); a golfer who missed holes is marked
+  // incomplete and never wins — their total isn't comparable.
+  const leaderboard = (() => {
+    const recorded = nines.filter((nine) => nine.playerNames.some((name) => !nameIgnored(name)));
+    const totalHoles = recorded.reduce((count, nine) => count + nine.holes.length, 0);
+    const byGolfer = new Map<string, { label: string; writtenNames: string[]; cells: number[] }>();
+    for (const nine of recorded) {
+      nine.playerNames.forEach((name, playerIndex) => {
+        if (nameIgnored(name)) return;
+        const playerId = players.find((entry) => entry.name === name)?.playerId;
+        const key = playerId ?? `written:${name}`;
+        const entry = byGolfer.get(key) ?? {
+          label: golferLabel(name),
+          writtenNames: [],
+          cells: [],
+        };
+        if (!entry.writtenNames.includes(name)) entry.writtenNames.push(name);
+        for (const row of nine.scores) {
+          const cell = row[playerIndex] ?? null;
+          if (cell !== null) entry.cells.push(cell);
+        }
+        byGolfer.set(key, entry);
+      });
+    }
+    const totals = [...byGolfer.entries()].map(([key, entry]) => ({
+      key,
+      label: entry.label,
+      writtenNames: entry.writtenNames,
+      total: entry.cells.length > 0 ? entry.cells.reduce((sum, value) => sum + value, 0) : null,
+      incomplete: entry.cells.length > 0 && entry.cells.length < totalHoles,
+    }));
+    const ranked = [...totals].sort((a, b) => {
+      if ((a.total === null) !== (b.total === null)) return a.total === null ? 1 : -1;
+      if (a.total === null || b.total === null) return 0;
+      if (a.incomplete !== b.incomplete) return a.incomplete ? 1 : -1;
+      return a.total - b.total;
+    });
+    // The winning total among complete rounds; null = nobody can win yet.
+    const best = totals.reduce<number | null>(
+      (min, entry) =>
+        entry.total !== null && !entry.incomplete && (min === null || entry.total < min)
+          ? entry.total
+          : min,
+      null,
+    );
+    return { totalHoles, ranked, best, anyIncomplete: totals.some((entry) => entry.incomplete) };
+  })();
+
   const dateIsFuture = DATE_PATTERN.test(date) && date > localIsoDate(new Date());
 
   const roundProblems = useMemo(() => {
@@ -762,7 +814,7 @@ export function ReviewRound({
       if (problem) list.push(problem);
     });
     if (roundNeedsCheck) {
-      const problem = totalsProblem("the 18-hole totals", roundRows, roundChoice);
+      const problem = totalsProblem("the round totals", roundRows, roundChoice);
       if (problem) list.push(problem);
     }
     return [...new Set(list)];
@@ -1156,19 +1208,59 @@ export function ReviewRound({
         );
       })}
 
-      {roundNeedsCheck && (
-        <ReviewSection
-          title="18-hole totals"
-          description="The card's grand totals, checked against every score above."
-        >
+      <ReviewSection
+        title="Round totals"
+        description="Every golfer's strokes across the whole card, from the scores above."
+      >
+        <div className="flex flex-col divide-y">
+          {leaderboard.ranked.map((entry) => {
+            const winner =
+              entry.total !== null && !entry.incomplete && entry.total === leaderboard.best;
+            return (
+              <div
+                key={entry.key}
+                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+              >
+                {leaderboard.best !== null && (
+                  <span aria-hidden={!winner} className="flex w-7 shrink-0 items-center">
+                    {winner && (
+                      <Trophy
+                        aria-label="First place"
+                        className="size-5 text-amber-600 dark:text-amber-400"
+                      />
+                    )}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{entry.label}</span>
+                  <span className="block truncate text-sm text-muted-foreground">
+                    Written as {entry.writtenNames.map((name) => `“${name}”`).join(" · ")}
+                  </span>
+                </span>
+                <Score
+                  value={entry.total}
+                  incomplete={entry.incomplete}
+                  className="shrink-0 text-lg font-semibold"
+                />
+              </div>
+            );
+          })}
+        </div>
+        {leaderboard.anyIncomplete && (
+          <p className="text-xs text-muted-foreground">
+            <sup>+</sup> didn't play all {leaderboard.totalHoles} holes on this card — the total
+            only counts holes with a recorded score.
+          </p>
+        )}
+        {roundNeedsCheck && (
           <TotalsCheck
             rows={roundRows}
             choice={roundChoice}
             onChoice={setRoundChoice}
             canAffirm={roundPristine}
           />
-        </ReviewSection>
-      )}
+        )}
+      </ReviewSection>
 
       {mergeCandidate && (
         <ReviewSection
