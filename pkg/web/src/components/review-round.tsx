@@ -39,6 +39,10 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 // below a fresh array identity on every render.
 const NO_RECORDS: never[] = [];
 
+// Golfer-picker sentinel for "leave this written name off the round" — no
+// real golfer id (a uuid) can collide with it.
+const IGNORE_PLAYER = "__ignore__";
+
 type CourseWithSets = {
   id: string;
   name: string;
@@ -59,6 +63,10 @@ type PlayerOccurrence = { location: string; bbox: PlayerBoxSchema | null };
 type PlayerReview = {
   name: string;
   playerId: string | null;
+  // True when the user chose to ignore this written name — its score columns
+  // are left out of the review and nothing is recorded for it (a guest who
+  // isn't in the league, a stray column the extraction invented, …).
+  ignored: boolean;
   // The model's alternative readings of the scrawl, and every place this name
   // was seen — both shown in the golfer picker to disambiguate a hard read.
   guesses: string[];
@@ -68,8 +76,10 @@ type PlayerReview = {
 // Collapse the per-nine player rows to one entry per distinct written name (in
 // first-seen order), merging alternative readings and collecting where each
 // appeared ("Player 2 on Blue Spruce") with its bounding box.
-function distinctPlayers(extracted: ExtractDataSchema): Omit<PlayerReview, "playerId">[] {
-  const byName = new Map<string, Omit<PlayerReview, "playerId">>();
+function distinctPlayers(
+  extracted: ExtractDataSchema,
+): Omit<PlayerReview, "playerId" | "ignored">[] {
+  const byName = new Map<string, Omit<PlayerReview, "playerId" | "ignored">>();
   for (const nine of extracted.nines) {
     const nineLabel =
       nine.nineName ??
@@ -369,6 +379,7 @@ export function ReviewRound({
     distinctPlayers(extracted).map((entry) => ({
       ...entry,
       playerId: matched?.players.find((player) => player.name === entry.name)?.userId ?? null,
+      ignored: false,
     })),
   );
   const [nines, setNines] = useState<NineReview[]>(() =>
@@ -439,8 +450,10 @@ export function ReviewRound({
   const golfers: Golfer[] = useQuery(allGolfersQuery()).data ?? NO_RECORDS;
 
   // Ask the API whether an outing already exists on this date with any of the
-  // selected course sets — the two-scorecards-one-foursome case.
+  // selected course sets — the two-scorecards-one-foursome case. Nines whose
+  // players are all ignored won't be submitted, so they don't participate.
   const selectedSetIdsKey = nines
+    .filter((nine) => nine.playerNames.some((name) => !nameIgnored(name)))
     .map((nine) => nine.courseSetId)
     .filter((id): id is string => id !== null)
     .sort()
@@ -543,9 +556,12 @@ export function ReviewRound({
     );
   }
 
-  function assignGolfer(index: number, golferId: string | null) {
+  // `value` is a golfer id, null (cleared), or the IGNORE_PLAYER sentinel —
+  // ignoring drops the written name from the round entirely.
+  function assignGolfer(index: number, value: string | null) {
     const writtenName = players[index]?.name;
-    updatePlayer(index, { playerId: golferId });
+    const ignored = value === IGNORE_PLAYER;
+    updatePlayer(index, { playerId: ignored ? null : value, ignored });
     // Clear the player's per-nine tees so the defaulting effect re-derives
     // them from the newly assigned golfer's preference.
     setNines((current) =>
@@ -604,6 +620,11 @@ export function ReviewRound({
     );
   }
 
+  // Whether the review for a written name is set to be left off the round.
+  function nameIgnored(writtenName: string): boolean {
+    return players.find((entry) => entry.name === writtenName)?.ignored ?? false;
+  }
+
   // The nines step shows who each golfer IS (their profile name), not the
   // scrawl on the card; names that aren't matched yet fall back to the scrawl.
   function golferLabel(writtenName: string): string {
@@ -620,32 +641,39 @@ export function ReviewRound({
 
   function nineTotalsRows(nine: NineReview): TotalsRow[] {
     const computed = nineComputedTotals(nine);
-    return nine.playerNames.map((name, playerIndex) => ({
-      label: golferLabel(name),
-      written: nine.writtenTotals[playerIndex] ?? null,
-      computed: computed[playerIndex] ?? null,
-    }));
+    return nine.playerNames
+      .map((name, playerIndex) => ({ name, playerIndex }))
+      .filter(({ name }) => !nameIgnored(name))
+      .map(({ name, playerIndex }) => ({
+        label: golferLabel(name),
+        written: nine.writtenTotals[playerIndex] ?? null,
+        computed: computed[playerIndex] ?? null,
+      }));
   }
 
   // The card's 18-hole totals are index-aligned with the distinct player
   // list; the computed side sums the ASSIGNED GOLFER's cells across every
   // nine, so a card that writes one person under two names ("AJM"/"AJ")
   // still sums their whole round once both names point at the same golfer.
-  const roundRows: TotalsRow[] = players.map((player, index) => ({
-    label: golferLabel(player.name),
-    written: extracted.writtenTotals[index] ?? null,
-    computed: sumOrNull(
-      nines.flatMap((nine) =>
-        nine.playerNames.flatMap((name, playerIndex) => {
-          const sameGolfer =
-            player.playerId !== null
-              ? players.find((entry) => entry.name === name)?.playerId === player.playerId
-              : name === player.name;
-          return sameGolfer ? nine.scores.map((row) => row[playerIndex] ?? null) : [];
-        }),
+  // Ignored names have no row — nothing of theirs is being recorded.
+  const roundRows: TotalsRow[] = players
+    .map((player, index) => ({ player, index }))
+    .filter(({ player }) => !player.ignored)
+    .map(({ player, index }) => ({
+      label: golferLabel(player.name),
+      written: extracted.writtenTotals[index] ?? null,
+      computed: sumOrNull(
+        nines.flatMap((nine) =>
+          nine.playerNames.flatMap((name, playerIndex) => {
+            const sameGolfer =
+              player.playerId !== null
+                ? players.find((entry) => entry.name === name)?.playerId === player.playerId
+                : name === player.name;
+            return sameGolfer ? nine.scores.map((row) => row[playerIndex] ?? null) : [];
+          }),
+        ),
       ),
-    ),
-  }));
+    }));
   const roundNeedsCheck = roundRows.some((row) => row.written !== null);
 
   const dateIsFuture = DATE_PATTERN.test(date) && date > localIsoDate(new Date());
@@ -657,12 +685,15 @@ export function ReviewRound({
       list.push("The date is in the future — rounds can't be post-dated. Use the Today button.");
     }
     if (courseId === null) list.push("Pick the course — nines can only come from a known course.");
-    const unassigned = players.filter((player) => player.playerId === null);
+    const unassigned = players.filter((player) => player.playerId === null && !player.ignored);
     if (unassigned.length > 0) {
       list.push(
         `Match ${unassigned.map((player) => `“${player.name}”`).join(", ")} to golfers — invite ` +
-          "anyone missing from the Golfers tab first.",
+          "anyone missing from the Golfers tab first, or ignore names that shouldn't be recorded.",
       );
+    }
+    if (players.length > 0 && players.every((player) => player.ignored)) {
+      list.push("Every golfer is ignored — match at least one to record the round.");
     }
     // Two written names MAY point at one golfer (the card wrote "AJM" on one
     // nine and "AJ" on the other) — but within a single nine, two score
@@ -687,6 +718,9 @@ export function ReviewRound({
   const nineProblems = (() => {
     const list: string[] = [];
     nines.forEach((nine, index) => {
+      // A nine whose written names are all ignored is dropped at submit, so
+      // nothing about it needs to check out.
+      if (nine.playerNames.every((name) => nameIgnored(name))) return;
       const title = defaultNineName(nine);
       if (nine.courseSetId === null) {
         list.push(`Pick which nine “${title}” is.`);
@@ -699,6 +733,7 @@ export function ReviewRound({
         return;
       }
       nine.playerNames.forEach((name, playerIndex) => {
+        if (nameIgnored(name)) return;
         const tee = set.tees.find((entry) => entry.id === nine.teeIds[playerIndex]);
         if (!tee) {
           list.push(`Pick which tee ${golferLabel(name)} played “${title}” from.`);
@@ -715,7 +750,10 @@ export function ReviewRound({
       });
       if (
         nines.some(
-          (other, otherIndex) => otherIndex !== index && other.courseSetId === nine.courseSetId,
+          (other, otherIndex) =>
+            otherIndex !== index &&
+            other.courseSetId === nine.courseSetId &&
+            other.playerNames.some((name) => !nameIgnored(name)),
         )
       ) {
         list.push(`Two nines are assigned to ${set.name} — each nine needs its own.`);
@@ -747,27 +785,35 @@ export function ReviewRound({
         scorecardId,
         outingId: mergeTarget?.id ?? null,
         courseId: mergeTarget ? null : courseId,
-        nines: nines.map((nine) => {
+        nines: nines.flatMap((nine) => {
+          // Ignored names are left out; a nine with nobody left is dropped
+          // entirely (the API requires at least one player per nine).
+          const active = nine.playerNames
+            .map((name, playerIndex) => ({ name, playerIndex }))
+            .filter(({ name }) => !nameIgnored(name));
+          if (active.length === 0) return [];
           if (nine.courseSetId === null) {
             throw new Error(`“${defaultNineName(nine)}” has no nine selected.`);
           }
-          return {
-            courseSetId: nine.courseSetId,
-            players: nine.playerNames.map((name, playerIndex) => {
-              const player = players.find((entry) => entry.name === name);
-              if (!player?.playerId) throw new Error(`“${name}” is not matched to a golfer.`);
-              const teeId = nine.teeIds[playerIndex] ?? null;
-              if (teeId === null) throw new Error(`“${name}” has no tee selected.`);
-              return {
-                playerId: player.playerId,
-                courseSetTeeId: teeId,
-                scores: nine.holes.map((hole, holeIndex) => ({
-                  holeNumber: hole.number,
-                  score: nine.scores[holeIndex]?.[playerIndex] ?? null,
-                })),
-              };
-            }),
-          };
+          return [
+            {
+              courseSetId: nine.courseSetId,
+              players: active.map(({ name, playerIndex }) => {
+                const player = players.find((entry) => entry.name === name);
+                if (!player?.playerId) throw new Error(`“${name}” is not matched to a golfer.`);
+                const teeId = nine.teeIds[playerIndex] ?? null;
+                if (teeId === null) throw new Error(`“${name}” has no tee selected.`);
+                return {
+                  playerId: player.playerId,
+                  courseSetTeeId: teeId,
+                  scores: nine.holes.map((hole, holeIndex) => ({
+                    holeNumber: hole.number,
+                    score: nine.scores[holeIndex]?.[playerIndex] ?? null,
+                  })),
+                };
+              }),
+            },
+          ];
         }),
       };
     } catch (error) {
@@ -843,7 +889,7 @@ export function ReviewRound({
 
         <ReviewSection
           title="Golfers"
-          description="Match each name written on the card to a golfer — tees are picked per nine in the next step."
+          description="Match each name written on the card to a golfer — or ignore a name to leave it off the round. Tees are picked per nine in the next step."
         >
           <div className="flex flex-col divide-y">
             {players.map((player, index) => {
@@ -887,15 +933,31 @@ export function ReviewRound({
                   )}
                   <ResponsiveSelect
                     ariaLabel={`Golfer for ${player.name}`}
-                    value={player.playerId}
+                    value={player.ignored ? IGNORE_PLAYER : player.playerId}
                     onValueChange={(value) => assignGolfer(index, value)}
-                    options={golfers.map((golfer) => ({
-                      value: golfer.id,
-                      label: golfer.name ?? golfer.email ?? "Unnamed golfer",
-                    }))}
+                    options={[
+                      {
+                        value: IGNORE_PLAYER,
+                        label: "Ignore this golfer",
+                        description: "Leave this name off the round — nothing is recorded for it.",
+                      },
+                      ...golfers.map((golfer) => ({
+                        value: golfer.id,
+                        label: golfer.name ?? golfer.email ?? "Unnamed golfer",
+                      })),
+                    ]}
+                    // The trigger shows the ignored state as a fact, not the
+                    // list row's imperative "Ignore this golfer".
+                    renderValue={(option) =>
+                      option?.value === IGNORE_PLAYER ? (
+                        <span className="text-muted-foreground">Ignored — not recorded</span>
+                      ) : (
+                        (option?.label ?? "— Choose golfer —")
+                      )
+                    }
                     searchable
                     clearable
-                    invalid={player.playerId === null}
+                    invalid={player.playerId === null && !player.ignored}
                     placeholder="— Choose golfer —"
                     title={`Golfer for “${player.name}”`}
                     searchPlaceholder="Search golfers…"
@@ -932,6 +994,21 @@ export function ReviewRound({
   return (
     <div className="flex flex-col gap-5">
       {nines.map((nine, nineIndex) => {
+        // Only the non-ignored written names get columns, tee pickers, and
+        // totals rows; playerIndex stays the ORIGINAL index into the nine's
+        // index-aligned arrays (scores, teeIds, writtenTotals).
+        const activePlayers = nine.playerNames
+          .map((name, playerIndex) => ({ name, playerIndex }))
+          .filter(({ name }) => !nameIgnored(name));
+        if (activePlayers.length === 0) {
+          return (
+            <ReviewSection key={nineIndex} title={defaultNineName(nine)}>
+              <p className="text-sm text-muted-foreground">
+                Every golfer on this nine is ignored — it won't be recorded.
+              </p>
+            </ReviewSection>
+          );
+        }
         const set = selectedCourse?.sets.find((entry) => entry.id === nine.courseSetId);
         // Par per tee, for the database-par column and the score notation:
         // the column shows the first player's tee (pars rarely differ), each
@@ -944,7 +1021,8 @@ export function ReviewRound({
         );
         const playerPars = (playerIndex: number) =>
           parByTee.get(nine.teeIds[playerIndex] ?? "") ?? null;
-        const displayPars = playerPars(0) ?? [...parByTee.values()][0] ?? null;
+        const displayPars =
+          playerPars(activePlayers[0].playerIndex) ?? [...parByTee.values()][0] ?? null;
         const computedTotals = nineComputedTotals(nine);
         return (
           <ReviewSection
@@ -994,7 +1072,7 @@ export function ReviewRound({
 
             {set && set.tees.length > 0 && (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {nine.playerNames.map((name, playerIndex) => (
+                {activePlayers.map(({ name, playerIndex }) => (
                   <div key={name} className="flex flex-col gap-2">
                     <Label>Tee for {golferLabel(name)}</Label>
                     <ResponsiveSelect
@@ -1027,7 +1105,7 @@ export function ReviewRound({
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="p-2 pl-0 font-medium">Hole</th>
                     <th className="p-2 font-medium">Par</th>
-                    {nine.playerNames.map((name) => (
+                    {activePlayers.map(({ name }) => (
                       <th key={name} className="p-2 text-center font-medium">
                         {golferLabel(name)}
                       </th>
@@ -1041,7 +1119,7 @@ export function ReviewRound({
                       <td className="p-2 text-muted-foreground">
                         {displayPars?.get(hole.number) ?? hole.par}
                       </td>
-                      {nine.playerNames.map((name, playerIndex) => (
+                      {activePlayers.map(({ name, playerIndex }) => (
                         <td key={name} className="p-2 text-center">
                           <GolfScore
                             aria-label={`${golferLabel(name)}'s score on hole ${hole.number}`}
@@ -1058,7 +1136,7 @@ export function ReviewRound({
                   <tr>
                     <td className="p-2 pl-0 font-medium">Total</td>
                     <td className="p-2" />
-                    {nine.playerNames.map((name, playerIndex) => (
+                    {activePlayers.map(({ name, playerIndex }) => (
                       <td key={name} className="p-2 text-center font-medium">
                         <Score value={computedTotals[playerIndex] ?? null} />
                       </td>
