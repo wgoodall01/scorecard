@@ -79,9 +79,12 @@ AUTH_EMAIL_FROM = "noreply@scorecard.wg.gay"
 AI_GATEWAY_ID = "scorecard"
 WEBAUTHN_RP_NAME = "Scorecard"
 # Origins passkeys may be registered/used from. rpID/expectedOrigin are derived
-# from the request Origin validated against this list. Add ngrok/tunnel origins
-# here when testing on a phone.
-WEBAUTHN_ALLOWED_ORIGINS = "http://localhost:5173,https://scorecard.wg.gay"
+# from the request Origin validated against this list, so this is PRODUCTION
+# ONLY — a localhost entry here would let anything spoofing that Origin run a
+# ceremony against prod under rpID "localhost". Local dev and phone tunnels
+# override the whole list in `.env.local`, e.g.
+# WEBAUTHN_ALLOWED_ORIGINS=http://localhost:5173,https://<name>.ngrok-free.app
+WEBAUTHN_ALLOWED_ORIGINS = "https://scorecard.wg.gay"
 
 # Secrets the Worker requires. Local values come from the repo-root
 # `.env.local` (the only env file in this repo — wrangler dev reads it since

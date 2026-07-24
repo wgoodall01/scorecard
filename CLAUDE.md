@@ -76,6 +76,11 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   Auth needs no KV (challenges are stateless signed tokens); the `[vars]`
   `WEBAUTHN_RP_NAME`/`WEBAUTHN_ALLOWED_ORIGINS` and the `[secrets]`
   `AUTHN_CHALLENGE_SIGNING_SECRET` (alongside `JWT_SECRET`) configure WebAuthn.
+  `WEBAUTHN_ALLOWED_ORIGINS` in `[vars]` is the PRODUCTION list only
+  (`https://scorecard.wg.gay`) — never add localhost or a tunnel origin there,
+  since the allowlist is what derives rpID/expectedOrigin and prod would then
+  honor a spoofed `Origin: http://localhost:5173`. Local dev overrides the whole
+  list in `.env.local` (that override is REQUIRED for local passkey ceremonies).
 - `pkg/api/schema.ts`: Drizzle schema (with `relations` for the relational
   query API). Tables: `user` (+ `preferred_tee` — the `TEES`
   const is the app-level tee CATEGORY list, matched against
@@ -574,7 +579,9 @@ script/update_seed.nu --local`).
 - The repo-root `.env.local` is the ONLY env file — no `.dev.vars`, no other
   `.env*` anywhere. It holds local secrets (`JWT_SECRET` and
   `AUTHN_CHALLENGE_SIGNING_SECRET` for `wrangler dev`,
-  `AI_GATEWAY_TOKEN` for `bun eval`); wrangler dev reads it directly since no
+  `AI_GATEWAY_TOKEN` for `bun eval`) plus the two local-only `[vars]` overrides
+  (`NODE_ENV=development`, and `WEBAUTHN_ALLOWED_ORIGINS` with the localhost +
+  current tunnel origins); wrangler dev reads it directly since no
   `.dev.vars` exists. Required Worker secrets are declared in `wrangler.toml`'s
   `[secrets]` block (validated at dev/deploy time); non-secret config belongs
   in `wrangler.toml` itself (`[vars]`, `account_id`), never in env files.
