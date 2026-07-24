@@ -51,6 +51,20 @@ export function sortTees<TTee extends { name: string; type: Tee | null }>(tees: 
   return [...tees].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
+// Nines in play order: by the hole number they start on, so a "Front"/"Back"
+// pair reads 1-9 then 10-18 rather than alphabetically. A nine's start is the
+// lowest hole number across its tees (holes hang off tees, not the nine).
+// Hole-less nines sort last; ties fall back to the name.
+export function sortNines<TSet extends { name: string; tees: { holes: { number: number }[] }[] }>(
+  sets: TSet[],
+): TSet[] {
+  const firstHole = (set: TSet) => {
+    const numbers = set.tees.flatMap((tee) => tee.holes.map((hole) => hole.number));
+    return numbers.length === 0 ? Number.POSITIVE_INFINITY : Math.min(...numbers);
+  };
+  return [...sets].sort((a, b) => firstHole(a) - firstHole(b) || a.name.localeCompare(b.name));
+}
+
 export function teeLabel(tee: { name: string; gender: "m" | "f" | null }) {
   return tee.gender === null ? tee.name : `${tee.name} (${tee.gender.toUpperCase()})`;
 }
@@ -97,7 +111,10 @@ function useCourses() {
           setError("Unable to load courses.");
           return;
         }
-        setCourses((await response.json()).courses);
+        // Sort once here so the list page's badges and the detail page's nine
+        // cards agree on the order.
+        const { courses: loaded } = await response.json();
+        setCourses(loaded.map((course) => ({ ...course, sets: sortNines(course.sets) })));
       },
       () => {
         if (!cancelled) setError("Unable to load courses.");

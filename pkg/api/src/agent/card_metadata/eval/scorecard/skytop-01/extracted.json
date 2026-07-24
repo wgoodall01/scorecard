@@ -1,0 +1,516 @@
+{
+  "version": 1,
+  "error": null,
+  "nines": [
+    {
+      "name": "Front",
+      "tees": [
+        {
+          "name": "Blue",
+          "holes": [
+            {
+              "number": 1,
+              "par": 4,
+              "yardage": 424
+            },
+            {
+              "number": 2,
+              "par": 4,
+              "yardage": 375
+            },
+            {
+              "number": 3,
+              "par": 3,
+              "yardage": 248
+            },
+            {
+              "number": 4,
+              "par": 4,
+              "yardage": 377
+            },
+            {
+              "number": 5,
+              "par": 4,
+              "yardage": 410
+            },
+            {
+              "number": 6,
+              "par": 3,
+              "yardage": 182
+            },
+            {
+              "number": 7,
+              "par": 5,
+              "yardage": 530
+            },
+            {
+              "number": 8,
+              "par": 4,
+              "yardage": 455
+            },
+            {
+              "number": 9,
+              "par": 5,
+              "yardage": 484
+            }
+          ]
+        },
+        {
+          "name": "Blue/White",
+          "holes": [
+            {
+              "number": 1,
+              "par": 4,
+              "yardage": 414
+            },
+            {
+              "number": 2,
+              "par": 4,
+              "yardage": 375
+            },
+            {
+              "number": 3,
+              "par": 3,
+              "yardage": 198
+            },
+            {
+              "number": 4,
+              "par": 4,
+              "yardage": 377
+            },
+            {
+              "number": 5,
+              "par": 4,
+              "yardage": 410
+            },
+            {
+              "number": 6,
+              "par": 3,
+              "yardage": 182
+            },
+            {
+              "number": 7,
+              "par": 5,
+              "yardage": 530
+            },
+            {
+              "number": 8,
+              "par": 4,
+              "yardage": 426
+            },
+            {
+              "number": 9,
+              "par": 5,
+              "yardage": 484
+            }
+          ]
+        },
+        {
+          "name": "White",
+          "holes": [
+            {
+              "number": 1,
+              "par": 4,
+              "yardage": 414
+            },
+            {
+              "number": 2,
+              "par": 4,
+              "yardage": 367
+            },
+            {
+              "number": 3,
+              "par": 3,
+              "yardage": 198
+            },
+            {
+              "number": 4,
+              "par": 4,
+              "yardage": 370
+            },
+            {
+              "number": 5,
+              "par": 4,
+              "yardage": 408
+            },
+            {
+              "number": 6,
+              "par": 3,
+              "yardage": 176
+            },
+            {
+              "number": 7,
+              "par": 5,
+              "yardage": 515
+            },
+            {
+              "number": 8,
+              "par": 4,
+              "yardage": 426
+            },
+            {
+              "number": 9,
+              "par": 5,
+              "yardage": 480
+            }
+          ]
+        },
+        {
+          "name": "White/Red",
+          "holes": [
+            {
+              "number": 1,
+              "par": 4,
+              "yardage": 414
+            },
+            {
+              "number": 2,
+              "par": 4,
+              "yardage": 367
+            },
+            {
+              "number": 3,
+              "par": 3,
+              "yardage": 188
+            },
+            {
+              "number": 4,
+              "par": 4,
+              "yardage": 361
+            },
+            {
+              "number": 5,
+              "par": 4,
+              "yardage": 332
+            },
+            {
+              "number": 6,
+              "par": 3,
+              "yardage": 176
+            },
+            {
+              "number": 7,
+              "par": 5,
+              "yardage": 515
+            },
+            {
+              "number": 8,
+              "par": 4,
+              "yardage": 373
+            },
+            {
+              "number": 9,
+              "par": 5,
+              "yardage": 480
+            }
+          ]
+        },
+        {
+          "name": "Red",
+          "holes": [
+            {
+              "number": 1,
+              "par": 4,
+              "yardage": 415
+            },
+            {
+              "number": 2,
+              "par": 4,
+              "yardage": 315
+            },
+            {
+              "number": 3,
+              "par": 3,
+              "yardage": 188
+            },
+            {
+              "number": 4,
+              "par": 4,
+              "yardage": 361
+            },
+            {
+              "number": 5,
+              "par": 4,
+              "yardage": 332
+            },
+            {
+              "number": 6,
+              "par": 3,
+              "yardage": 136
+            },
+            {
+              "number": 7,
+              "par": 5,
+              "yardage": 476
+            },
+            {
+              "number": 8,
+              "par": 4,
+              "yardage": 373
+            },
+            {
+              "number": 9,
+              "par": 5,
+              "yardage": 431
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Back",
+      "tees": [
+        {
+          "name": "Blue",
+          "holes": [
+            {
+              "number": 10,
+              "par": 4,
+              "yardage": 288
+            },
+            {
+              "number": 11,
+              "par": 5,
+              "yardage": 469
+            },
+            {
+              "number": 12,
+              "par": 3,
+              "yardage": 210
+            },
+            {
+              "number": 13,
+              "par": 4,
+              "yardage": 339
+            },
+            {
+              "number": 14,
+              "par": 4,
+              "yardage": 329
+            },
+            {
+              "number": 15,
+              "par": 5,
+              "yardage": 551
+            },
+            {
+              "number": 16,
+              "par": 3,
+              "yardage": 189
+            },
+            {
+              "number": 17,
+              "par": 4,
+              "yardage": 435
+            },
+            {
+              "number": 18,
+              "par": 4,
+              "yardage": 364
+            }
+          ]
+        },
+        {
+          "name": "Blue/White",
+          "holes": [
+            {
+              "number": 10,
+              "par": 4,
+              "yardage": 276
+            },
+            {
+              "number": 11,
+              "par": 5,
+              "yardage": 469
+            },
+            {
+              "number": 12,
+              "par": 3,
+              "yardage": 188
+            },
+            {
+              "number": 13,
+              "par": 4,
+              "yardage": 339
+            },
+            {
+              "number": 14,
+              "par": 4,
+              "yardage": 329
+            },
+            {
+              "number": 15,
+              "par": 5,
+              "yardage": 551
+            },
+            {
+              "number": 16,
+              "par": 3,
+              "yardage": 189
+            },
+            {
+              "number": 17,
+              "par": 4,
+              "yardage": 428
+            },
+            {
+              "number": 18,
+              "par": 4,
+              "yardage": 364
+            }
+          ]
+        },
+        {
+          "name": "White",
+          "holes": [
+            {
+              "number": 10,
+              "par": 4,
+              "yardage": 276
+            },
+            {
+              "number": 11,
+              "par": 5,
+              "yardage": 461
+            },
+            {
+              "number": 12,
+              "par": 3,
+              "yardage": 188
+            },
+            {
+              "number": 13,
+              "par": 4,
+              "yardage": 333
+            },
+            {
+              "number": 14,
+              "par": 4,
+              "yardage": 322
+            },
+            {
+              "number": 15,
+              "par": 5,
+              "yardage": 492
+            },
+            {
+              "number": 16,
+              "par": 3,
+              "yardage": 180
+            },
+            {
+              "number": 17,
+              "par": 4,
+              "yardage": 428
+            },
+            {
+              "number": 18,
+              "par": 4,
+              "yardage": 352
+            }
+          ]
+        },
+        {
+          "name": "White/Red",
+          "holes": [
+            {
+              "number": 10,
+              "par": 4,
+              "yardage": 276
+            },
+            {
+              "number": 11,
+              "par": 5,
+              "yardage": 461
+            },
+            {
+              "number": 12,
+              "par": 3,
+              "yardage": 124
+            },
+            {
+              "number": 13,
+              "par": 4,
+              "yardage": 326
+            },
+            {
+              "number": 14,
+              "par": 4,
+              "yardage": 290
+            },
+            {
+              "number": 15,
+              "par": 5,
+              "yardage": 492
+            },
+            {
+              "number": 16,
+              "par": 3,
+              "yardage": 168
+            },
+            {
+              "number": 17,
+              "par": 4,
+              "yardage": 400
+            },
+            {
+              "number": 18,
+              "par": 4,
+              "yardage": 352
+            }
+          ]
+        },
+        {
+          "name": "Red",
+          "holes": [
+            {
+              "number": 10,
+              "par": 4,
+              "yardage": 235
+            },
+            {
+              "number": 11,
+              "par": 5,
+              "yardage": 419
+            },
+            {
+              "number": 12,
+              "par": 3,
+              "yardage": 124
+            },
+            {
+              "number": 13,
+              "par": 4,
+              "yardage": 326
+            },
+            {
+              "number": 14,
+              "par": 4,
+              "yardage": 290
+            },
+            {
+              "number": 15,
+              "par": 5,
+              "yardage": 423
+            },
+            {
+              "number": 16,
+              "par": 3,
+              "yardage": 168
+            },
+            {
+              "number": 17,
+              "par": 4,
+              "yardage": 400
+            },
+            {
+              "number": 18,
+              "par": 4,
+              "yardage": 301
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

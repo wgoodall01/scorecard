@@ -36,9 +36,22 @@ export const MetadataTee = z.object({
     .nullable()
     .describe(
       'The tee position\'s printed name exactly as on the card ("Blue", "White/Gold", …), ' +
-        "or null if the row is unlabeled.",
+        "or null if the row is unlabeled. A combination tee is named for the two tees it " +
+        'interleaves, longer first and slash-joined — "Blue/White", never "Blue/White Combo" ' +
+        'or "Combo (Blue/White)".',
     ),
-  holes: z.array(MetadataHole).describe("One entry per printed hole on this nine, in order."),
+  holes: z
+    .array(MetadataHole)
+    // Hard guardrail against the failure this schema exists to prevent: reading
+    // an 18-hole card as ONE nine. A "nine" is nine holes; the ceiling is 12
+    // rather than 9 only to leave room for cards that print extra tiebreaker /
+    // playoff holes on the same loop. Anything longer is an unsplit 18 and must
+    // fail validation rather than land in the database as a bogus nine.
+    .max(12)
+    .describe(
+      "One entry per printed hole on this nine, in order. A nine has NINE holes (at most 12, " +
+        "and only when the card prints extra tiebreaker holes) — never 18.",
+    ),
 });
 export type MetadataTeeSchema = z.infer<typeof MetadataTee>;
 
@@ -47,8 +60,9 @@ export const MetadataNine = z.object({
     .string()
     .nullable()
     .describe(
-      'This nine\'s own printed or watermarked name ("White Oak", "Blue Spruce", …), or null ' +
-        "if unnamed.",
+      'This nine\'s own printed or watermarked name ("White Oak", "Blue Spruce", …). When a ' +
+        'card prints an unnamed 18 split into OUT/IN, use exactly "Front" for holes 1-9 and ' +
+        '"Back" for holes 10-18. Only null if the nine is genuinely unnamed and unplaceable.',
     ),
   tees: z
     .array(MetadataTee)
