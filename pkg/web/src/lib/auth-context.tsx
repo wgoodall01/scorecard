@@ -1,5 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { authService, createApiClient, type ApiClient } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
+import { ApiError, authService } from "@/lib/auth";
+import { api } from "@/lib/api";
+import { apiQuery, queryClient } from "@/lib/query";
 
 // email is null for golfers who exist only as players (no account yet) —
 // though the signed-in user's own profile always has one (they logged in).
@@ -7,7 +10,6 @@ export type Profile = { id: string; email: string | null; name: string | null; a
 
 type AuthContextValue = {
   token: string | null;
-  client: ApiClient | null;
   profile: Profile | null;
   profileError: string | null;
   isAdmin: boolean;
@@ -23,69 +25,62 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState(() => authService.getToken());
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const client = useMemo(() => (token ? createApiClient(token) : null), [token]);
 
+  // The signed-in user's profile. `api` reads the token per request, so the
+  // token going from null to set is what enables this query.
+  const profileQuery = useQuery({
+    ...apiQuery(api.me.$get),
+    enabled: token !== null,
+    retry: false,
+  });
+
+  // A stored token whose subject no longer resolves: drop it so the app returns
+  // to the signed-out state instead of loading forever. (A side effect on the
+  // query's error — not a fetch.)
+  const status = profileQuery.error instanceof ApiError ? profileQuery.error.status : null;
   useEffect(() => {
-    if (!client) {
-      setProfile(null);
-      setProfileError(null);
-      return;
+    if (status === 401 || status === 404) {
+      authService.clearToken();
+      setToken(null);
+      queryClient.clear();
     }
+  }, [status]);
 
-    let cancelled = false;
-    setProfileError(null);
-    void client.api.me.$get().then(
-      async (response) => {
-        if (cancelled) return;
-        if (response.status === 401 || response.status === 404) {
-          // The stored token no longer maps to a user — drop it so the app
-          // returns to the signed-out state instead of loading forever.
-          authService.clearToken();
-          setToken(null);
-          return;
-        }
-        if (!response.ok) {
-          setProfileError("Unable to load your profile.");
-          return;
-        }
-        const { user } = await response.json();
-        if (!cancelled) setProfile(user);
-      },
-      () => {
-        if (!cancelled) setProfileError("Unable to load your profile.");
-      },
-    );
+  // A new session must not see the previous one's cached data.
+  function adopt(newToken: string) {
+    queryClient.clear();
+    setToken(newToken);
+  }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
+  const profile = profileQuery.data?.user ?? null;
+  const profileError =
+    profileQuery.error !== null && status !== 401 && status !== 404
+      ? "Unable to load your profile."
+      : null;
 
   const value = useMemo<AuthContextValue>(
     () => ({
       token,
-      client,
       profile,
       profileError,
       isAdmin: profile?.admin ?? false,
       signInWithPasskey: async () => {
-        setToken(await authService.signInWithPasskey());
+        adopt(await authService.signInWithPasskey());
       },
       devLogin: async (email) => {
-        setToken(await authService.devLogin(email));
+        adopt(await authService.devLogin(email));
       },
       enrollPasskey: async (opts) => {
-        setToken(await authService.enrollPasskey(opts));
+        adopt(await authService.enrollPasskey(opts));
       },
       requestRecovery: (email) => authService.requestRecovery(email),
       signOut: () => {
         authService.clearToken();
         setToken(null);
+        queryClient.clear();
       },
     }),
-    [client, profile, profileError, token],
+    [profile, profileError, token],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

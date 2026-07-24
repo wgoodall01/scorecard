@@ -28,14 +28,15 @@ beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO course (id, name) VALUES ('course', 'Buck Hill Falls')`),
     env.DB.prepare(
-      `INSERT INTO course_set (id, course_id, name) VALUES ('front', 'course', 'White')`,
+      `INSERT INTO course_set (id, course_id, name) VALUES ('front', 'course', 'White'), ('back', 'course', 'Red')`,
     ),
     env.DB.prepare(
-      `INSERT INTO course_set_tee (id, course_set_id, name, type) VALUES ('tw', 'front', 'White', 'standard'), ('tb', 'front', 'Blue', 'back')`,
+      `INSERT INTO course_set_tee (id, course_set_id, name, type) VALUES ('tw', 'front', 'White', 'standard'), ('tb', 'front', 'Blue', 'back'), ('tr', 'back', 'Red', 'standard')`,
     ),
     env.DB.prepare(
       `INSERT INTO hole (id, course_set_tee_id, number, par)
-       VALUES ('w1', 'tw', 1, 4), ('w2', 'tw', 2, 4), ('b1', 'tb', 1, 4), ('b2', 'tb', 2, 4)`,
+       VALUES ('w1', 'tw', 1, 4), ('w2', 'tw', 2, 4), ('b1', 'tb', 1, 4), ('b2', 'tb', 2, 4),
+              ('r1', 'tr', 10, 4)`,
     ),
     env.DB.prepare(
       `INSERT INTO user (id, name) VALUES ('alice', 'Alice'), ('bob', 'Bob'), ('dave', 'Dave')`,
@@ -43,7 +44,13 @@ beforeEach(async () => {
   ]);
 });
 
-const TEE_BY_HOLE: Record<string, string> = { w1: "tw", w2: "tw", b1: "tb", b2: "tb" };
+const TEE_BY_HOLE: Record<string, string> = {
+  w1: "tw",
+  w2: "tw",
+  b1: "tb",
+  b2: "tb",
+  r1: "tr",
+};
 
 async function seedOuting(
   id: string,
@@ -120,6 +127,71 @@ async function submitOuting(date: string) {
     env,
   );
 }
+
+async function listOutings(query: Record<string, string> = {}) {
+  const token = await createToken("alice@example.com", env.JWT_SECRET);
+  const search = new URLSearchParams(query).toString();
+  const res = await app.request(
+    `/outings${search ? `?${search}` : ""}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+    env,
+  );
+  return {
+    status: res.status,
+    body: (await res.json()) as { records: { id: string }[]; next: string | null },
+  };
+}
+
+describe("GET /outings", () => {
+  // Newest recorded first: ids are uuidv7 in production, and these sort the
+  // same way.
+  beforeEach(async () => {
+    await seedOuting("o1", "2026-07-01", [{ playerId: "alice", scores: { w1: 4 } }]);
+    await seedOuting("o2", "2026-07-02", [{ playerId: "bob", scores: { b1: 5 } }]);
+    await seedOuting("o3", "2026-07-03", [{ playerId: "alice", scores: { r1: 6 } }]);
+  });
+
+  it("lists newest first, in one page when it fits", async () => {
+    const { body } = await listOutings();
+    expect(body.records.map((entry) => entry.id)).toEqual(["o3", "o2", "o1"]);
+    expect(body.next).toBeNull();
+  });
+
+  it("walks the cursor without repeating or dropping an outing", async () => {
+    const seen: string[] = [];
+    let after: string | null = null;
+    do {
+      const { body } = await listOutings({ limit: "2", ...(after ? { after } : {}) });
+      seen.push(...body.records.map((entry) => entry.id));
+      after = body.next;
+    } while (after);
+    expect(seen).toEqual(["o3", "o2", "o1"]);
+  });
+
+  it("rejects a cursor it didn't mint", async () => {
+    expect((await listOutings({ after: "bogus" })).status).toBe(400);
+  });
+
+  // The filters have to run in SQL: applied to the page after LIMIT they'd
+  // hand back short pages while the cursor marched past the matches.
+  it("filters by player in SQL, so a paged filter still fills the page", async () => {
+    const { body } = await listOutings({ playerId: "alice", limit: "1" });
+    expect(body.records.map((entry) => entry.id)).toEqual(["o3"]);
+    const { body: rest } = await listOutings({ playerId: "alice", after: body.next! });
+    expect(rest.records.map((entry) => entry.id)).toEqual(["o1"]);
+    expect(rest.next).toBeNull();
+  });
+
+  it("filters by nine", async () => {
+    const { body } = await listOutings({ courseSetId: "back" });
+    expect(body.records.map((entry) => entry.id)).toEqual(["o3"]);
+  });
+
+  it("filters by date, for the same-day merge lookup", async () => {
+    const { body } = await listOutings({ date: "2026-07-02", courseId: "course" });
+    expect(body.records.map((entry) => entry.id)).toEqual(["o2"]);
+  });
+});
 
 describe("POST /outings", () => {
   it("rejects a future-dated outing", async () => {

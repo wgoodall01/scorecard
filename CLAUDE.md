@@ -8,7 +8,15 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
 
 - `pkg/web`: Vite + React + TypeScript front end, styled with Tailwind and
   shadcn/ui. `src/lib/api.ts` creates Hono's typed RPC client from the API's
-  exported `AppType`. `src/App.tsx` is the app shell ONLY (AppShell, nav,
+  exported `AppType` (reading the bearer token per request, so the client and
+  its query keys are stable across sign-in/out) and wraps it with
+  hono-rpc-query's `hcQuery` as the exported `api`. ALL data fetching goes
+  through TanStack Query — `useQuery(apiQuery(api.x.$get, input))`,
+  `useMutation(apiMutation(api.x.$post))`,
+  `useInfiniteQuery(apiInfiniteQuery(…))` — never fetch in a `useEffect`; the
+  thin wrappers live in `src/lib/query.ts` and shared query factories in
+  `src/lib/queries.ts` (see pkg/web/CLAUDE.md for the whole convention).
+  `src/App.tsx` is the app shell ONLY (AppShell, nav,
   PageHeading/PageTitle); every page component lives in `src/pages/`
   (capture, login, me, golfers, outings, courses, honors, scorecards — the
   scorecards list/detail pages are deliberately NOT nav tabs; the Me page
@@ -124,8 +132,25 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   raw-SQL writers (the seed script, tests that care) must set them
   themselves. Generated SQL migrations belong in `pkg/api/migrations` and
   are applied by Wrangler.
+- `pkg/api/src/pagination.ts`: keyset pagination, shared by every list
+  endpoint. The wire shape is `?after=<cursor>&limit=<n>` (both optional) and
+  the response body IS the `Page<T>` = `{records, next}` — `next` is the cursor
+  for the following page, null at the end. A cursor is opaque: base64url of
+  `v0:<column>:<direction>:<value>`. Only `id` DESCENDING exists (primary keys
+  are uuidv7, so descending id is newest-first); the column/direction ride in
+  the payload so a name- or date-keyed sort is additive, and a cursor naming
+  any other sort is rejected as invalid. Routes spread `PageRef.shape` into
+  their zod query schema and run the query through `loadPageById(ref, load)`,
+  whose `load` applies `afterIdWhere(col, afterId)`, orders by `desc(col)`, and
+  honors the limit (it's handed limit+1 to detect the next page without a
+  count). `PAGE_LIMIT_DEFAULT` 50, `PAGE_LIMIT_MAX` 200. Paginated today:
+  `/outings`, `/golfers`, `/courses`. Every filter on a paginated route MUST
+  run in SQL — narrowing the page after LIMIT would return short pages while
+  the cursor marched past the matches.
 - `pkg/api/routes/golfers.ts`: the player registry (subsumes the old admin
-  routes/page). List/get golfers with nicknames (any signed-in user); PATCH is
+  routes/page). List golfers newest-first, paginated, with a server-side `?q=`
+  search over name/email/nicknames (it has to be server-side to span pages);
+  get one golfer with nicknames (any signed-in user); PATCH is
   self-or-admin (nicknames use replace-all semantics; the `admin` flag needs an
   admin and never on yourself); `/golfers/invite` is admin-only, idempotent on
   email, and creates an `invite` row + emails a passkey-enroll link (7-day
@@ -160,10 +185,13 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   `getRequestUserId(c)` exposes the bearer's subject for the mixed-auth
   register route. The web stores the bearer token in `localStorage` exactly as
   before.
-- `pkg/api/routes/outings.ts`: `/courses` (with sets, their TEES, and each
-  tee's holes — the review UI shows database pars and auto-picks sets by par
-  sequence against any tee's layout);
-  `/outings` list (reverse-chrono summaries; course/set/player filters);
+- `pkg/api/routes/outings.ts`: `/courses` (paginated newest-first, with sets,
+  their TEES, and each tee's holes — the review UI shows database pars and
+  auto-picks sets by par sequence against any tee's layout) and `/courses/:id`
+  (the same tree for one course, since the course page can't hunt through a
+  paginated list);
+  `/outings` list (paginated newest-recorded-first — `desc(outing.id)`, not by
+  date played; course/set/player/date filters, all applied in SQL);
   `/outings/check` (merge-candidate lookup: an outing on the same date with
   scores on any of the given course sets — the one-foursome-two-scorecards
   case); `/outings/:id` detail (sets derived from score_sets, a display hole

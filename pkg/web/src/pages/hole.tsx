@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { Area, ComposedChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid } from "recharts";
 import { AppShell, PageTitle } from "@/App";
 import { GolfScore } from "@/components/golf-score";
 import { ResponsiveSelect } from "@/components/responsive-select";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { apiQuery } from "@/lib/query";
 import { formatOutingDate } from "@/pages/outings";
 
 type HoleScore = {
@@ -49,36 +52,15 @@ function labelOf(score: HoleScore) {
 }
 
 function useHoleStats(setId: string, number: number) {
-  const { client } = useAuth();
-  const [data, setData] = useState<HoleStats | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!client) return;
-    let cancelled = false;
-    setData(null);
-    setError(null);
-    void client.api["course-sets"][":setId"].holes[":number"]
-      .$get({ param: { setId, number: String(number) } })
-      .then(
-        async (response) => {
-          if (cancelled) return;
-          if (!response.ok) {
-            setError("Unable to load this hole.");
-            return;
-          }
-          setData((await response.json()) as HoleStats);
-        },
-        () => {
-          if (!cancelled) setError("Unable to load this hole.");
-        },
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [client, setId, number]);
-
-  return { data, error };
+  const holeQuery = useQuery(
+    apiQuery(api["course-sets"][":setId"].holes[":number"].$get, {
+      param: { setId, number: String(number) },
+    }),
+  );
+  return {
+    data: (holeQuery.data as HoleStats | undefined) ?? null,
+    error: holeQuery.error !== null ? "Unable to load this hole." : null,
+  };
 }
 
 const chartConfig = {
@@ -298,27 +280,16 @@ const CONSISTENCY_MIN_ROUNDS = 3;
 
 export function HoleStatsPage({ setId, number }: { setId: string; number: number }) {
   const { data, error } = useHoleStats(setId, number);
-  const { client, profile } = useAuth();
+  const { profile } = useAuth();
   const myId = profile?.id ?? null;
 
   // The tee list shows yardages for the golfer's gender (the /me profile
   // doesn't carry it, so fetch the full golfer row); default to men's.
-  const [gender, setGender] = useState<"m" | "f">("m");
-  useEffect(() => {
-    if (!client || !profile) return;
-    let cancelled = false;
-    void client.api.golfers[":id"]
-      .$get({ param: { id: profile.id } })
-      .then(async (response) => {
-        if (cancelled || !response.ok) return;
-        const { golfer } = await response.json();
-        if (golfer.gender) setGender(golfer.gender);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [client, profile]);
+  const selfQuery = useQuery({
+    ...apiQuery(api.golfers[":id"].$get, { param: { id: profile?.id ?? "" } }),
+    enabled: profile !== null,
+  });
+  const gender: "m" | "f" = selfQuery.data?.golfer.gender ?? "m";
   // Tees for this golfer's gender, plus ungendered markers (combos), longest
   // first (the API already sorts by yardage).
   const genderTees = (data?.tees ?? []).filter(

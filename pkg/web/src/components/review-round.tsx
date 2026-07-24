@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,13 +25,19 @@ import { Score } from "@/components/score";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
+import { allCoursesQuery, allGolfersQuery } from "@/lib/queries";
+import { apiMutation, apiQuery } from "@/lib/query";
 import { cn } from "@/lib/utils";
 import type { Golfer } from "@/pages/golfers";
 import { sortTees, teeLabel, type CourseTee } from "@/pages/courses";
 import { formatOutingDate, playerLabel, type OutingDetail } from "@/pages/outings";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// A stable empty fallback, so a still-loading registry doesn't hand the memos
+// below a fresh array identity on every render.
+const NO_RECORDS: never[] = [];
 
 type CourseWithSets = {
   id: string;
@@ -354,10 +361,6 @@ export function ReviewRound({
   onRetake: () => void;
   onSubmitted: (outingId: string) => void;
 }) {
-  const { client } = useAuth();
-  const [golfers, setGolfers] = useState<Golfer[]>([]);
-  const [courses, setCourses] = useState<CourseWithSets[]>([]);
-  const [coursesLoaded, setCoursesLoaded] = useState(false);
   const [step, setStep] = useState<"round" | "nines">("round");
 
   const [date, setDate] = useState(() => parseExtractedDate(extracted.date));
@@ -421,32 +424,36 @@ export function ReviewRound({
     return writtenTotalsMatch(written, computed) ? "agree" : null;
   });
 
-  const [mergeCandidate, setMergeCandidate] = useState<OutingDetail | null>(null);
   const [mergeAccepted, setMergeAccepted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  // A payload we couldn't even assemble (an unmatched golfer, a missing tee) —
+  // separate from the POST's own failure below.
+  const [payloadError, setPayloadError] = useState<string | null>(null);
 
-  // Loaded on mount (the matched course needs a name to display) and
-  // re-fetched every time the course combobox opens, so a course added in
-  // another tab shows up without a reload.
-  const loadCourses = useCallback(async () => {
-    if (!client) return;
-    const response = await client.api.courses.$get();
-    if (!response.ok) return;
-    setCourses((await response.json()).courses);
-    setCoursesLoaded(true);
-  }, [client]);
+  // Both registries are paginated; these pickers filter client-side, so they
+  // want the whole (name-sorted) list. Courses load on mount (the matched course
+  // needs a name to display) and refetch when the combobox opens, so a course
+  // added in another tab shows up without a reload.
+  const coursesQuery = useQuery(allCoursesQuery());
+  const courses: CourseWithSets[] = coursesQuery.data ?? NO_RECORDS;
+  const coursesLoaded = coursesQuery.isSuccess;
+  const golfers: Golfer[] = useQuery(allGolfersQuery()).data ?? NO_RECORDS;
 
-  useEffect(() => {
-    void loadCourses();
-  }, [loadCourses]);
-
-  useEffect(() => {
-    if (!client) return;
-    void client.api.golfers.$get().then(async (response) => {
-      if (response.ok) setGolfers((await response.json()).golfers);
-    });
-  }, [client]);
+  // Ask the API whether an outing already exists on this date with any of the
+  // selected course sets — the two-scorecards-one-foursome case.
+  const selectedSetIdsKey = nines
+    .map((nine) => nine.courseSetId)
+    .filter((id): id is string => id !== null)
+    .sort()
+    .join(",");
+  const checkQuery = useQuery({
+    ...apiQuery(api.outings.check.$get, {
+      query: { date, courseSetIds: selectedSetIdsKey },
+    }),
+    // Only worth asking once the user is on the per-nine step with a real date
+    // and at least one nine chosen.
+    enabled: selectedSetIdsKey !== "" && DATE_PATTERN.test(date) && step === "nines",
+  });
+  const mergeCandidate: OutingDetail | null = checkQuery.data?.outing ?? null;
 
   // Scores already in the merge candidate that this capture would replace
   // (submit upserts on outing+player+hole), summarized per golfer as
@@ -529,35 +536,6 @@ export function ReviewRound({
       return anyChanged ? next : current;
     });
   }, [selectedCourse, golfers, players, mergeTarget, nines]);
-
-  // Ask the API whether an outing already exists on this date with any of the
-  // selected course sets — the two-scorecards-one-foursome case.
-  const selectedSetIdsKey = nines
-    .map((nine) => nine.courseSetId)
-    .filter((id): id is string => id !== null)
-    .sort()
-    .join(",");
-  useEffect(() => {
-    if (!client || selectedSetIdsKey === "" || !DATE_PATTERN.test(date) || step !== "nines") {
-      setMergeCandidate(null);
-      setMergeAccepted(false);
-      return;
-    }
-    let cancelled = false;
-    void client.api.outings.check
-      .$get({ query: { date, courseSetIds: selectedSetIdsKey } })
-      .then(async (response) => {
-        if (cancelled || !response.ok) return;
-        const { outing } = await response.json();
-        if (cancelled) return;
-        setMergeCandidate(outing);
-        if (!outing) setMergeAccepted(false);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [client, date, selectedSetIdsKey, step]);
 
   function updatePlayer(index: number, update: Partial<PlayerReview>) {
     setPlayers((current) =>
@@ -752,12 +730,19 @@ export function ReviewRound({
     return [...new Set(list)];
   })();
 
-  async function submit() {
-    if (!client || roundProblems.length > 0 || nineProblems.length > 0) return;
-    setSubmitting(true);
-    setSubmitError(null);
+  const submitMutation = useMutation({
+    ...apiMutation(api.outings.$post),
+    onSuccess: ({ outingId }) => onSubmitted(outingId),
+  });
+  const submitting = submitMutation.isPending;
+  const submitError = payloadError ?? submitMutation.error?.message ?? null;
+
+  function submit() {
+    if (roundProblems.length > 0 || nineProblems.length > 0) return;
+    setPayloadError(null);
+    let payload: SubmitOutingRequestSchema;
     try {
-      const payload: SubmitOutingRequestSchema = {
+      payload = {
         date,
         scorecardId,
         outingId: mergeTarget?.id ?? null,
@@ -785,18 +770,11 @@ export function ReviewRound({
           };
         }),
       };
-      const response = await client.api.outings.$post({ json: payload });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? "Unable to save this round.");
-      }
-      const { outingId } = await response.json();
-      onSubmitted(outingId);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Unable to save this round.");
-    } finally {
-      setSubmitting(false);
+      setPayloadError(error instanceof Error ? error.message : "Unable to save this round.");
+      return;
     }
+    submitMutation.mutate({ json: payload });
   }
 
   if (step === "round") {
@@ -853,7 +831,7 @@ export function ReviewRound({
                     }))
                   : null
               }
-              onOpen={() => void loadCourses()}
+              onOpen={() => void coursesQuery.refetch()}
               placeholder="— Choose course —"
               title="Choose course"
               searchPlaceholder="Search courses…"
@@ -1193,7 +1171,7 @@ export function ReviewRound({
             Back
           </Button>
           <Button
-            onClick={() => void submit()}
+            onClick={submit}
             disabled={submitting || roundProblems.length > 0 || nineProblems.length > 0}
           >
             <Send data-icon="inline-start" />

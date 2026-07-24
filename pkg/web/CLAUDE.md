@@ -4,10 +4,63 @@ Front-end-specific guidance. The **repo-root `CLAUDE.md`** holds the app
 architecture (routes, pages, the API/RPC contract, capture/review flow); this
 file is the "how we build UI here" layer. Read both.
 
-Stack: Vite + React 19 + TypeScript, TanStack Router, Tailwind v4, shadcn/ui on
-top of **Base UI** (`@base-ui/react` — NOT Radix; props/APIs differ, e.g.
-`render={<Comp/>}` slots, `initialFocus`, `Positioner`), `cmdk` for command
-lists, `recharts` for charts.
+Stack: Vite + React 19 + TypeScript, TanStack Router, **TanStack Query** (with
+`hono-rpc-query`), Tailwind v4, shadcn/ui on top of **Base UI**
+(`@base-ui/react` — NOT Radix; props/APIs differ, e.g. `render={<Comp/>}` slots,
+`initialFocus`, `Positioner`), `cmdk` for command lists, `recharts` for charts.
+
+## Data fetching: TanStack Query only
+
+**Never fetch in a `useEffect`.** No `useState` for server data, no hand-rolled
+loading/error flags, no `cancelled` flags. Every request — reads, writes, polls
+— goes through TanStack Query. `useEffect` is for DOM/timer/URL side effects
+only (revoking an object URL, a debounce timer, a progress interval).
+
+`src/lib/api.ts` exports `api`: the Hono RPC client wrapped in
+`hono-rpc-query`'s `hcQuery`. `src/lib/query.ts` adapts it — its wrappers exist
+because the library's own `queryFn` never checks `response.ok`, which would turn
+a 404 into data:
+
+```tsx
+const golfer = useQuery(apiQuery(api.golfers[":id"].$get, { param: { id } }));
+//  → { queryKey, queryFn } — spread it to add options:
+const self = useQuery({ ...apiQuery(api.me.$get), enabled: signedIn });
+
+const save = useMutation({
+  ...apiMutation(api.golfers[":id"].$patch),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: apiQueryKey(api.golfers.$get) }),
+});
+save.mutate({ param: { id }, json: { name } }); // typed from the route
+
+const list = useInfiniteQuery(apiInfiniteQuery(api.outings.$get, { query: { limit: 20 } }));
+const outings = pagedRecords(list.data); // null while the first page is in flight
+<LoadMore
+  hasMore={list.hasNextPage}
+  loading={list.isFetchingNextPage}
+  onLoadMore={() => void list.fetchNextPage()}
+/>;
+```
+
+- Errors: a non-2xx throws `ApiError` (the API's own `error` message, plus
+  `status`), so read `query.error?.message` / `mutation.error?.message` instead
+  of parsing bodies. `apiQueryKey(endpoint)` with no input is a prefix that
+  invalidates every variant of that endpoint (all filters, all pages).
+- Filters/search belong in the query KEY (pass them as `input`), so changing one
+  starts a fresh list and the old one stays cached. Debounce a text input into
+  the state you pass as input; don't debounce the fetch.
+- Shared factories live in `src/lib/queries.ts`: `allCoursesQuery()` /
+  `allGolfersQuery()` walk every page for the comboboxes that filter the whole
+  registry client-side; `scorecardImageQuery(id)` fetches a photo as an object
+  URL (the endpoint needs the bearer token, so `<img src>` can't); the job polls
+  (`scorecardScoresQuery`, `scorecardMetadataQuery`, `courseResearchQuery`) use
+  `refetchInterval` while the body says `status: "pending"` — check with
+  `isPending(data)` — until a per-attempt deadline.
+- Sequencing without effects: gate a dependent query with `enabled` (see the
+  course-import flow, where the research PUT is a `staleTime: Infinity` query
+  that fires once its inputs are ready), and derive wizard steps from the data
+  rather than setting state when a fetch lands.
+- Multipart uploads have no typed RPC method (the route parses the form itself),
+  so they're a `useMutation` with a hand-written `fetch` — still a mutation.
 
 ## Reuse these components — don't reinvent
 
@@ -29,6 +82,9 @@ canonical component per job:
 - **Score cells → `GolfScore`** (`@/components/golf-score`): standard golf
   notation (birdie circle, bogey square…), read-only by default, editable with
   `onChange`.
+- **The footer of a paginated list → `LoadMore`** (`@/components/load-more`):
+  the full-width "Load more" row, wired to an infinite query. It renders nothing
+  when `hasMore` is false, so it can sit unconditionally at the end of a card.
 
 `ResponsiveSelect` and `ResponsiveModal` share the 640px (`sm:`) breakpoint so
 the whole app's popovers/sheets feel like one system.

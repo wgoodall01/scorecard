@@ -22,6 +22,7 @@ export {
 } from "./routes/golfers";
 export { SubmitOutingRequest, type SubmitOutingRequestSchema } from "./routes/outings";
 export type { Honor, HonorHolder, HonorOutingRef, HonorSlug } from "./src/honors";
+export type { CursorSchema, Page, PageRefSchema } from "./src/pagination";
 export type { HandicapPoint, PlayerHandicap } from "./src/handicap";
 export { Email, type EmailSchema } from "./routes/shared";
 export {

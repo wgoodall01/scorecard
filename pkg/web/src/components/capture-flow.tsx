@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Calculator,
   Camera,
@@ -31,6 +32,7 @@ import { ReviewRound } from "@/components/review-round";
 import { Stepper } from "@/components/stepper";
 import { useAuth } from "@/lib/auth-context";
 import { resizeImageForCapture } from "@/lib/image_resize";
+import { isPending, scorecardScoresQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 type FlowStep = "capture" | "analyze" | "review" | "submit";
@@ -53,20 +55,70 @@ type CaptureResult = {
   matched: MatchedData | null;
 };
 
+// The extraction gets this long before the wait is called a failure.
+const EXTRACT_TIMEOUT_MS = 60_000;
+
 export function CaptureFlow() {
   const { token } = useAuth();
   const hasCamera = useLikelyHasCamera();
-  const [step, setStep] = useState<FlowStep>("capture");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [image, setImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [analyzeStatus, setAnalyzeStatus] = useState("");
   const [progress, setProgress] = useState(0);
   const analyzeStartedAt = useRef<number | null>(null);
-  const [result, setResult] = useState<CaptureResult | null>(null);
-  const [captureId, setCaptureId] = useState<string | null>(null);
   const [outingId, setOutingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // When the extraction wait runs out (set per upload, read by the poll).
+  const deadlineRef = useRef(0);
+
+  // The upload is multipart, which the route parses itself — so there's no
+  // typed RPC method for it and the mutation writes the fetch by hand.
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      // Preview (and crop review thumbnails) from the EXACT resized bytes the
+      // model sees, not the original file — so the extraction's bounding boxes
+      // line up with what we crop, regardless of the phone's EXIF orientation
+      // or original resolution.
+      const resized = await resizeImageForCapture(file);
+      const form = new FormData();
+      form.set("image", resized);
+      form.set("extract", JSON.stringify({ scores: true }));
+      const response = await fetch("/api/scorecard", {
+        method: "POST",
+        headers: token === null ? {} : { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const body = (await response.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!response.ok || !body.id)
+        throw new Error(body.error ?? "Unable to upload your scorecard.");
+      return { id: body.id, resizedUrl: URL.createObjectURL(resized) };
+    },
+    onSuccess: ({ resizedUrl }) => setPreviewUrl(resizedUrl),
+  });
+  const captureId = uploadMutation.data?.id ?? null;
+
+  // Then wait out the extraction job, polling until it lands.
+  const scoresQuery = useQuery(scorecardScoresQuery(captureId, deadlineRef.current));
+  // A pending body means "ask again"; anything else IS the extraction.
+  const pending = isPending(scoresQuery.data);
+  const result: CaptureResult | null =
+    scoresQuery.data !== undefined && !isPending(scoresQuery.data) ? scoresQuery.data : null;
+  const timedOut = pending && Date.now() >= deadlineRef.current;
+
+  const error =
+    uploadMutation.error?.message ??
+    scoresQuery.error?.message ??
+    (timedOut ? "Extraction is taking longer than expected. Please try again." : null);
+
+  // The step follows the data: an image in flight means Analyze, a finished
+  // extraction means Review, a submitted outing means Submit.
+  const step: FlowStep = outingId ? "submit" : result ? "review" : image ? "analyze" : "capture";
+
+  const analyzeStatus = uploadMutation.isPending
+    ? "Uploading your photo…"
+    : // Surface the job's own progress message ("Reading the scorecard…",
+      // "Matching golfers and course…") when it has reported one.
+      ((isPending(scoresQuery.data) ? scoresQuery.data.message : null) ??
+      "Reading the round details…");
 
   useEffect(
     () => () => {
@@ -95,89 +147,20 @@ export function CaptureFlow() {
   }, [step, error]);
 
   function reset() {
-    setStep("capture");
     setImage(null);
     setPreviewUrl(null);
-    setResult(null);
-    setCaptureId(null);
     setOutingId(null);
-    setError(null);
     setProgress(0);
+    uploadMutation.reset();
   }
 
   function startAnalyze(nextImage: File) {
     setImage(nextImage);
     setPreviewUrl(URL.createObjectURL(nextImage));
-    void analyze(nextImage);
-  }
-
-  async function analyze(imageToAnalyze: File) {
-    if (!token) return;
-
-    setStep("analyze");
-    setError(null);
-    setResult(null);
     setProgress(0);
     analyzeStartedAt.current = Date.now();
-
-    try {
-      setAnalyzeStatus("Uploading your photo…");
-      // Preview (and crop review thumbnails) from the EXACT resized bytes the
-      // model sees, not the original file — so the extraction's bounding boxes
-      // line up with what we crop, regardless of the phone's EXIF orientation
-      // or original resolution.
-      const resized = await resizeImageForCapture(imageToAnalyze);
-      setPreviewUrl(URL.createObjectURL(resized));
-      const form = new FormData();
-      form.set("image", resized);
-      form.set("extract", JSON.stringify({ scores: true }));
-      const submitResponse = await fetch("/api/scorecard", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      });
-      const submitBody = (await submitResponse.json()) as { id?: string; error?: string };
-      if (!submitResponse.ok || !submitBody.id)
-        throw new Error(submitBody.error ?? "Unable to upload your scorecard.");
-      setCaptureId(submitBody.id);
-
-      setAnalyzeStatus("Reading the round details…");
-      for (let attempt = 0; attempt < 60; attempt++) {
-        const resultResponse = await fetch(
-          `/api/scorecard/${encodeURIComponent(submitBody.id)}/scores`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (resultResponse.status === 202) {
-          // Surface the job's own progress message ("Reading the scorecard…",
-          // "Matching golfers and course…") when it has reported one.
-          const pending = (await resultResponse.json().catch(() => null)) as {
-            message?: string | null;
-          } | null;
-          if (pending?.message) setAnalyzeStatus(pending.message);
-          await new Promise((resolve) => window.setTimeout(resolve, 750));
-          continue;
-        }
-
-        const resultBody = (await resultResponse.json()) as unknown;
-        if (!resultResponse.ok) {
-          const message =
-            typeof resultBody === "object" && resultBody && "error" in resultBody
-              ? String(resultBody.error)
-              : "Unable to extract your scorecard.";
-          throw new Error(message);
-        }
-        setProgress(1);
-        setResult(resultBody as CaptureResult);
-        setStep("review");
-        return;
-      }
-
-      throw new Error("Extraction is taking longer than expected. Please try again.");
-    } catch (analyzeError) {
-      setError(
-        analyzeError instanceof Error ? analyzeError.message : "Unable to analyze your scorecard.",
-      );
-    }
+    deadlineRef.current = Date.now() + EXTRACT_TIMEOUT_MS;
+    uploadMutation.mutate(nextImage);
   }
 
   return (
@@ -273,7 +256,7 @@ export function CaptureFlow() {
           <EmptyContent>
             {error ? (
               <div className="flex flex-wrap justify-center gap-3">
-                <Button onClick={() => image && void analyze(image)}>
+                <Button onClick={() => image && startAnalyze(image)}>
                   <RefreshCcw data-icon="inline-start" />
                   Try again
                 </Button>
@@ -316,10 +299,7 @@ export function CaptureFlow() {
           scorecardId={captureId}
           previewUrl={previewUrl}
           onRetake={reset}
-          onSubmitted={(submittedOutingId) => {
-            setOutingId(submittedOutingId);
-            setStep("submit");
-          }}
+          onSubmitted={setOutingId}
         />
       )}
 

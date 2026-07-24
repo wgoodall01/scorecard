@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Images, NotebookText } from "lucide-react";
 import type { ScorecardStatus } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { ImageExpand } from "@/components/image-expand";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
+import { apiQuery } from "@/lib/query";
+import { scorecardImageQuery } from "@/lib/queries";
 import { formatOutingDate, playerLabel } from "@/pages/outings";
 
 export type ScorecardSummary = {
@@ -34,33 +36,9 @@ function StatusBadge({ status }: { status: ScorecardStatus }) {
   return <Badge variant="secondary">{status === "pending" ? "Processing" : "Processed"}</Badge>;
 }
 
-// The photo behind a scorecard, fetched with the bearer token and rendered
-// from a blob URL (a plain <img src> can't send the Authorization header) —
-// the same dance as scorecard-gallery.tsx.
-function useScorecardImage(scorecardId: string | null) {
-  const { client } = useAuth();
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!client || scorecardId === null) return;
-    let cancelled = false;
-    let created: string | null = null;
-    void client.api.scorecard[":id"].image.$get({ param: { id: scorecardId } }).then(
-      async (response) => {
-        if (!response.ok || cancelled) return;
-        created = URL.createObjectURL(await response.blob());
-        if (!cancelled) setUrl(created);
-      },
-      () => {},
-    );
-    return () => {
-      cancelled = true;
-      if (created) URL.revokeObjectURL(created);
-      setUrl(null);
-    };
-  }, [client, scorecardId]);
-
-  return url;
+// The photo behind a scorecard, as a blob URL (see `scorecardImageQuery`).
+function useScorecardImage(scorecardId: string) {
+  return useQuery(scorecardImageQuery(scorecardId)).data ?? null;
 }
 
 function ScorecardThumb({ scorecardId }: { scorecardId: string }) {
@@ -103,30 +81,9 @@ export function ScorecardList({ scorecards }: { scorecards: ScorecardSummary[] }
 }
 
 export function ScorecardsPage() {
-  const { client } = useAuth();
-  const [scorecards, setScorecards] = useState<ScorecardSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!client) return;
-    let cancelled = false;
-    void client.api.scorecard.$get({ query: {} }).then(
-      async (response) => {
-        if (cancelled) return;
-        if (!response.ok) {
-          setError("Unable to load your scorecards.");
-          return;
-        }
-        setScorecards((await response.json()).scorecards);
-      },
-      () => {
-        if (!cancelled) setError("Unable to load your scorecards.");
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
+  const scorecardsQuery = useQuery(apiQuery(api.scorecard.$get, { query: {} }));
+  const scorecards: ScorecardSummary[] | null = scorecardsQuery.data?.scorecards ?? null;
+  const error = scorecardsQuery.error !== null ? "Unable to load your scorecards." : null;
 
   return (
     <AppShell>
@@ -157,31 +114,12 @@ export function ScorecardsPage() {
 }
 
 export function ScorecardDetailPage({ scorecardId }: { scorecardId: string }) {
-  const { client } = useAuth();
-  const [scorecard, setScorecard] = useState<ScorecardDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const imageUrl = useScorecardImage(scorecardId);
-
-  useEffect(() => {
-    if (!client) return;
-    let cancelled = false;
-    void client.api.scorecard[":id"].$get({ param: { id: scorecardId } }).then(
-      async (response) => {
-        if (cancelled) return;
-        if (!response.ok) {
-          setError("This scorecard could not be found.");
-          return;
-        }
-        setScorecard((await response.json()).scorecard);
-      },
-      () => {
-        if (!cancelled) setError("Unable to load this scorecard.");
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [client, scorecardId]);
+  const scorecardQuery = useQuery(
+    apiQuery(api.scorecard[":id"].$get, { param: { id: scorecardId } }),
+  );
+  const scorecard: ScorecardDetail | null = scorecardQuery.data?.scorecard ?? null;
+  const error = scorecardQuery.error?.message ?? null;
 
   return (
     <AppShell>

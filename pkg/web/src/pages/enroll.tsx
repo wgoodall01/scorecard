@@ -1,64 +1,46 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CenterCardLayout } from "@/components/center-card-layout";
 import { PageTitle } from "@/App";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { authService, createApiClient, suggestDeviceName } from "@/lib/auth";
-
-type InviteInfo = { name: string | null; email: string | null };
+import { ApiError, authService, suggestDeviceName } from "@/lib/auth";
+import { apiQuery } from "@/lib/query";
 
 export function EnrollPage({ token }: { token: string }) {
   const { enrollPasskey } = useAuth();
   const navigate = useNavigate();
-  const [invite, setInvite] = useState<InviteInfo | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState(() => suggestDeviceName());
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!token) {
-      setLoadError("This link is incomplete.");
-      return;
-    }
-    let cancelled = false;
-    void createApiClient()
-      .api.auth.invite[":token"].$get({ param: { token } })
-      .then(
-        async (response) => {
-          if (cancelled) return;
-          if (!response.ok) {
-            setLoadError(
-              response.status === 410
-                ? "This link has expired. Request a new one from the sign-in page."
-                : "This link is invalid. Request a new one from the sign-in page.",
-            );
-            return;
-          }
-          setInvite((await response.json()).invite);
-        },
-        () => {
-          if (!cancelled) setLoadError("Unable to check this link. Please try again.");
-        },
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
+  const inviteQuery = useQuery({
+    ...apiQuery(api.auth.invite[":token"].$get, { param: { token } }),
+    enabled: token !== "",
+    retry: false,
+  });
+  const invite = inviteQuery.data?.invite ?? null;
+  const loadError =
+    token === ""
+      ? "This link is incomplete."
+      : inviteQuery.error instanceof ApiError
+        ? inviteQuery.error.status === 410
+          ? "This link has expired. Request a new one from the sign-in page."
+          : "This link is invalid. Request a new one from the sign-in page."
+        : inviteQuery.error !== null
+          ? "Unable to check this link. Please try again."
+          : null;
 
-  async function createPasskey() {
-    setSubmitting(true);
-    setError(null);
-    try {
-      await enrollPasskey({ inviteToken: token, name: deviceName.trim() || "Passkey" });
-      await navigate({ href: authService.getReturnTo(), replace: true });
-    } catch (enrollError) {
-      setError(enrollError instanceof Error ? enrollError.message : "Unable to set up a passkey.");
-    } finally {
-      setSubmitting(false);
-    }
+  const enrollMutation = useMutation({
+    mutationFn: () => enrollPasskey({ inviteToken: token, name: deviceName.trim() || "Passkey" }),
+    onSuccess: () => navigate({ href: authService.getReturnTo(), replace: true }),
+  });
+  const submitting = enrollMutation.isPending;
+  const error = enrollMutation.error?.message ?? null;
+
+  function createPasskey() {
+    enrollMutation.mutate();
   }
 
   return (

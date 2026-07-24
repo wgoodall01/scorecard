@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   Anchor,
@@ -25,7 +26,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResponsiveModal } from "@/components/responsive-modal";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
+import { apiQuery } from "@/lib/query";
 import { formatOutingDate, playerLabel } from "@/pages/outings";
 
 type HonorMeta = {
@@ -489,38 +491,17 @@ function DateRangePicker({
 }
 
 export function HonorsPage({ from: fromParam, to: toParam }: { from?: string; to?: string }) {
-  const { client } = useAuth();
   const navigate = useNavigate();
-  const [honors, setHonors] = useState<Honor[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const defaults = yearRange(new Date().getFullYear());
   const from = fromParam ?? defaults.from;
   const to = toParam ?? defaults.to;
 
-  useEffect(() => {
-    if (!client) return;
-    let cancelled = false;
-    setHonors(null);
-    setError(null);
-    void client.api.honors.$get({ query: { from, to } }).then(
-      async (response) => {
-        if (cancelled) return;
-        if (!response.ok) {
-          setError("Unable to load the honors board.");
-          return;
-        }
-        const data = await response.json();
-        setHonors(data.honors);
-      },
-      () => {
-        if (!cancelled) setError("Unable to load the honors board.");
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [client, from, to]);
+  // The range is part of the query key, so picking a new one refetches (and
+  // keeps the previous board cached).
+  const honorsQuery = useQuery(apiQuery(api.honors.$get, { query: { from, to } }));
+  const honors: Honor[] | null = honorsQuery.data?.honors ?? null;
+  const error = honorsQuery.error !== null ? "Unable to load the honors board." : null;
 
   const setRange = (range: { from: string; to: string }) => {
     // The current-year default keeps a clean, param-free URL.

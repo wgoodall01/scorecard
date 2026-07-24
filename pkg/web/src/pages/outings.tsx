@@ -1,5 +1,6 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Camera,
   ChevronRight,
@@ -13,12 +14,16 @@ import { AppShell, PageHeading, PageTitle } from "@/App";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { LoadMore } from "@/components/load-more";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResponsiveSelect } from "@/components/responsive-select";
 import { GolfScore } from "@/components/golf-score";
 import { Score } from "@/components/score";
 import { ScorecardGallery } from "@/components/scorecard-gallery";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { allCoursesQuery, allGolfersQuery } from "@/lib/queries";
+import { apiInfiniteQuery, apiMutation, apiQuery, apiQueryKey, pagedRecords } from "@/lib/query";
 
 export type OutingSummary = {
   id: string;
@@ -83,44 +88,35 @@ export function formatOutingDate(date: string) {
   });
 }
 
+// One page of outings per request; the rest arrive through "Load more".
+const OUTINGS_PAGE_SIZE = 20;
+
+// A stable empty fallback, so a still-loading registry doesn't hand the memos
+// below a fresh array identity on every render.
+const NO_RECORDS: never[] = [];
+
 export function OutingsPage() {
-  const { client } = useAuth();
-  const [outings, setOutings] = useState<OutingSummary[] | null>(null);
-  const [courses, setCourses] = useState<CourseOption[]>([]);
-  const [players, setPlayers] = useState<
-    { id: string; name: string | null; email: string | null }[]
-  >([]);
   const [courseId, setCourseId] = useState<string | null>(null);
   const [courseSetId, setCourseSetId] = useState<string | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
 
-  const loadOutings = useCallback(async () => {
-    if (!client) return;
-    const response = await client.api.outings.$get({
+  // The filters are part of the query key, so changing one starts a fresh list
+  // at page one (and the old one stays cached).
+  const outingsQuery = useInfiniteQuery(
+    apiInfiniteQuery(api.outings.$get, {
       query: {
         courseId: courseId ?? undefined,
         courseSetId: courseSetId ?? undefined,
         playerId: playerId ?? undefined,
+        limit: OUTINGS_PAGE_SIZE,
       },
-    });
-    if (!response.ok) return;
-    const { outings: loadedOutings } = await response.json();
-    setOutings(loadedOutings);
-  }, [client, courseId, courseSetId, playerId]);
+    }),
+  );
+  const outings = pagedRecords<OutingSummary>(outingsQuery.data);
 
-  useEffect(() => {
-    void loadOutings();
-  }, [loadOutings]);
-
-  useEffect(() => {
-    if (!client) return;
-    void client.api.courses.$get().then(async (response) => {
-      if (response.ok) setCourses((await response.json()).courses);
-    });
-    void client.api.golfers.$get().then(async (response) => {
-      if (response.ok) setPlayers((await response.json()).golfers);
-    });
-  }, [client]);
+  // The filter pickers need every course and golfer, not just a page.
+  const courses: CourseOption[] = useQuery(allCoursesQuery()).data ?? NO_RECORDS;
+  const players = useQuery(allGolfersQuery()).data ?? NO_RECORDS;
 
   const setOptions = useMemo(() => {
     const relevantCourses = courseId ? courses.filter((course) => course.id === courseId) : courses;
@@ -215,7 +211,18 @@ export function OutingsPage() {
             )}
           </section>
         )}
-        {outings && outings.length > 0 && <OutingList outings={outings} />}
+        {outings && outings.length > 0 && (
+          <OutingList
+            outings={outings}
+            footer={
+              <LoadMore
+                hasMore={outingsQuery.hasNextPage}
+                loading={outingsQuery.isFetchingNextPage}
+                onLoadMore={() => void outingsQuery.fetchNextPage()}
+              />
+            }
+          />
+        )}
       </div>
     </AppShell>
   );
@@ -237,12 +244,16 @@ export function OutingList({
   outings,
   highlightPlayerId,
   roundsByOuting,
+  footer,
 }: {
   outings: OutingSummary[];
   highlightPlayerId?: string;
   // Per-outing standard rounds for the highlighted player; rounds that count
   // toward the current handicap are starred.
   roundsByOuting?: ReadonlyMap<string, OutingListRound[]>;
+  // Rendered inside the card below the list — a `<LoadMore>` where the list
+  // is paginated.
+  footer?: ReactNode;
 }) {
   return (
     <section className="rounded-xl border bg-card">
@@ -317,6 +328,7 @@ export function OutingList({
           );
         })}
       </ul>
+      {footer}
     </section>
   );
 }
@@ -350,93 +362,59 @@ function computeRoundTotals(outing: OutingDetail) {
 }
 
 export function OutingDetailPage({ outingId }: { outingId: string }) {
-  const { client, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const navigate = useNavigate();
-  const [outing, setOuting] = useState<OutingDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [mergeCandidates, setMergeCandidates] = useState<OutingSummary[]>([]);
-  const [merging, setMerging] = useState<string | null>(null);
-  const [mergeError, setMergeError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const queryClient = useQueryClient();
 
-  const loadOuting = useCallback(async () => {
-    if (!client) return;
-    try {
-      const response = await client.api.outings[":id"].$get({ param: { id: outingId } });
-      if (!response.ok) {
-        setError("This outing could not be found.");
-        return;
-      }
-      const { outing: loadedOuting } = await response.json();
-      setOuting(loadedOuting);
-    } catch {
-      setError("Unable to load this outing.");
-    }
-  }, [client, outingId]);
-
-  useEffect(() => {
-    void loadOuting();
-  }, [loadOuting]);
+  const outingQuery = useQuery(apiQuery(api.outings[":id"].$get, { param: { id: outingId } }));
+  const outing: OutingDetail | null = outingQuery.data?.outing ?? null;
 
   // Auto-suggest merges: other outings at this course on the same date are
-  // almost certainly the same round captured on separate scorecards.
-  useEffect(() => {
-    if (!client || !outing) return;
-    let cancelled = false;
-    void client.api.outings
-      .$get({ query: { courseId: outing.course.id } })
-      .then(async (response) => {
-        if (cancelled || !response.ok) return;
-        const { outings } = await response.json();
-        if (cancelled) return;
-        setMergeCandidates(
-          outings.filter((entry) => entry.date === outing.date && entry.id !== outing.id),
-        );
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [client, outing]);
+  // almost certainly the same round captured on separate scorecards. The date is
+  // filtered server-side — narrowing a page of the list here would miss
+  // candidates sitting behind the cursor.
+  const candidatesQuery = useQuery({
+    ...apiQuery(api.outings.$get, {
+      query: { courseId: outing?.course.id, date: outing?.date },
+    }),
+    enabled: outing !== null,
+  });
+  const mergeCandidates: OutingSummary[] =
+    candidatesQuery.data?.records.filter((entry) => entry.id !== outingId) ?? [];
 
-  async function merge(sourceId: string) {
-    if (!client) return;
-    setMerging(sourceId);
-    setMergeError(null);
-    try {
-      const response = await client.api.outings[":id"].merge.$post({
-        param: { id: outingId },
-        json: { outingId: sourceId },
+  // A merge deletes one outing and rewrites another's scores, which moves
+  // handicaps and honors with it — so everything cached is suspect.
+  const mergeMutation = useMutation({
+    ...apiMutation(api.outings[":id"].merge.$post),
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+
+  const deleteMutation = useMutation({
+    ...apiMutation(api.outings[":id"].$delete),
+    onSuccess: async () => {
+      // Same reach as a merge: scores are gone, so handicaps and honors change.
+      queryClient.removeQueries({
+        queryKey: apiQueryKey(api.outings[":id"].$get, { param: { id: outingId } }),
       });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? "Unable to merge these outings.");
-      }
-      await loadOuting();
-    } catch (mergeFailure) {
-      setMergeError(
-        mergeFailure instanceof Error ? mergeFailure.message : "Unable to merge these outings.",
-      );
-    } finally {
-      setMerging(null);
-    }
+      await queryClient.invalidateQueries();
+      await navigate({ to: "/outings" });
+    },
+  });
+
+  const merging = mergeMutation.isPending ? mergeMutation.variables.json.outingId : null;
+  const mergeError = mergeMutation.error?.message ?? null;
+  const error =
+    outingQuery.error !== null
+      ? outingQuery.error.message
+      : (deleteMutation.error?.message ?? null);
+
+  function merge(sourceId: string) {
+    mergeMutation.mutate({ param: { id: outingId }, json: { outingId: sourceId } });
   }
 
-  async function deleteOuting() {
-    if (!client) return;
+  function deleteOuting() {
     if (!window.confirm("Delete this outing and all its scores? This can't be undone.")) return;
-    setDeleting(true);
-    try {
-      const response = await client.api.outings[":id"].$delete({ param: { id: outingId } });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? "Unable to delete this outing.");
-      }
-      await navigate({ to: "/outings" });
-    } catch (deleteFailure) {
-      setError(deleteFailure instanceof Error ? deleteFailure.message : "Unable to delete.");
-      setDeleting(false);
-    }
+    deleteMutation.mutate({ param: { id: outingId } });
   }
 
   return (
@@ -486,12 +464,12 @@ export function OutingDetailPage({ outingId }: { outingId: string }) {
                 <PopoverContent align="end" className="w-48 p-1">
                   <button
                     type="button"
-                    disabled={deleting}
+                    disabled={deleteMutation.isPending}
                     onClick={deleteOuting}
                     className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
                   >
                     <Trash2 aria-hidden="true" className="size-4" />
-                    {deleting ? "Deleting…" : "Delete outing"}
+                    {deleteMutation.isPending ? "Deleting…" : "Delete outing"}
                   </button>
                 </PopoverContent>
               </Popover>
@@ -540,7 +518,7 @@ export function OutingDetailPage({ outingId }: { outingId: string }) {
                       type="button"
                       size="sm"
                       disabled={merging !== null}
-                      onClick={() => void merge(candidate.id)}
+                      onClick={() => merge(candidate.id)}
                     >
                       <GitMerge data-icon="inline-start" />
                       {merging === candidate.id ? "Merging…" : "Merge in"}

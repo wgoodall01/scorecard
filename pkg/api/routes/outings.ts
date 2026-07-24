@@ -1,9 +1,10 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Env } from "../env";
 import { course, courseSet, courseSetTee, hole, outing, score, scoreSet, uuidv7 } from "../schema";
+import { afterIdWhere, loadPageById, PageRef } from "../src/pagination";
 import { NaiveDate, requireAdmin, requireAuth, zodBody, zodQuery } from "./shared";
 
 export const SubmitPlayerScores = z.object({
@@ -136,10 +137,15 @@ export type OutingDetail = NonNullable<Awaited<ReturnType<typeof loadOutingDetai
 // Summaries for the outings list: course, players, sets, per-player strokes
 // (flagged `incomplete` when the player scored some but not all of the
 // outing's holes — an incomplete total isn't comparable to complete ones).
-async function loadOutingSummaries(db: ReturnType<typeof getDb>, where?: ReturnType<typeof eq>) {
+// One page of summaries, newest recorded first (uuidv7 ids sort by creation).
+async function loadOutingSummaries(
+  db: ReturnType<typeof getDb>,
+  { where, limit }: { where?: SQL | undefined; limit: number },
+) {
   const outings = await db.query.outing.findMany({
     where,
-    orderBy: [desc(outing.date), desc(outing.id)],
+    orderBy: [desc(outing.id)],
+    limit,
     with: {
       course: true,
       scoreSets: {
@@ -202,14 +208,44 @@ async function loadOutingSummaries(db: ReturnType<typeof getDb>, where?: ReturnT
   });
 }
 
+// The nine/tee/hole tree the course responses carry (spelled out at each call
+// site — drizzle infers the result shape from the literal). Archived nines are
+// hidden everywhere new scores are recorded — the registry, the capture review
+// picker — so they're hidden here too.
+
 export const outingRoutes = new Hono<Env>()
-  .get("/courses", requireAuth, async (c) => {
+  // The course registry, one page at a time. Callers that need the whole list
+  // (the capture review picker, the outings filters) walk the cursor and sort
+  // by name themselves.
+  .get(
+    "/courses",
+    requireAuth,
+    zodQuery(z.object({ ...PageRef.shape }), "Invalid course filters"),
+    async (c) => {
+      const db = getDb(c.env.DB);
+      const page = await loadPageById(c.req.valid("query"), ({ afterId, limit }) =>
+        db.query.course.findMany({
+          where: and(isNull(course.archivedAt), afterIdWhere(course.id, afterId)),
+          orderBy: [desc(course.id)],
+          limit,
+          with: {
+            sets: {
+              where: isNull(courseSet.archivedAt),
+              orderBy: [asc(courseSet.name)],
+              with: { tees: { orderBy: [asc(courseSetTee.name)], with: { holes: true } } },
+            },
+          },
+        }),
+      );
+      return c.json(page);
+    },
+  )
+  // One course with its nines — the course page fetches by id rather than
+  // hunting through the (now paginated) list.
+  .get("/courses/:id", requireAuth, async (c) => {
     const db = getDb(c.env.DB);
-    const courses = await db.query.course.findMany({
-      // Archived courses (and archived nines) are hidden everywhere new scores
-      // are recorded — the registry, the capture review picker — and here.
-      where: isNull(course.archivedAt),
-      orderBy: [asc(course.name)],
+    const found = await db.query.course.findFirst({
+      where: eq(course.id, c.req.param("id")),
       with: {
         sets: {
           where: isNull(courseSet.archivedAt),
@@ -218,7 +254,8 @@ export const outingRoutes = new Hono<Env>()
         },
       },
     });
-    return c.json({ courses });
+    if (!found) return c.json({ error: "Course not found" }, 404);
+    return c.json({ course: found });
   })
   // Every score ever recorded on ONE hole of a nine — where a "hole" is a
   // (course set, hole number) pair, spanning the per-tee `hole` rows that
@@ -339,27 +376,49 @@ export const outingRoutes = new Hono<Env>()
         courseId: z.string().optional(),
         courseSetId: z.string().optional(),
         playerId: z.string().optional(),
+        date: NaiveDate.optional(),
+        ...PageRef.shape,
       }),
       "Invalid outing filters",
     ),
     async (c) => {
       const db = getDb(c.env.DB);
-      const { courseId, courseSetId, playerId } = c.req.valid("query");
-      let outings = await loadOutingSummaries(
-        db,
-        courseId ? eq(outing.courseId, courseId) : undefined,
+      const { courseId, courseSetId, playerId, date, ...ref } = c.req.valid("query");
+
+      // Every filter runs in SQL. Narrowing the loaded page instead would hand
+      // back short (or empty) pages while the cursor marched on — the set and
+      // player filters reach through score_set with a subquery for that reason.
+      const page = await loadPageById(ref, ({ afterId, limit }) =>
+        loadOutingSummaries(db, {
+          where: and(
+            courseId ? eq(outing.courseId, courseId) : undefined,
+            date ? eq(outing.date, date) : undefined,
+            playerId
+              ? inArray(
+                  outing.id,
+                  db
+                    .select({ id: scoreSet.outingId })
+                    .from(scoreSet)
+                    .where(eq(scoreSet.playerId, playerId)),
+                )
+              : undefined,
+            courseSetId
+              ? inArray(
+                  outing.id,
+                  db
+                    .select({ id: scoreSet.outingId })
+                    .from(scoreSet)
+                    .innerJoin(courseSetTee, eq(courseSetTee.id, scoreSet.courseSetTeeId))
+                    .where(eq(courseSetTee.courseSetId, courseSetId)),
+                )
+              : undefined,
+            afterIdWhere(outing.id, afterId),
+          ),
+          limit,
+        }),
       );
 
-      // Set/player filters are applied over the summaries — the dataset is one
-      // league's outings, so shipping the filter to SQL buys nothing yet.
-      if (courseSetId) {
-        outings = outings.filter((entry) => entry.sets.some((set) => set.id === courseSetId));
-      }
-      if (playerId) {
-        outings = outings.filter((entry) => entry.players.some((player) => player.id === playerId));
-      }
-
-      return c.json({ outings });
+      return c.json(page);
     },
   )
   // Merge-candidate lookup: is there already an outing on this date with

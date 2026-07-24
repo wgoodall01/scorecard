@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   ChevronRight,
@@ -14,8 +15,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppShell, PageHeading, PageTitle } from "@/App";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { suggestDeviceName } from "@/lib/auth";
+import { apiMutation, apiQuery, apiQueryKey } from "@/lib/query";
 import { ScorecardList, type ScorecardSummary } from "@/pages/scorecards";
 
 const RECENT_SCORECARDS = 5;
@@ -39,78 +42,82 @@ function formatDate(value: string) {
 // The signed-in user's passkeys: list, rename, remove, and add more (on this
 // device now, or by emailing yourself an enroll link for another device).
 function PasskeysCard() {
-  const { client, enrollPasskey } = useAuth();
-  const [credentials, setCredentials] = useState<Credential[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { enrollPasskey } = useAuth();
+  const queryClient = useQueryClient();
+  const [enrollError, setEnrollError] = useState<string | null>(null);
+  const [enrolling, setEnrolling] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
-  const load = useCallback(async () => {
-    if (!client) return;
-    const response = await client.api.auth.credentials.$get();
-    if (response.ok) setCredentials((await response.json()).credentials);
-  }, [client]);
+  const credentialsQuery = useQuery(apiQuery(api.auth.credentials.$get));
+  const credentials: Credential[] | null = credentialsQuery.data?.credentials ?? null;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Every change to the passkey list refetches it from the server.
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: apiQueryKey(api.auth.credentials.$get) });
 
+  const inviteSelfMutation = useMutation({
+    ...apiMutation(api.auth.invite.self.$post),
+    onSuccess: () =>
+      setInviteStatus("Check your email for a link to set up a passkey on another device."),
+  });
+  const renameMutation = useMutation({
+    ...apiMutation(api.auth.credentials[":id"].$patch),
+    onSuccess: async () => {
+      setEditingId(null);
+      await invalidate();
+    },
+  });
+  const removeMutation = useMutation({
+    ...apiMutation(api.auth.credentials[":id"].$delete),
+    onSuccess: invalidate,
+  });
+
+  const busy =
+    enrolling ||
+    inviteSelfMutation.isPending ||
+    renameMutation.isPending ||
+    removeMutation.isPending;
+  const error =
+    enrollError ??
+    inviteSelfMutation.error?.message ??
+    renameMutation.error?.message ??
+    removeMutation.error?.message ??
+    (credentialsQuery.error !== null ? "Unable to load your passkeys." : null);
+
+  // The browser ceremony isn't an API call — it's a WebAuthn dance that ends in
+  // one — so it stays imperative, and just invalidates the list when it lands.
   async function addOnThisDevice() {
-    if (!client) return;
-    setBusy(true);
-    setError(null);
+    setEnrolling(true);
+    setEnrollError(null);
     setInviteStatus(null);
     try {
       await enrollPasskey({ name: suggestDeviceName() });
-      await load();
+      await invalidate();
     } catch (addError) {
-      setError(addError instanceof Error ? addError.message : "Unable to add a passkey.");
+      setEnrollError(addError instanceof Error ? addError.message : "Unable to add a passkey.");
     } finally {
-      setBusy(false);
+      setEnrolling(false);
     }
   }
 
-  async function emailAnotherDevice() {
-    if (!client) return;
-    setBusy(true);
-    setError(null);
+  function emailAnotherDevice() {
+    setEnrollError(null);
     setInviteStatus(null);
-    try {
-      const response = await client.api.auth.invite.self.$post();
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? "Unable to send the link.");
-      }
-      setInviteStatus("Check your email for a link to set up a passkey on another device.");
-    } catch (inviteError) {
-      setError(inviteError instanceof Error ? inviteError.message : "Unable to send the link.");
-    } finally {
-      setBusy(false);
-    }
+    inviteSelfMutation.mutate({});
   }
 
-  async function saveName(id: string) {
-    if (!client) return;
+  function saveName(id: string) {
     const name = editingName.trim();
     if (!name) return;
-    const response = await client.api.auth.credentials[":id"].$patch({
-      param: { id },
-      json: { name },
-    });
-    if (response.ok) {
-      setEditingId(null);
-      await load();
-    }
+    renameMutation.mutate({ param: { id }, json: { name } });
   }
 
-  async function remove(id: string) {
-    if (!client) return;
+  function remove(id: string) {
     if (!window.confirm("Remove this passkey? You won't be able to sign in with it anymore."))
       return;
-    const response = await client.api.auth.credentials[":id"].$delete({ param: { id } });
-    if (response.ok) await load();
+    removeMutation.mutate({ param: { id } });
   }
 
   return (
@@ -140,11 +147,11 @@ function PasskeysCard() {
                     autoFocus
                     onChange={(event) => setEditingName(event.target.value)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter") void saveName(cred.id);
+                      if (event.key === "Enter") saveName(cred.id);
                       if (event.key === "Escape") setEditingId(null);
                     }}
                   />
-                  <Button size="icon" variant="ghost" onClick={() => void saveName(cred.id)}>
+                  <Button size="icon" variant="ghost" onClick={() => saveName(cred.id)}>
                     <Check className="size-4" />
                   </Button>
                   <Button size="icon" variant="ghost" onClick={() => setEditingId(null)}>
@@ -182,7 +189,7 @@ function PasskeysCard() {
                     size="icon"
                     variant="ghost"
                     aria-label="Remove passkey"
-                    onClick={() => void remove(cred.id)}
+                    onClick={() => remove(cred.id)}
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -201,7 +208,7 @@ function PasskeysCard() {
             <KeyRound data-icon="inline-start" />
             Add a passkey on this device
           </Button>
-          <Button variant="outline" onClick={() => void emailAnotherDevice()} disabled={busy}>
+          <Button variant="outline" onClick={emailAnotherDevice} disabled={busy}>
             <Mail data-icon="inline-start" />
             Add another device
           </Button>
@@ -213,23 +220,10 @@ function PasskeysCard() {
 
 // The signed-in user's most recent captures, with the full list one tap away.
 function RecentScorecards() {
-  const { client } = useAuth();
-  const [scorecards, setScorecards] = useState<ScorecardSummary[] | null>(null);
-
-  useEffect(() => {
-    if (!client) return;
-    let cancelled = false;
-    void client.api.scorecard.$get({ query: { limit: RECENT_SCORECARDS } }).then(
-      async (response) => {
-        if (!response.ok || cancelled) return;
-        setScorecards((await response.json()).scorecards);
-      },
-      () => {},
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
+  const scorecardsQuery = useQuery(
+    apiQuery(api.scorecard.$get, { query: { limit: RECENT_SCORECARDS } }),
+  );
+  const scorecards: ScorecardSummary[] | null = scorecardsQuery.data?.scorecards ?? null;
 
   return (
     <section className="rounded-xl border bg-card">

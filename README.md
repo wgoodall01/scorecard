@@ -14,8 +14,8 @@ the whole **Cloudflare developer platform** (Workers, D1, R2, Queues, Images, AI
 Gateway, Email), **AI-SDK-driven vision + tool-using agents**, **WebAuthn
 passkeys**, and a modern React front end on **TanStack Router** and **shadcn/ui**.
 The goal was to build something end-to-end and non-trivial on tech that was new to
-me, so the interesting parts of this repo are as much *how* it's put together as
-*what* it does.
+me, so the interesting parts of this repo are as much _how_ it's put together as
+_what_ it does.
 
 <p align="center">
   <img src="docs/screenshots/outing-detail.png" width="720" alt="Outing detail: leaderboard and per-nine score tables in standard golf notation" />
@@ -38,11 +38,11 @@ R2 and an extraction job runs in the background while you move on to review.
 </p>
 
 **Review** is a two-step, phone-friendly editor over the model's extraction.
-First you confirm the *date* (defaulting to the handwritten date, with a
-future-date guard), pick the *course*, and match each written name to a known
+First you confirm the _date_ (defaulting to the handwritten date, with a
+future-date guard), pick the _course_, and match each written name to a known
 golfer — the UI shows a cropped thumbnail of the actual handwriting plus the
 model's alternate readings. Then, per nine, you confirm which course nine it is,
-pick each player's *tee*, and fix any misread scores in cells rendered in
+pick each player's _tee_, and fix any misread scores in cells rendered in
 **standard golf notation** (circles for birdies, squares for bogeys, judged
 against each player's par). Before you submit, every handwritten total is
 reconciled against the summed scores — matches auto-confirm, mismatches force an
@@ -52,7 +52,8 @@ explicit ruling. If another card from the same day already exists, it offers to
 ### Outings
 
 A reverse-chronological list of every recorded round (filterable by course, nine,
-and golfer). The **detail page** (shown at the top of this README) is a
+and golfer), loaded a page at a time with a "Load more" footer — every list in the
+app is cursor-paginated. The **detail page** (shown at the top of this README) is a
 leaderboard sorted by strokes with a trophy on the winning complete round, per-nine
 score tables in golf notation, and thumbnails of the scorecards the scores were
 read from. Same-day/same-course outings can be merged after the fact.
@@ -61,10 +62,10 @@ read from. Same-day/same-course outings can be merged after the fact.
 
 A board of named achievements over a selectable date range (defaulting to the
 current calendar year, via a date-range picker in the header), in three sections:
-*laurels* like *Medalist*, *Hot Nine*, and *The Metronome*; *streaks* like *The
-Heater* and *Groundhog Day* (runs of consecutive holes that carry across outings,
-computed gaps-and-islands style); and "*Dishonors*" like *The Crater* and *Snowman
-Collector*. Each card names the current holder, a headline stat, and a one-line
+_laurels_ like _Medalist_, _Hot Nine_, and _The Metronome_; _streaks_ like _The
+Heater_ and _Groundhog Day_ (runs of consecutive holes that carry across outings,
+computed gaps-and-islands style); and "_Dishonors_" like _The Crater_ and _Snowman
+Collector_. Each card names the current holder, a headline stat, and a one-line
 story linking back to the outing that earned it. The whole board is computed in a
 **single SQLite query** (CTEs + window functions) on every request.
 
@@ -160,6 +161,11 @@ courses, and deleting/merging outings.
   fully type-safe routing: typed `Link`s and params, `validateSearch` zod schemas,
   and intent-based preloading. File-route wrappers stay thin; the type-safety is
   end-to-end from the router into the Hono RPC client.
+- **[TanStack Query](https://tanstack.com/query)** (with
+  [hono-rpc-query](https://github.com/k3dom/hono-rpc-query)) — the only way the
+  app talks to the server: query options are derived straight from the typed RPC
+  client, so caching, invalidation, infinite lists, and job polling are all
+  declarative. Nothing fetches in a `useEffect`.
 - **[Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)**
   (on Base UI) — the component layer.
 - **[Recharts](https://recharts.org/)** — the handicap and score-distribution
@@ -192,7 +198,8 @@ passkey consumes the token. A successful ceremony mints our **own HS256 JWT**
 nullable email. The browser stores the bearer in `localStorage`.
 
 **The front end is a typed SPA.** React + Vite + TanStack Router, talking to the
-API through Hono's typed RPC client built from the exported `AppType`. There is no
+API through Hono's typed RPC client built from the exported `AppType`, with
+TanStack Query owning every request. There is no
 OpenAPI, no generated client, no drift — the web package type-checks directly
 against the API's types, so a breaking change to a route is a compile error in the
 UI.
@@ -209,7 +216,7 @@ truth, not the queue message, so duplicate deliveries never re-run and the web c
 poll status over plain HTTP. Large artifacts go to R2.
 
 **The extraction job is a vision agent.** It normalizes the image (Cloudflare
-Images), then makes one `generateObject` call whose zod schema *is* the contract
+Images), then makes one `generateObject` call whose zod schema _is_ the contract
 for what the model emits, what the agent returns, and what the evals assert. Two
 follow-on **matching agents** (players, courses) resolve the handwritten names and
 course to database ids: each is a hybrid loop that pre-fetches candidates

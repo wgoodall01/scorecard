@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, ChevronRight, Mail, Mars, Pencil, Search, UserRoundPlus, Venus } from "lucide-react";
 import type { PlayerHandicap, Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { HandicapCard } from "@/components/handicap-card";
+import { LoadMore } from "@/components/load-more";
 import { MultiCombobox } from "@/components/multi-combobox";
 import { ResponsiveModal } from "@/components/responsive-modal";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResponsiveSelect } from "@/components/responsive-select";
 import { Switch } from "@/components/ui/switch";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { apiInfiniteQuery, apiMutation, apiQuery, apiQueryKey, pagedRecords } from "@/lib/query";
 import { OutingList, type OutingListRound, type OutingSummary } from "@/pages/outings";
 import { TEE_LABELS, TEES } from "@/lib/tees";
 
@@ -26,11 +30,6 @@ export type Golfer = {
   gender: "m" | "f" | null;
   nicknames: { id: string; userId: string; nickname: string; nicknameType: string }[];
 };
-
-async function requestError(response: { json: () => Promise<unknown> }, fallback: string) {
-  const body = (await response.json().catch(() => ({}))) as { error?: string };
-  return body.error ?? fallback;
-}
 
 // Group the handicap record's USGA-standard rounds by outing, so the outing
 // list can show per-round scores (an 18 and a 9 for a 27-hole outing)
@@ -51,34 +50,28 @@ function roundsByOuting(handicap: PlayerHandicap | null) {
   return rounds;
 }
 
+const GOLFERS_PAGE_SIZE = 25;
+const SEARCH_DEBOUNCE_MS = 250;
+
 export function GolfersPage() {
-  const { client, isAdmin } = useAuth();
-  const [golfers, setGolfers] = useState<Golfer[] | null>(null);
+  const { isAdmin } = useAuth();
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
 
-  const loadGolfers = useCallback(async () => {
-    if (!client) return;
-    const response = await client.api.golfers.$get();
-    if (!response.ok) return;
-    const { golfers: loadedGolfers } = await response.json();
-    setGolfers(loadedGolfers);
-  }, [client]);
-
+  // Search runs on the server (it has to — it spans pages we haven't loaded),
+  // so debounce the box rather than starting a query per keystroke.
   useEffect(() => {
-    void loadGolfers();
-  }, [loadGolfers]);
+    const timer = setTimeout(() => setQuery(search.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const filteredGolfers = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query || !golfers) return golfers;
-    return golfers.filter(
-      (golfer) =>
-        (golfer.name ?? "").toLowerCase().includes(query) ||
-        (golfer.email ?? "").toLowerCase().includes(query) ||
-        golfer.nicknames.some((entry) => entry.nickname.toLowerCase().includes(query)),
-    );
-  }, [golfers, search]);
+  const golfersQuery = useInfiniteQuery(
+    apiInfiniteQuery(api.golfers.$get, {
+      query: { q: query || undefined, limit: GOLFERS_PAGE_SIZE },
+    }),
+  );
+  const golfers = pagedRecords<Golfer>(golfersQuery.data);
 
   return (
     <AppShell>
@@ -111,12 +104,14 @@ export function GolfersPage() {
         </div>
         <section className="rounded-xl border bg-card">
           {!golfers && <p className="p-5 text-sm text-muted-foreground">Loading golfers…</p>}
-          {golfers && filteredGolfers && filteredGolfers.length === 0 && (
-            <p className="p-5 text-sm text-muted-foreground">No golfers match your search.</p>
+          {golfers && golfers.length === 0 && (
+            <p className="p-5 text-sm text-muted-foreground">
+              {query ? "No golfers match your search." : "No golfers yet."}
+            </p>
           )}
-          {filteredGolfers && filteredGolfers.length > 0 && (
+          {golfers && golfers.length > 0 && (
             <ul>
-              {filteredGolfers.map((golfer) => (
+              {golfers.map((golfer) => (
                 <li key={golfer.id} className="border-b last:border-b-0">
                   <Link
                     to="/golfers/$id"
@@ -147,13 +142,14 @@ export function GolfersPage() {
               ))}
             </ul>
           )}
+          <LoadMore
+            hasMore={golfersQuery.hasNextPage}
+            loading={golfersQuery.isFetchingNextPage}
+            onLoadMore={() => void golfersQuery.fetchNextPage()}
+          />
         </section>
       </div>
-      <InviteGolferDialog
-        open={inviteOpen}
-        onOpenChange={setInviteOpen}
-        onInvited={() => void loadGolfers()}
-      />
+      <InviteGolferDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </AppShell>
   );
 }
@@ -161,44 +157,38 @@ export function GolfersPage() {
 function InviteGolferDialog({
   open,
   onOpenChange,
-  onInvited,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onInvited: () => void;
 }) {
-  const { client } = useAuth();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [nicknames, setNicknames] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!client) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await client.api.golfers.invite.$post({
-        json: {
-          email,
-          name: name.trim() || undefined,
-          nicknames: nicknames.map((nickname) => ({ nickname, nicknameType: "nickname" })),
-        },
-      });
-      if (!response.ok) throw new Error(await requestError(response, "Unable to send the invite."));
+  const inviteMutation = useMutation({
+    ...apiMutation(api.golfers.invite.$post),
+    onSuccess: async () => {
       setEmail("");
       setName("");
       setNicknames([]);
       onOpenChange(false);
-      onInvited();
-    } catch (inviteError) {
-      setError(inviteError instanceof Error ? inviteError.message : "Unable to send the invite.");
-    } finally {
-      setLoading(false);
-    }
+      // The new golfer belongs at the top of the (newest-first) list.
+      await queryClient.invalidateQueries({ queryKey: apiQueryKey(api.golfers.$get) });
+    },
+  });
+  const error = inviteMutation.error?.message ?? null;
+  const loading = inviteMutation.isPending;
+
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    inviteMutation.mutate({
+      json: {
+        email,
+        name: name.trim() || undefined,
+        nicknames: nicknames.map((nickname) => ({ nickname, nicknameType: "nickname" })),
+      },
+    });
   }
 
   return (
@@ -249,12 +239,11 @@ function InviteGolferDialog({
   );
 }
 
+const GOLFER_OUTINGS_PAGE_SIZE = 20;
+
 export function GolferDetailPage({ golferId }: { golferId: string }) {
-  const { client, profile, isAdmin } = useAuth();
-  const [golfer, setGolfer] = useState<Golfer | null>(null);
-  const [outings, setOutings] = useState<OutingSummary[] | null>(null);
-  const [handicapRecord, setHandicapRecord] = useState<PlayerHandicap | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { profile, isAdmin } = useAuth();
+  const queryClient = useQueryClient();
 
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState("");
@@ -262,59 +251,49 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
   const [preferredTee, setPreferredTee] = useState<Tee | null>(null);
   const [gender, setGender] = useState<"m" | "f" | null>(null);
   const [nicknames, setNicknames] = useState<string[]>([]);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [updatingAdmin, setUpdatingAdmin] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
-  const [inviting, setInviting] = useState(false);
 
   const isSelf = profile?.id === golferId;
   const canEdit = isAdmin || isSelf;
 
-  const loadGolfer = useCallback(async () => {
-    if (!client) return;
-    const response = await client.api.golfers[":id"].$get({ param: { id: golferId } });
-    if (!response.ok) {
-      setError("This golfer could not be found.");
-      return;
-    }
-    const { golfer: loadedGolfer } = await response.json();
-    setGolfer(loadedGolfer);
-  }, [client, golferId]);
+  const golferQuery = useQuery(apiQuery(api.golfers[":id"].$get, { param: { id: golferId } }));
+  const golfer: Golfer | null = golferQuery.data?.golfer ?? null;
+  const error = golferQuery.error?.message ?? null;
 
-  useEffect(() => {
-    void loadGolfer();
-  }, [loadGolfer]);
-
-  // The golfer's outing history, newest first (the API already sorts it).
-  useEffect(() => {
-    if (!client) return;
-    let cancelled = false;
-    void client.api.outings
-      .$get({ query: { playerId: golferId } })
-      .then(async (response) => {
-        if (!cancelled && response.ok) setOutings((await response.json()).outings);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [client, golferId]);
+  // The golfer's outing history, newest first (the API sorts and pages it).
+  const outingsQuery = useInfiniteQuery(
+    apiInfiniteQuery(api.outings.$get, {
+      query: { playerId: golferId, limit: GOLFER_OUTINGS_PAGE_SIZE },
+    }),
+  );
+  const outings = pagedRecords<OutingSummary>(outingsQuery.data);
 
   // The golfer's Handicap Index and its history, recomputed by the API.
-  useEffect(() => {
-    if (!client) return;
-    let cancelled = false;
-    void client.api.golfers[":id"].handicap
-      .$get({ param: { id: golferId } })
-      .then(async (response) => {
-        if (!cancelled && response.ok) setHandicapRecord((await response.json()).handicap);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [client, golferId]);
+  const handicapQuery = useQuery(
+    apiQuery(api.golfers[":id"].handicap.$get, { param: { id: golferId } }),
+  );
+  const handicapRecord: PlayerHandicap | null = handicapQuery.data?.handicap ?? null;
+
+  // Both edits write through the same PATCH; refetch this golfer (and the
+  // list, whose row shows the same fields) from the server afterwards.
+  const updateMutation = useMutation({
+    ...apiMutation(api.golfers[":id"].$patch),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: apiQueryKey(api.golfers.$get) });
+      await queryClient.invalidateQueries({
+        queryKey: apiQueryKey(api.golfers[":id"].$get, { param: { id: golferId } }),
+      });
+    },
+  });
+
+  const inviteMutation = useMutation({
+    ...apiMutation(api.golfers.invite.$post),
+    onSuccess: (_data, variables) => setInviteStatus(`Invite sent to ${variables.json.email}.`),
+  });
+
+  const saving = updateMutation.isPending;
+  const inviting = inviteMutation.isPending;
+  const profileError = updateMutation.error?.message ?? inviteMutation.error?.message ?? null;
 
   // The editor opens seeded from the CURRENT record, so abandoned edits
   // never linger into the next session with the sheet.
@@ -325,43 +304,25 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
     setPreferredTee(golfer.preferredTee);
     setGender(golfer.gender);
     setNicknames(golfer.nicknames.map((entry) => entry.nickname));
-    setProfileError(null);
     setInviteStatus(null);
+    updateMutation.reset();
+    inviteMutation.reset();
     setEditOpen(true);
   }
 
   // Re-sends the invite email to the golfer's SAVED address (the invite
   // endpoint is idempotent on email, and admin-only).
-  async function sendInvite() {
-    if (!client || !golfer?.email) return;
-    setInviting(true);
-    setProfileError(null);
+  function sendInvite() {
+    if (!golfer?.email) return;
     setInviteStatus(null);
-    try {
-      const response = await client.api.golfers.invite.$post({
-        json: { email: golfer.email },
-      });
-      if (!response.ok) {
-        throw new Error(await requestError(response, "Unable to send the invite."));
-      }
-      setInviteStatus(`Invite sent to ${golfer.email}.`);
-    } catch (inviteError) {
-      setProfileError(
-        inviteError instanceof Error ? inviteError.message : "Unable to send the invite.",
-      );
-    } finally {
-      setInviting(false);
-    }
+    inviteMutation.mutate({ json: { email: golfer.email } });
   }
 
-  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+  function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!client || !golfer) return;
-
-    setSaving(true);
-    setProfileError(null);
-    try {
-      const response = await client.api.golfers[":id"].$patch({
+    if (!golfer) return;
+    updateMutation.mutate(
+      {
         param: { id: golfer.id },
         json: {
           name: name.trim() || null,
@@ -370,44 +331,14 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
           gender,
           nicknames: nicknames.map((nickname) => ({ nickname, nicknameType: "nickname" })),
         },
-      });
-      if (!response.ok) {
-        throw new Error(await requestError(response, "Unable to update this golfer."));
-      }
-      const { golfer: updatedGolfer } = await response.json();
-      setGolfer(updatedGolfer);
-      setEditOpen(false);
-    } catch (saveError) {
-      setProfileError(
-        saveError instanceof Error ? saveError.message : "Unable to update this golfer.",
-      );
-    } finally {
-      setSaving(false);
-    }
+      },
+      { onSuccess: () => setEditOpen(false) },
+    );
   }
 
-  async function toggleAdmin(nextAdmin: boolean) {
-    if (!client || !golfer) return;
-
-    setUpdatingAdmin(true);
-    setProfileError(null);
-    try {
-      const response = await client.api.golfers[":id"].$patch({
-        param: { id: golfer.id },
-        json: { admin: nextAdmin },
-      });
-      if (!response.ok) {
-        throw new Error(await requestError(response, "Unable to update this golfer."));
-      }
-      const { golfer: updatedGolfer } = await response.json();
-      setGolfer(updatedGolfer);
-    } catch (toggleError) {
-      setProfileError(
-        toggleError instanceof Error ? toggleError.message : "Unable to update this golfer.",
-      );
-    } finally {
-      setUpdatingAdmin(false);
-    }
+  function toggleAdmin(nextAdmin: boolean) {
+    if (!golfer) return;
+    updateMutation.mutate({ param: { id: golfer.id }, json: { admin: nextAdmin } });
   }
 
   return (
@@ -495,6 +426,13 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
                   outings={outings}
                   highlightPlayerId={golferId}
                   roundsByOuting={roundsByOuting(handicapRecord)}
+                  footer={
+                    <LoadMore
+                      hasMore={outingsQuery.hasNextPage}
+                      loading={outingsQuery.isFetchingNextPage}
+                      onLoadMore={() => void outingsQuery.fetchNextPage()}
+                    />
+                  }
                 />
                 {handicapRecord?.timeseries.some((point) => point.counted) && (
                   <p className="text-xs text-muted-foreground">
@@ -592,8 +530,8 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
               </div>
               <Switch
                 checked={golfer.admin}
-                disabled={updatingAdmin}
-                onCheckedChange={(checked) => void toggleAdmin(checked)}
+                disabled={saving}
+                onCheckedChange={(checked) => toggleAdmin(checked)}
               />
             </div>
           )}
@@ -613,7 +551,7 @@ export function GolferDetailPage({ golferId }: { golferId: string }) {
                 size="sm"
                 className="shrink-0"
                 disabled={inviting || !golfer.email}
-                onClick={() => void sendInvite()}
+                onClick={sendInvite}
               >
                 <Mail data-icon="inline-start" />
                 {inviting ? "Sending…" : "Send Invite"}

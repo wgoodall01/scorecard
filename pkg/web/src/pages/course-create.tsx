@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Camera,
   Check,
@@ -33,8 +34,11 @@ import { CameraDialog, useLikelyHasCamera } from "@/components/camera-dialog";
 import { ImageExpand } from "@/components/image-expand";
 import { ResponsiveSelect } from "@/components/responsive-select";
 import { Stepper } from "@/components/stepper";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { resizeImageForCapture } from "@/lib/image_resize";
+import { apiMutation, apiQuery, apiQueryKey } from "@/lib/query";
+import { courseResearchQuery, isPending, scorecardMetadataQuery } from "@/lib/queries";
 import { TEE_LABELS, TEES } from "@/lib/tees";
 import { cn } from "@/lib/utils";
 
@@ -48,54 +52,35 @@ type Facility = {
   existingCourseId: string | null;
 };
 
-const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+// How long the two background jobs get before the wait is called a failure.
+const JOB_TIMEOUT_MS = 90_000;
+const SEARCH_DEBOUNCE_MS = 250;
 
 export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number | null }) {
-  const { token, client } = useAuth();
+  const { token } = useAuth();
   const hasCamera = useLikelyHasCamera();
+  const queryClient = useQueryClient();
   // Edit mode: load an existing course straight into the editor, skipping the
   // capture/find/analyze steps.
   const editMode = editFacilityId != null;
-  // Guards the poll loops so they stop after unmount. Set true on mount (not
-  // just false on cleanup) so React StrictMode's mount→cleanup→mount cycle
-  // doesn't leave it stuck false and skip polling entirely.
-  const aliveRef = useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
-
   const [step, setStep] = useState<FlowStep>(editFacilityId != null ? "review" : "capture");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [scorecardId, setScorecardId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  // The scorecard metadata extraction runs in the background from upload while
-  // the admin searches; the Analyze step waits on these refs (refs, not state,
-  // so the analyze loop can poll them without re-render churn).
-  const metadataReadyRef = useRef(false);
-  const metadataErrorRef = useRef<string | null>(null);
-
-  // Find step.
+  // Find step. The typeahead is debounced into `query`, which is part of the
+  // search query's key.
+  const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const [facilities, setFacilities] = useState<Facility[] | null>(null);
   const [facility, setFacility] = useState<Facility | null>(null);
 
-  // Analyze step (all the waiting: metadata extraction + USGA matching).
-  const [analyzeStatus, setAnalyzeStatus] = useState("");
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-  const analyzeStartedRef = useRef(false);
-
-  // Review step.
-  const [proposal, setProposal] = useState<CourseProposalSchema | null>(null);
-  const [existing, setExisting] = useState<CourseProposalSchema | null>(null);
+  // Review step. `edited` holds the admin's in-progress edits; until they touch
+  // anything, the proposal from the server (or the existing course, in edit
+  // mode) is what's shown.
+  const [edited, setEdited] = useState<CourseProposalSchema | null>(null);
   const [showExisting, setShowExisting] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [savedCourseId, setSavedCourseId] = useState<string | null>(null);
+
+  // Both background jobs get one deadline per attempt.
+  const deadlineRef = useRef(0);
 
   useEffect(
     () => () => {
@@ -104,253 +89,180 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
     [previewUrl],
   );
 
-  // Debounced facility typeahead against the USGA mirror.
   useEffect(() => {
-    if (step !== "find" || !client) return;
-    const trimmed = query.trim();
-    if (trimmed.length < 2) {
-      setFacilities(null);
-      return;
-    }
-    let cancelled = false;
-    setFacilities(null);
-    const timer = window.setTimeout(async () => {
-      try {
-        const response = await client.api.courses.facilities.$get({ query: { q: trimmed } });
-        if (cancelled) return;
-        setFacilities(response.ok ? (await response.json()).facilities : []);
-      } catch {
-        if (!cancelled) setFacilities([]);
-      }
-    }, 250);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [query, step, client]);
+    const timer = window.setTimeout(() => setQuery(search.trim()), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
-  // Edit mode: load the existing course for the facility into the editor.
-  useEffect(() => {
-    if (editFacilityId == null || !client) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await client.api.courses.facility[":facilityId"].$get({
-          param: { facilityId: String(editFacilityId) },
-        });
-        if (cancelled) return;
-        const body = response.ok ? await response.json() : null;
-        if (!body?.course) throw new Error("not found");
-        const loaded = toProposal(body.course);
-        setProposal(loaded);
-        setExisting(loaded);
-      } catch {
-        if (!cancelled) setReviewError("Couldn't load this course for editing.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [editFacilityId, client]);
-
-  // Entering the Analyze step runs the whole waiting pipeline once (guarded so
-  // StrictMode / re-renders don't double-fire it).
-  useEffect(() => {
-    if (step !== "analyze") {
-      analyzeStartedRef.current = false;
-      return;
-    }
-    if (analyzeStartedRef.current) return;
-    analyzeStartedRef.current = true;
-    void runAnalyze();
-    // runAnalyze reads facility/scorecardId from state closures.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
-
-  function reset() {
-    setStep("capture");
-    setPreviewUrl(null);
-    setScorecardId(null);
-    setError(null);
-    metadataReadyRef.current = false;
-    metadataErrorRef.current = null;
-    setQuery("");
-    setFacilities(null);
-    setFacility(null);
-    setAnalyzeStatus("");
-    setAnalyzeError(null);
-    setProposal(null);
-    setExisting(null);
-    setShowExisting(false);
-    setReviewError(null);
-    setSavedCourseId(null);
-  }
-
-  function startCapture(file: File) {
-    setPreviewUrl(URL.createObjectURL(file));
-    void upload(file);
-  }
-
-  async function upload(file: File) {
-    if (!token) return;
-    setError(null);
-    try {
+  // 1. Upload the photo (multipart, so it's a hand-written fetch) and kick off
+  // the layout extraction; the admin searches for the facility while it runs.
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
       const form = new FormData();
       form.set("image", await resizeImageForCapture(file));
       form.set("extract", JSON.stringify({ metadata: true }));
       const response = await fetch("/api/scorecard", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token === null ? {} : { Authorization: `Bearer ${token}` },
         body: form,
       });
-      const body = (await response.json()) as { id?: string; error?: string };
-      if (!response.ok || !body.id)
-        throw new Error(body.error ?? "Unable to upload the scorecard.");
-      setScorecardId(body.id);
-      setStep("find");
-      void pollMetadata(body.id);
-    } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Unable to upload.");
-    }
-  }
+      const body = (await response.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!response.ok || !body.id) throw new Error(body.error ?? "Unable to upload.");
+      return body.id;
+    },
+    onSuccess: () => setStep("find"),
+  });
+  const scorecardId = uploadMutation.data ?? null;
+  const error = uploadMutation.error?.message ?? null;
 
-  async function pollMetadata(id: string) {
-    for (let attempt = 0; attempt < 80 && aliveRef.current; attempt++) {
-      try {
-        const response = await fetch(`/api/scorecard/${encodeURIComponent(id)}/metadata`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.status === 202) {
-          await sleep(1000);
-          continue;
-        }
-        if (!response.ok) {
-          const body = (await response.json()) as { error?: string };
-          metadataErrorRef.current = body.error ?? "Couldn't read the scorecard.";
-          return;
-        }
-        metadataReadyRef.current = true;
-        return;
-      } catch {
-        await sleep(1000);
-      }
-    }
-    if (aliveRef.current) metadataErrorRef.current = "Reading the scorecard took too long.";
-  }
+  // The facility typeahead over the USGA mirror.
+  const facilitiesQuery = useQuery({
+    ...apiQuery(api.courses.facilities.$get, { query: { q: query } }),
+    enabled: step === "find" && query.length >= 2,
+  });
+  const facilities: Facility[] | null =
+    query.length < 2 ? null : (facilitiesQuery.data?.facilities ?? null);
 
-  // The Analyze step: wait out the scorecard layout extraction (kicked off at
-  // upload), then run + poll the USGA matching, landing on Review with a ready
-  // proposal. All the slowness lives here so Find and Review stay instant.
-  async function runAnalyze() {
-    if (!client || !facility || !scorecardId) return;
-    setAnalyzeError(null);
-    setProposal(null);
-    setExisting(null);
-    setShowExisting(false);
-    setReviewError(null);
+  // 2. The layout extraction, polled from upload onward — the Analyze step is
+  // mostly waiting for this to land.
+  const metadataQuery = useQuery(scorecardMetadataQuery(scorecardId, deadlineRef.current));
+  const metadataReady = metadataQuery.data !== undefined && !isPending(metadataQuery.data);
+  const metadataError =
+    metadataQuery.error?.message ??
+    (isPending(metadataQuery.data) && Date.now() >= deadlineRef.current
+      ? "Reading the scorecard took too long."
+      : null);
 
-    // 1. Scorecard layout extraction.
-    setAnalyzeStatus("Reading the scorecard layout…");
-    while (aliveRef.current && !metadataReadyRef.current && !metadataErrorRef.current) {
-      await sleep(400);
-    }
-    if (!aliveRef.current) return;
-    if (metadataErrorRef.current) {
-      setAnalyzeError(metadataErrorRef.current);
-      return;
-    }
-
-    // 2. USGA matching (research). Load any existing course alongside for the
-    // before/after toggle.
-    setAnalyzeStatus("Matching against USGA ratings…");
-    void loadExisting(facility.facilityId);
-    let jobId: string;
-    try {
-      const response = await client.api.courses.research.$put({
-        json: { scorecardId, facilityId: facility.facilityId },
+  // 3. Once the layout is read, start the USGA reconciliation. This is a PUT
+  // behind a query so it fires exactly once its inputs are ready (and once
+  // only: cached forever under its key) with no effect to sequence it.
+  const researchStartQuery = useQuery({
+    queryKey: ["courses", "research", "start", scorecardId, facility?.facilityId],
+    queryFn: async () => {
+      const response = await api.courses.research.$put.call({
+        json: { scorecardId: scorecardId!, facilityId: facility!.facilityId },
       });
       if (!response.ok) throw new Error("Unable to start course matching.");
-      jobId = (await response.json()).jobId;
-    } catch (researchError) {
-      setAnalyzeError(
-        researchError instanceof Error ? researchError.message : "Unable to match the course.",
-      );
+      return (await response.json()).jobId;
+    },
+    enabled: step === "analyze" && metadataReady && scorecardId !== null && facility !== null,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+  });
+
+  // 4. …and wait for it, which lands us in Review with a proposal.
+  const researchQuery = useQuery(
+    courseResearchQuery(researchStartQuery.data ?? null, deadlineRef.current),
+  );
+  const researched =
+    researchQuery.data !== undefined && !isPending(researchQuery.data)
+      ? (researchQuery.data as CourseProposalSchema)
+      : null;
+
+  // The existing app course for this facility: the before/after toggle in
+  // create mode, and the whole starting point in edit mode.
+  const facilityId = editFacilityId ?? facility?.facilityId ?? null;
+  const existingQuery = useQuery({
+    ...apiQuery(api.courses.facility[":facilityId"].$get, {
+      param: { facilityId: String(facilityId ?? "") },
+    }),
+    enabled: facilityId !== null,
+  });
+  const existing = existingQuery.data?.course ? toProposal(existingQuery.data.course) : null;
+
+  const analyzeStatus = metadataReady
+    ? "Matching against USGA ratings…"
+    : "Reading the scorecard layout…";
+  const analyzeError =
+    metadataError ??
+    researchStartQuery.error?.message ??
+    researchQuery.error?.message ??
+    (isPending(researchQuery.data) && Date.now() >= deadlineRef.current
+      ? "Analyzing the course took too long."
+      : null);
+
+  const saveMutation = useMutation({
+    ...apiMutation(api.courses.$post),
+    onSuccess: async () => {
+      // The saved course belongs in the registry (and in every picker that
+      // walks it) right away.
+      await queryClient.invalidateQueries({ queryKey: apiQueryKey(api.courses.$get) });
+      setStep("done");
+    },
+  });
+  const savedCourseId = saveMutation.data?.courseId ?? null;
+  const saving = saveMutation.isPending;
+  const reviewError =
+    saveMutation.error?.message ??
+    (editMode && existingQuery.error !== null ? "Couldn't load this course for editing." : null);
+
+  // What the editor shows: the admin's edits if they've made any, else the
+  // researched proposal, else (edit mode) the existing course.
+  const proposal = edited ?? researched ?? (editMode ? existing : null);
+  const setProposal = setEdited;
+
+  // The researched proposal is what lands us on Review.
+  const effectiveStep: FlowStep = savedCourseId
+    ? "done"
+    : researched !== null && step === "analyze"
+      ? "review"
+      : step;
+
+  function reset() {
+    setStep("capture");
+    setPreviewUrl(null);
+    setSearch("");
+    setQuery("");
+    setFacility(null);
+    setEdited(null);
+    setShowExisting(false);
+    uploadMutation.reset();
+    saveMutation.reset();
+  }
+
+  function startCapture(file: File) {
+    setPreviewUrl(URL.createObjectURL(file));
+    deadlineRef.current = Date.now() + JOB_TIMEOUT_MS;
+    uploadMutation.mutate(file);
+  }
+
+  // Retry the wait: push the deadline out and refetch whichever job stalled.
+  function retryAnalyze() {
+    deadlineRef.current = Date.now() + JOB_TIMEOUT_MS;
+    if (!metadataReady) {
+      void metadataQuery.refetch();
       return;
     }
-
-    for (let attempt = 0; attempt < 80 && aliveRef.current; attempt++) {
-      try {
-        const response = await fetch(`/api/courses/research/${encodeURIComponent(jobId)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.status === 202) {
-          await sleep(1000);
-          continue;
-        }
-        if (!response.ok) {
-          const body = (await response.json()) as { error?: string };
-          setAnalyzeError(body.error ?? "Couldn't reconcile the course.");
-          return;
-        }
-        setProposal((await response.json()) as CourseProposalSchema);
-        setStep("review");
-        return;
-      } catch {
-        await sleep(1000);
-      }
+    if (researchStartQuery.data === undefined) {
+      void researchStartQuery.refetch();
+      return;
     }
-    if (aliveRef.current) setAnalyzeError("Analyzing the course took too long.");
+    void researchQuery.refetch();
   }
 
-  async function loadExisting(facilityId: number) {
-    if (!client) return;
-    try {
-      const response = await client.api.courses.facility[":facilityId"].$get({
-        param: { facilityId: String(facilityId) },
-      });
-      if (!response.ok) return;
-      const body = await response.json();
-      if (body.course) setExisting(toProposal(body.course));
-    } catch {
-      // best-effort — the toggle just won't show
-    }
+  function save() {
+    if (!proposal) return;
+    // Edit mode loaded the full course, so any existing nine absent from the
+    // proposal was explicitly removed — archive it. (The create flow only has
+    // the captured nines, so it never archives.)
+    const archiveSetNames =
+      editMode && existing
+        ? existing.sets
+            .filter(
+              (existingSet) =>
+                !proposal.sets.some(
+                  (set) => set.name.trim().toLowerCase() === existingSet.name.trim().toLowerCase(),
+                ),
+            )
+            .map((existingSet) => existingSet.name)
+        : [];
+    saveMutation.mutate({
+      json: { ...proposal, scorecardId: editMode ? null : scorecardId, archiveSetNames },
+    });
   }
 
-  async function save() {
-    if (!client || !proposal) return;
-    setSaving(true);
-    setReviewError(null);
-    try {
-      // Edit mode loaded the full course, so any existing nine absent from the
-      // proposal was explicitly removed — archive it. (The create flow only has
-      // the captured nines, so it never archives.)
-      const archiveSetNames =
-        editMode && existing
-          ? existing.sets
-              .filter(
-                (existingSet) =>
-                  !proposal.sets.some(
-                    (set) =>
-                      set.name.trim().toLowerCase() === existingSet.name.trim().toLowerCase(),
-                  ),
-              )
-              .map((existingSet) => existingSet.name)
-          : [];
-      const response = await client.api.courses.$post({
-        json: { ...proposal, scorecardId: editMode ? null : scorecardId, archiveSetNames },
-      });
-      const body = (await response.json()) as { courseId?: string; error?: string };
-      if (!response.ok || !body.courseId) throw new Error(body.error ?? "Unable to save.");
-      setSavedCourseId(body.courseId);
-      setStep("done");
-    } catch (saveError) {
-      setReviewError(saveError instanceof Error ? saveError.message : "Unable to save the course.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const busy = step === "analyze" && !analyzeError;
+  const busy = effectiveStep === "analyze" && !analyzeError;
 
   return (
     <AppShell>
@@ -361,7 +273,7 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
             <Stepper
               aria-label="Add course progress"
               className="max-w-md"
-              current={step}
+              current={effectiveStep}
               busy={busy}
               steps={[
                 { key: "capture", label: "Capture", icon: Camera },
@@ -399,7 +311,7 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
           </Empty>
         )}
 
-        {step === "capture" && (
+        {effectiveStep === "capture" && (
           <CaptureStep
             hasCamera={hasCamera}
             error={error}
@@ -409,10 +321,10 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
           />
         )}
 
-        {step === "find" && (
+        {effectiveStep === "find" && (
           <FindStep
-            query={query}
-            onQuery={setQuery}
+            query={search}
+            onQuery={setSearch}
             facilities={facilities}
             selected={facility}
             onSelect={setFacility}
@@ -421,17 +333,17 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
           />
         )}
 
-        {step === "analyze" && (
+        {effectiveStep === "analyze" && (
           <AnalyzeStep
             status={analyzeStatus}
             error={analyzeError}
             previewUrl={previewUrl}
-            onRetry={() => void runAnalyze()}
+            onRetry={retryAnalyze}
             onStartOver={reset}
           />
         )}
 
-        {step === "review" && proposal && (
+        {effectiveStep === "review" && proposal && (
           <ReviewStep
             proposal={proposal}
             existing={existing}
@@ -448,7 +360,7 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
           />
         )}
 
-        {step === "done" && (
+        {effectiveStep === "done" && (
           <Empty className="min-h-64 border bg-muted/30">
             <EmptyHeader>
               <EmptyMedia variant="icon" className="rounded-full bg-primary/10 text-primary">

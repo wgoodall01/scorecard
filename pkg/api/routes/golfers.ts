@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, like, or } from "drizzle-orm";
 import { DrizzleQueryError } from "drizzle-orm/errors";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -8,7 +8,8 @@ import { invite as inviteTable, nickname, TEES, user } from "../schema";
 import { enrollEmail } from "../src/email/templates/enroll_link";
 import { randomToken } from "../src/auth/webauthn";
 import { computeHandicap } from "../src/handicap";
-import { Email, getCurrentUser, requireAuth, zodBody } from "./shared";
+import { afterIdWhere, loadPageById, PageRef } from "../src/pagination";
+import { Email, getCurrentUser, requireAuth, zodBody, zodQuery } from "./shared";
 
 export const Nickname = z.object({
   nickname: z.string().trim().min(1),
@@ -73,15 +74,47 @@ async function replaceNicknames(
   }
 }
 
+// Free-text golfer search, matched in SQL over name, email, and nicknames
+// (SQLite LIKE is case-insensitive for ASCII). It has to run in the database,
+// not over the loaded page — a search that only saw the first page would miss
+// everyone behind it.
+function golferSearch(db: ReturnType<typeof getDb>, query: string) {
+  const pattern = `%${query}%`;
+  return or(
+    like(user.name, pattern),
+    like(user.email, pattern),
+    inArray(
+      user.id,
+      db.select({ id: nickname.userId }).from(nickname).where(like(nickname.nickname, pattern)),
+    ),
+  );
+}
+
 export const golferRoutes = new Hono<Env>()
-  .get("/golfers", requireAuth, async (c) => {
-    const db = getDb(c.env.DB);
-    const golfers = await db.query.user.findMany({
-      with: { nicknames: true },
-      orderBy: [asc(user.name), asc(user.email)],
-    });
-    return c.json({ golfers });
-  })
+  // Newest golfer first (uuidv7 ids), one page at a time.
+  .get(
+    "/golfers",
+    requireAuth,
+    zodQuery(
+      z.object({ q: z.string().trim().optional(), ...PageRef.shape }),
+      "Invalid golfer filters",
+    ),
+    async (c) => {
+      const db = getDb(c.env.DB);
+      const { q, ...ref } = c.req.valid("query");
+      const search = q ? golferSearch(db, q) : undefined;
+
+      const page = await loadPageById(ref, ({ afterId, limit }) =>
+        db.query.user.findMany({
+          where: and(search, afterIdWhere(user.id, afterId)),
+          orderBy: [desc(user.id)],
+          limit,
+          with: { nicknames: true },
+        }),
+      );
+      return c.json(page);
+    },
+  )
   .get("/golfers/:id", requireAuth, async (c) => {
     const db = getDb(c.env.DB);
     const golfer = await getGolfer(db, c.req.param("id"));

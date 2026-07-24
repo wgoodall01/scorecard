@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { KeyRound, LogIn, MailCheck, Share } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CautionStripe } from "@/components/caution-stripe";
@@ -28,8 +29,6 @@ export function LoginPage({
   const [email, setEmail] = useState(initialEmail ?? "");
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoverySent, setRecoverySent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [devEmail, setDevEmail] = useState(devLoginOverride ?? initialEmail ?? "");
   const [isStandalone] = useState(
     () =>
@@ -37,74 +36,72 @@ export function LoginPage({
       (navigator as Navigator & { standalone?: boolean }).standalone === true,
   );
 
+  // returnTo is a runtime path (validated by the login route's search schema);
+  // the auth context updates reactively, so no reload is needed.
+  const land = () => navigate({ href: returnTo, replace: true });
+
+  const signInMutation = useMutation({
+    mutationFn: signInWithPasskey,
+    onSuccess: land,
+    // Any passkey failure — no passkey on this device, a dismissed prompt, or a
+    // network "Load failed" — should point the user at the email fallback
+    // rather than dead-end.
+    onError: () => setShowRecovery(true),
+  });
+
   // DEV ONLY: sign in as an arbitrary email with no passkey. Shared by the
   // ?devLoginOverride= auto-login and the caution-striped form below.
-  async function devSignIn(email: string) {
-    if (!IS_DEV || !email.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      await devLogin(email.trim());
-      await navigate({ href: returnTo, replace: true });
-    } catch (devError) {
-      setError(devError instanceof ApiError ? devError.message : "Dev sign-in failed.");
-    } finally {
-      setLoading(false);
-    }
+  const devMutation = useMutation({
+    mutationFn: (email: string) => devLogin(email.trim()),
+    onSuccess: land,
+  });
+
+  const recoveryMutation = useMutation({
+    mutationFn: (recoveryEmail: string) => {
+      // The enroll link's landing reads this to return the user where they meant
+      // to go after setting up a passkey.
+      authService.setReturnTo(returnTo);
+      return requestRecovery(recoveryEmail);
+    },
+    onSuccess: () => setRecoverySent(true),
+  });
+
+  const loading = signInMutation.isPending || devMutation.isPending || recoveryMutation.isPending;
+  // ApiError carries a friendly message; anything else gets a generic one.
+  const error = signInMutation.error
+    ? signInMutation.error instanceof ApiError
+      ? signInMutation.error.message
+      : "Couldn’t sign in with a passkey on this device."
+    : devMutation.error
+      ? devMutation.error instanceof ApiError
+        ? devMutation.error.message
+        : "Dev sign-in failed."
+      : (recoveryMutation.error?.message ?? null);
+
+  function devSignIn(devSignInEmail: string) {
+    if (!IS_DEV || !devSignInEmail.trim()) return;
+    devMutation.mutate(devSignInEmail);
+  }
+
+  function signIn() {
+    signInMutation.mutate();
+  }
+
+  function sendRecovery() {
+    if (!email.trim()) return;
+    recoveryMutation.mutate(email);
   }
 
   // Fire the auto-login once when arriving at /login?devLoginOverride=<email>.
+  // (A trigger, not a fetch — the request itself is the mutation above.)
   const autoLoginDone = useRef(false);
   useEffect(() => {
     if (!IS_DEV || !devLoginOverride || autoLoginDone.current) return;
     autoLoginDone.current = true;
-    void devSignIn(devLoginOverride);
-    // devSignIn closes over stable values; run exactly once for this param.
+    devSignIn(devLoginOverride);
+    // Runs exactly once for this param.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [devLoginOverride]);
-
-  async function signIn() {
-    setLoading(true);
-    setError(null);
-    try {
-      await signInWithPasskey();
-      // returnTo is a runtime path (validated by the login route's search
-      // schema); the auth context updates reactively, no reload needed.
-      await navigate({ href: returnTo, replace: true });
-    } catch (signInError) {
-      // Any passkey failure — no passkey on this device, a dismissed prompt, or
-      // a network "Load failed" — should point the user at the email fallback
-      // rather than dead-end. ApiError carries a friendly message; anything
-      // else gets a generic one.
-      setError(
-        signInError instanceof ApiError
-          ? signInError.message
-          : "Couldn’t sign in with a passkey on this device.",
-      );
-      setShowRecovery(true);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function sendRecovery() {
-    if (!email.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      // The enroll link's landing reads this to return the user where they meant
-      // to go after setting up a passkey.
-      authService.setReturnTo(returnTo);
-      await requestRecovery(email);
-      setRecoverySent(true);
-    } catch (recoveryError) {
-      setError(
-        recoveryError instanceof Error ? recoveryError.message : "Unable to send a sign-in link.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const installHint = !isStandalone && (
     <aside className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm md:hidden">
@@ -138,7 +135,7 @@ export function LoginPage({
           className="self-center"
           onClick={() => {
             setRecoverySent(false);
-            setError(null);
+            recoveryMutation.reset();
           }}
         >
           Use a different email
@@ -187,13 +184,13 @@ export function LoginPage({
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") void sendRecovery();
+                if (event.key === "Enter") sendRecovery();
               }}
               required
             />
             <Button
               className="w-full"
-              onClick={() => void sendRecovery()}
+              onClick={() => sendRecovery()}
               disabled={loading || !email.trim()}
             >
               {loading ? "Sending…" : "Email me a sign-in link"}
@@ -216,7 +213,7 @@ export function LoginPage({
             className="flex flex-col gap-3"
             onSubmit={(event) => {
               event.preventDefault();
-              void devSignIn(devEmail);
+              devSignIn(devEmail);
             }}
           >
             <p className="text-sm text-muted-foreground">

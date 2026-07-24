@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   BarChart3,
@@ -15,8 +16,11 @@ import type { Tee } from "api";
 import { AppShell, PageHeading, PageTitle } from "@/App";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { LoadMore } from "@/components/load-more";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { apiInfiniteQuery, apiMutation, apiQuery, apiQueryKey, pagedRecords } from "@/lib/query";
 import { TEE_LABELS, TEES } from "@/lib/tees";
 import { nineLabel } from "@/pages/outings";
 
@@ -96,41 +100,31 @@ function preferredTeeFor(
   );
 }
 
-function useCourses() {
-  const { client } = useAuth();
-  const [courses, setCourses] = useState<CourseWithNines[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const COURSES_PAGE_SIZE = 25;
 
-  useEffect(() => {
-    if (!client) return;
-    let cancelled = false;
-    void client.api.courses.$get().then(
-      async (response) => {
-        if (cancelled) return;
-        if (!response.ok) {
-          setError("Unable to load courses.");
-          return;
-        }
-        // Sort once here so the list page's badges and the detail page's nine
-        // cards agree on the order.
-        const { courses: loaded } = await response.json();
-        setCourses(loaded.map((course) => ({ ...course, sets: sortNines(course.sets) })));
-      },
-      () => {
-        if (!cancelled) setError("Unable to load courses.");
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
-
-  return { courses, error };
+// One course, by id — the detail page can't hunt through the paginated list.
+// Nines are sorted the same way the list page sorts them.
+function useCourse(courseId: string) {
+  const courseQuery = useQuery(apiQuery(api.courses[":id"].$get, { param: { id: courseId } }));
+  const loaded = courseQuery.data?.course;
+  return {
+    course: loaded ? ({ ...loaded, sets: sortNines(loaded.sets) } as CourseWithNines) : null,
+    error: courseQuery.error?.message ?? null,
+  };
 }
 
 export function CoursesPage() {
-  const { courses, error } = useCourses();
   const { isAdmin } = useAuth();
+
+  const coursesQuery = useInfiniteQuery(
+    apiInfiniteQuery(api.courses.$get, { query: { limit: COURSES_PAGE_SIZE } }),
+  );
+  // Sort the nines once here so the list's badges and the detail page's nine
+  // cards agree on the order.
+  const courses = pagedRecords(coursesQuery.data)?.map(
+    (course) => ({ ...course, sets: sortNines(course.sets) }) as CourseWithNines,
+  );
+  const error = coursesQuery.error !== null ? "Unable to load courses." : null;
 
   return (
     <AppShell>
@@ -182,58 +176,56 @@ export function CoursesPage() {
             ))}
           </ul>
         )}
+        <LoadMore
+          hasMore={coursesQuery.hasNextPage}
+          loading={coursesQuery.isFetchingNextPage}
+          onLoadMore={() => void coursesQuery.fetchNextPage()}
+        />
       </section>
     </AppShell>
   );
 }
 
 export function CourseDetailPage({ courseId }: { courseId: string }) {
-  const { courses, error } = useCourses();
-  const { client, isAdmin, profile } = useAuth();
+  const { course, error } = useCourse(courseId);
+  const { isAdmin, profile } = useAuth();
   const navigate = useNavigate();
-  const [archiving, setArchiving] = useState(false);
+  const queryClient = useQueryClient();
+
   // The signed-in golfer's tee preference, so each nine can headline the
   // rating/slope of the tee they'd actually play (the /me profile doesn't
   // carry these, so fetch the full golfer row).
-  const [preferredType, setPreferredType] = useState<Tee | null>(null);
-  const [gender, setGender] = useState<"m" | "f" | null>(null);
-  const course = courses?.find((entry) => entry.id === courseId) ?? null;
+  const selfQuery = useQuery({
+    ...apiQuery(api.golfers[":id"].$get, { param: { id: profile?.id ?? "" } }),
+    enabled: profile !== null,
+  });
+  const preferredType: Tee | null = selfQuery.data?.golfer.preferredTee ?? null;
+  const gender = selfQuery.data?.golfer.gender ?? null;
 
-  useEffect(() => {
-    if (!client || !profile) return;
-    let cancelled = false;
-    void client.api.golfers[":id"]
-      .$get({ param: { id: profile.id } })
-      .then(async (response) => {
-        if (cancelled || !response.ok) return;
-        const { golfer } = await response.json();
-        setPreferredType(golfer.preferredTee);
-        setGender(golfer.gender);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [client, profile]);
   // Editing goes through the facility-merge path (preserves ids), so it's only
   // offered for courses linked to a USGA facility.
   const canEdit = isAdmin && course?.ncrdbFacilityId != null;
 
-  async function archiveCourse() {
-    if (!client || !course) return;
+  const archiveMutation = useMutation({
+    ...apiMutation(api.courses[":id"].archive.$post),
+    onSuccess: async () => {
+      // The archived course drops out of the registry — and out of the pickers
+      // that walk every page of it.
+      await queryClient.invalidateQueries({ queryKey: apiQueryKey(api.courses.$get) });
+      await navigate({ to: "/courses" });
+    },
+  });
+  const archiving = archiveMutation.isPending;
+
+  function archiveCourse() {
+    if (!course) return;
     if (
       !window.confirm(
         `Archive “${course.name}”? It'll be hidden from new scores; past outings stay intact.`,
       )
     )
       return;
-    setArchiving(true);
-    const response = await client.api.courses[":id"].archive.$post({ param: { id: course.id } });
-    if (response.ok) {
-      await navigate({ to: "/courses" });
-    } else {
-      setArchiving(false);
-    }
+    archiveMutation.mutate({ param: { id: course.id } });
   }
 
   return (
@@ -310,11 +302,8 @@ export function CourseDetailPage({ courseId }: { courseId: string }) {
           </Popover>
         )}
       </div>
-      {!courses && !error && <p className="text-sm text-muted-foreground">Loading course…</p>}
+      {!course && !error && <p className="text-sm text-muted-foreground">Loading course…</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {courses && !course && (
-        <p className="text-sm text-destructive">This course could not be found.</p>
-      )}
       {course && (
         <div className="flex flex-col gap-5">
           {course.sets.length === 0 && (
