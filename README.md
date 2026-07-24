@@ -1,76 +1,276 @@
 # Scorecard
 
-This is an app that accepts image uploads of golf scorecards, extracts the scores and who's playing, sticks the data in a database, and then calculates fun metrics/prizes/awards based on the latest scores.
+Scorecard turns a **photo of a paper golf scorecard** into structured, browsable
+league data. You snap a picture of the card at the end of a round; a vision model
+reads the handwritten scores and player names; the app matches those against known
+golfers and courses, lets you review and correct the extraction on your phone, and
+records the round. From there it computes leaderboards, a WHS-style handicap
+estimate, per-hole scoring distributions, and a board of tongue-in-cheek "honors"
+for the group.
 
-## 1. Ingest agent
+It's a real app my golf group uses — but it was really built as a **learning
+project over a week of PTO** to get hands-on with a stack I don't normally touch:
+the whole **Cloudflare developer platform** (Workers, D1, R2, Queues, Images, AI
+Gateway, Email), **AI-SDK-driven vision + tool-using agents**, **WebAuthn
+passkeys**, and a modern React front end on **TanStack Router** and **shadcn/ui**.
+The goal was to build something end-to-end and non-trivial on tech that was new to
+me, so the interesting parts of this repo are as much *how* it's put together as
+*what* it does.
 
-We'll start by designing an ingest agent that can handle an image upload. We'll have an API endpoint that accepts a POST request (10mb max) with an image file. We'll generate a scorecard UUIDv7, then upload to `/cards/$id/image` in the bucket.
+<p align="center">
+  <img src="docs/screenshots/outing-detail.png" width="720" alt="Outing detail: leaderboard and per-nine score tables in standard golf notation" />
+</p>
 
-Once uploaded, we'll push an event to a CF job queue with the scorecard ID. The job-queue entrypoint on the same worker will process the image and extract the scorecard data.
+## Features
 
-We'll use the CF AI gateway and the vision capabilities of a capable OSS model (like Kimi K2 or similar) to extract the following:
+The app is a mobile-first SPA with six tabs (a sidebar on desktop, a bottom tab
+bar on phones). Here's the tour, roughly in the order you'd use it.
 
-```typescript
-interface Scorecard {
-  // Use a version number.
-  version: 1;
+### Capture → Review → Submit
 
-  // Name of the course, e.g. "Buck Hill Falls Golf Course"
-  courseName: string | null;
+The core loop. On **Capture** you take a photo (or upload one); the image goes to
+R2 and an extraction job runs in the background while you move on to review.
 
-  // Sometimes the date will be hand-written on the scorecard.
-  date?: string;
+<p align="center">
+  <img src="docs/screenshots/capture.png" width="620" alt="Capture page with the Capture → Analyze → Review → Submit stepper" />
+  &nbsp;
+  <img src="docs/screenshots/mobile-capture.png" width="230" alt="Capture page on mobile" />
+</p>
 
-  // HoleSet is a set of holes.
-  // This could either be a full 18-hole round, or a 9-hole round, or two 9-hole courses played consecutively.
-  // Omit any HoleSets for which no holes were played.
-  sets: Array<HoleSet>;
-}
+**Review** is a two-step, phone-friendly editor over the model's extraction.
+First you confirm the *date* (defaulting to the handwritten date, with a
+future-date guard), pick the *course*, and match each written name to a known
+golfer — the UI shows a cropped thumbnail of the actual handwriting plus the
+model's alternate readings. Then, per nine, you confirm which course nine it is,
+pick each player's *tee*, and fix any misread scores in cells rendered in
+**standard golf notation** (circles for birdies, squares for bogeys, judged
+against each player's par). Before you submit, every handwritten total is
+reconciled against the summed scores — matches auto-confirm, mismatches force an
+explicit ruling. If another card from the same day already exists, it offers to
+**merge** into that outing instead of creating a duplicate.
 
-interface HoleSet {
-  // The name of the hole set, if available.
-  // Think "Front", "Back", "Course A", "Red", etc.
-  setName: string | null;
+### Outings
 
-  // The holes in this set. This could be 9 or 18 holes.
-  holes: Array<Hole>;
+A reverse-chronological list of every recorded round (filterable by course, nine,
+and golfer). The **detail page** (shown at the top of this README) is a
+leaderboard sorted by strokes with a trophy on the winning complete round, per-nine
+score tables in golf notation, and thumbnails of the scorecards the scores were
+read from. Same-day/same-course outings can be merged after the fact.
 
-  // The players and their scores for this set of holes.
-  scores: Array<PlayerScores>;
-}
+### Honors
 
-// Use the technical name of each tee. By convention, colors map:
-// - TIPS is the farthest tee, usually blue or black.
-// - BACK is the next farthest tee, usually blue or black.
-// - STANDARD is the standard tee, usually white.
-// - SENIOR is the senior tee, usually gold or yellow.
-// - FORWARD is the forward tee, usually red.
-// - JUNIOR is the junior tee, usually green. Less common.
-type Tee = "TIPS" | "BACK" | "STANDARD" | "SENIOR" | "FORWARD" | "JUNIOR";
+A board of named achievements over a selectable date range (defaulting to the
+current calendar year, via a date-range picker in the header), in three sections:
+*laurels* like *Medalist*, *Hot Nine*, and *The Metronome*; *streaks* like *The
+Heater* and *Groundhog Day* (runs of consecutive holes that carry across outings,
+computed gaps-and-islands style); and "*Dishonors*" like *The Crater* and *Snowman
+Collector*. Each card names the current holder, a headline stat, and a one-line
+story linking back to the outing that earned it. The whole board is computed in a
+**single SQLite query** (CTEs + window functions) on every request.
 
-interface Hole {
-  // The par for this hole. Null if not specified on the scorecard.
-  par: number | { men: number; women: number };
+<p align="center">
+  <img src="docs/screenshots/honors.png" width="720" alt="Honors board with awards and dishonors" />
+</p>
 
-  // The yardage for this hole from each tee.
-  yardage: Record<Tee, number>;
-}
+### Golfers & Handicap
 
-interface PlayerScores {
-  // Player name, nickname, or initials.
-  name: string;
+A searchable roster of players. Each golfer's page shows a **"Casual Handicap"** — a
+WHS-style (2024 Rules of Handicapping) index computed purely from posted rounds,
+charted over time, with the per-round history below (starred where the round counts
+toward the current index). There's no manually-entered handicap anywhere; it's
+always derived from the scores on file.
 
-  // The tee this player played from. Null if not specified on the scorecard.
-  tee?: Tee;
+<p align="center">
+  <img src="docs/screenshots/golfer-handicap.png" width="720" alt="Golfer profile with a Casual Handicap chart" />
+</p>
 
-  // The player's scores recorded for each hole
-  // MUST equal the length of `HoleSet.holes`. If a player didn't play a hole, fill with `null`.
-  scores: Array<number | null>;
-}
+### Courses & Hole stats
+
+Courses are a read-only registry (course data is imported into the database, not
+authored in the app). A course page lists each nine with its USGA rating/slope/par
+and per-hole yardages. Drill into a hole for a **score-distribution chart** — a
+dot-histogram of your scores versus everyone else's, each with a fitted normal
+curve — plus scoring averages, best/worst, and consistency stats.
+
+<p align="center">
+  <img src="docs/screenshots/course-detail.png" width="360" alt="Course page: each nine with rating, slope, par, and per-hole yardages" />
+  &nbsp;
+  <img src="docs/screenshots/hole-stats.png" width="360" alt="Per-hole score distribution chart and stats" />
+</p>
+
+### Auth & Me
+
+Sign-in is **100% passkeys** — no passwords, no magic links. New players are
+invited by email; the **Me** page manages your passkeys (add another device, or
+email yourself an enroll link) and lists your recent scorecards. A caution-striped,
+dev-only email login (stripped from production bundles) makes local and
+phone-tunnel testing painless.
+
+<p align="center">
+  <img src="docs/screenshots/login.png" width="620" alt="Passkey sign-in with a dev-only local login" />
+</p>
+
+Admin-gated throughout: inviting golfers, toggling admin access, importing/editing
+courses, and deleting/merging outings.
+
+## Tech Stack
+
+**Cloudflare platform** — the whole thing runs on one Worker.
+
+- **Workers** — the API and the queue consumer are the same Worker (`fetch` +
+  `queue` + `scheduled` handlers). The Vite build is served as SPA static assets.
+- **D1** — SQLite as the system of record (players, courses, outings, scores, and
+  the job queue's rows).
+- **R2** — object storage for uploaded scorecard images and large job artifacts.
+- **Queues** — decouples image upload from the (slow, model-bound) extraction.
+- **Images** — server-side image normalization (downscale to a 2048px JPEG) before
+  the vision call.
+- **AI Gateway** — every model call is routed through the gateway with **BYOK**
+  stored keys, so no provider API keys live in the repo. It also gives caching,
+  logging, and a single endpoint across providers.
+- **Email** — the Cloudflare Email Sending binding delivers passkey-invite and
+  account-recovery links.
+
+**Backend**
+
+- **[Hono](https://hono.dev/)** — the Worker's HTTP framework. Its **typed RPC
+  client** is the star: the API exports an `AppType`, and the front end gets a
+  fully type-checked client with zero codegen.
+- **[Drizzle ORM](https://orm.drizzle.team/)** — schema, relational queries, and
+  generated D1 migrations.
+- **[Zod](https://zod.dev/)** — request validation and the single source of truth
+  for AI structured-output schemas.
+- **`hono/jwt` + [@simplewebauthn](https://simplewebauthn.dev/)** — WebAuthn
+  ceremonies and self-issued HS256 session JWTs.
+
+**AI**
+
+- **[Vercel AI SDK](https://ai-sdk.dev/) (v6)** — `generateObject` for vision
+  extraction and `generateText` with tools for the matching agents.
+- **`@ai-sdk/google` · `@ai-sdk/openai` · `@ai-sdk/anthropic` ·
+  `workers-ai-provider`** — provider plugins, all resolved through the AI Gateway.
+  Models are addressed as `provider/model@effort` strings; production defaults were
+  chosen by an eval sweep (Gemini 3.5 Flash for extraction and player matching,
+  GPT-5.4 Nano for course matching).
+
+**Frontend**
+
+- **React 19 + Vite** — the SPA.
+- **[TanStack Router](https://tanstack.com/router)** — genuinely excellent,
+  fully type-safe routing: typed `Link`s and params, `validateSearch` zod schemas,
+  and intent-based preloading. File-route wrappers stay thin; the type-safety is
+  end-to-end from the router into the Hono RPC client.
+- **[Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)**
+  (on Base UI) — the component layer.
+- **[Recharts](https://recharts.org/)** — the handicap and score-distribution
+  charts.
+
+**Tooling**
+
+- **[Bun](https://bun.sh/)** — package management (`bun install`) and the runtime
+  for every script and eval in the repo (dev orchestration, seeding, the eval
+  CLIs). Note that **Wrangler runs the Worker on V8/`workerd`, not Bun's JSC** — Bun
+  is the tooling/scripting runtime, not the deployment runtime.
+- **[Wrangler](https://developers.cloudflare.com/workers/wrangler/)** — dev,
+  migrations, and deploys (push-to-`main` auto-deploys via Workers Builds).
+- **Oxlint + Oxfmt** — linting and formatting.
+- **[Vitest](https://vitest.dev/) + `@cloudflare/vitest-pool-workers`** — tests run
+  inside the real `workerd` runtime against a migrated test D1.
+
+## Architecture
+
+Everything is one Worker in front of Cloudflare's storage and AI primitives. A few
+pieces are worth calling out.
+
+**Auth is passwordless, all passkeys.** WebAuthn ceremonies are wrapped with
+`@simplewebauthn/server`. Rather than a session store, the challenge is a
+short-lived **stateless signed token** — the server needs no KV/DB between the
+`options` and `verify` round-trips. Onboarding and recovery go out as email links
+(via the Cloudflare Email binding) carrying single-use invite tokens; enrolling a
+passkey consumes the token. A successful ceremony mints our **own HS256 JWT**
+(`hono/jwt`) whose subject is the user id — identity is decoupled from a mutable,
+nullable email. The browser stores the bearer in `localStorage`.
+
+**The front end is a typed SPA.** React + Vite + TanStack Router, talking to the
+API through Hono's typed RPC client built from the exported `AppType`. There is no
+OpenAPI, no generated client, no drift — the web package type-checks directly
+against the API's types, so a breaking change to a route is a compile error in the
+UI.
+
+**The API is a single Hono composition root.** `index.ts` wires the route modules
+and exports both `AppType` (for the client) and the Worker's `{ fetch, queue,
+scheduled }` handlers. A weekly cron prunes expired invites.
+
+**Background work runs through a small generic job framework.** Uploading a
+scorecard writes a `job` row to D1 and enqueues just its id. The queue consumer
+(same Worker) claims the row, dispatches on job type, streams progress back onto
+the row, and writes a terminal `ok`/`error` state — the row in D1 is the source of
+truth, not the queue message, so duplicate deliveries never re-run and the web can
+poll status over plain HTTP. Large artifacts go to R2.
+
+**The extraction job is a vision agent.** It normalizes the image (Cloudflare
+Images), then makes one `generateObject` call whose zod schema *is* the contract
+for what the model emits, what the agent returns, and what the evals assert. Two
+follow-on **matching agents** (players, courses) resolve the handwritten names and
+course to database ids: each is a hybrid loop that pre-fetches candidates
+deterministically and hands them to a tool-using model, so the common case resolves
+in a single turn (or zero, on an exact match). Matching is best-effort — it degrades
+to "unmatched" rather than failing, because the human review step is the backstop.
+
+**Everything model-facing is evaluated.** The extraction and matching agents each
+have an eval harness (real model calls against hand-reviewed fixtures) with a CLI
+to run and re-score, so model/prompt changes are measured, not guessed. The
+production model choices in this repo came out of those sweeps.
+
+```mermaid
+flowchart TB
+    subgraph Browser["Browser — React SPA"]
+        UI["Pages · TanStack Router · shadcn/ui"]
+        RPC["Typed Hono RPC client (AppType)"]
+        UI --- RPC
+    end
+
+    subgraph Worker["Cloudflare Worker (Hono)"]
+        API["REST API — routes/*"]
+        QUEUE["queue() consumer — job dispatch"]
+        CRON["scheduled() — weekly invite cleanup"]
+    end
+
+    subgraph Jobs["Extraction job"]
+        EX["Vision extract — AI SDK generateObject"]
+        MATCH["Player & course matching agents"]
+        EX --> MATCH
+    end
+
+    subgraph CF["Cloudflare data + AI"]
+        D1[("D1 — SQLite")]
+        R2[("R2 — images & artifacts")]
+        Q[["Queues"]]
+        IMG["Images — normalize"]
+        GW["AI Gateway (BYOK)"]
+        MAIL["Email — invites"]
+    end
+
+    Models["Gemini · GPT · Claude"]
+
+    RPC -->|"bearer JWT"| API
+    API --> D1
+    API -->|"upload"| R2
+    API -->|"enqueue { id }"| Q
+    API -->|"passkey invites"| MAIL
+    Q --> QUEUE
+    QUEUE --> EX
+    EX --> IMG
+    EX --> R2
+    EX --> GW
+    MATCH --> D1
+    GW --> Models
+    QUEUE -->|"job state / result"| D1
+
+    Auth["WebAuthn passkeys · @simplewebauthn"] -.-> API
 ```
 
-When done, we'll upload to `cards/$id/extracted.json` in the bucket, and ACK the job-queue entry.
+---
 
-### Evals
-
-In pkg/api/eval/scorecard/$LABEL/{image.foo,extracted.json}, we'll have known-correct image/extract pairs. Write a `vitest` test that'll use the @cloudflare/vitest-pool-workers package and `wrangler dev --remote` to run requests through the API gateway. Each test should run in parallel, and results should deep-equal the right JSON exactly (obv. it's OK for e.g. key ordering to differ).
+<sub>Screenshots are captured from local seed data. See `CLAUDE.md` for the full
+architecture notes and development commands.</sub>
