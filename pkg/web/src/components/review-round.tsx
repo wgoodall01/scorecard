@@ -685,18 +685,13 @@ export function ReviewRound({
   const leaderboard = (() => {
     const recorded = nines.filter((nine) => nine.playerNames.some((name) => !nameIgnored(name)));
     const totalHoles = recorded.reduce((count, nine) => count + nine.holes.length, 0);
-    const byGolfer = new Map<string, { label: string; writtenNames: string[]; cells: number[] }>();
+    const byGolfer = new Map<string, { label: string; cells: number[] }>();
     for (const nine of recorded) {
       nine.playerNames.forEach((name, playerIndex) => {
         if (nameIgnored(name)) return;
         const playerId = players.find((entry) => entry.name === name)?.playerId;
         const key = playerId ?? `written:${name}`;
-        const entry = byGolfer.get(key) ?? {
-          label: golferLabel(name),
-          writtenNames: [],
-          cells: [],
-        };
-        if (!entry.writtenNames.includes(name)) entry.writtenNames.push(name);
+        const entry = byGolfer.get(key) ?? { label: golferLabel(name), cells: [] };
         for (const row of nine.scores) {
           const cell = row[playerIndex] ?? null;
           if (cell !== null) entry.cells.push(cell);
@@ -707,7 +702,6 @@ export function ReviewRound({
     const totals = [...byGolfer.entries()].map(([key, entry]) => ({
       key,
       label: entry.label,
-      writtenNames: entry.writtenNames,
       total: entry.cells.length > 0 ? entry.cells.reduce((sum, value) => sum + value, 0) : null,
       incomplete: entry.cells.length > 0 && entry.cells.length < totalHoles,
     }));
@@ -1231,12 +1225,7 @@ export function ReviewRound({
                     )}
                   </span>
                 )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{entry.label}</span>
-                  <span className="block truncate text-sm text-muted-foreground">
-                    Written as {entry.writtenNames.map((name) => `“${name}”`).join(" · ")}
-                  </span>
-                </span>
+                <span className="min-w-0 flex-1 truncate font-medium">{entry.label}</span>
                 <Score
                   value={entry.total}
                   incomplete={entry.incomplete}
