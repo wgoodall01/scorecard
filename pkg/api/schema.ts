@@ -493,6 +493,44 @@ export const usgaTee = sqliteTable(
   (table) => [index("usga_tee_course_id_idx").on(table.courseId)],
 );
 
+// A mirror of every GolfCourseAPI course we've ever seen, one row per their
+// numeric course_id (a rated 18-hole layout — at a multi-nine club, one
+// nine-COMBINATION). Written on every search response, so the mirror grows as
+// the app is used.
+//
+// It exists for two reasons. First, the free tier allows 50 requests/DAY: a
+// stored row is searchable forever without spending quota, so the course-add
+// flow searches HERE first and only reaches upstream when the mirror comes up
+// empty. Second, it makes a course addressable — the research_course job takes
+// course_ids and reads these rows, instead of re-running a text search upstream
+// and hoping the response still contains what the admin picked.
+//
+// `payload` is the course object exactly as returned (tee/hole tree and all),
+// so a schema change re-reads the original rather than a lossily-normalized
+// copy. The scalar columns above it are denormalized purely for searching.
+export const gcapiCourse = sqliteTable(
+  "gcapi_course",
+  {
+    // GolfCourseAPI's own id — the natural key, and what the research job takes.
+    courseId: integer("course_id").primaryKey(),
+    clubName: varchar("club_name").notNull(),
+    // The rated layout's name ("White/Blue", "No. 2"), null if unnamed.
+    courseName: varchar("course_name"),
+    city: varchar("city"),
+    state: varchar("state"),
+    country: varchar("country"),
+    payload: json("payload").notNull(),
+    // When we last saw this row in an upstream response. Distinct from
+    // updated_at, which also moves when nothing changed.
+    fetchedAt: varchar("fetched_at").notNull().$defaultFn(isoNow),
+    ...timestamps,
+  },
+  (table) => [
+    index("gcapi_course_club_name_idx").on(table.clubName),
+    index("gcapi_course_course_name_idx").on(table.courseName),
+  ],
+);
+
 export const userRelations = relations(user, ({ many }) => ({
   nicknames: many(nickname),
   scorecards: many(scorecard),

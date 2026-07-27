@@ -16,7 +16,8 @@ import {
 import { CourseProposal } from "../src/agent/research_course/schema";
 import type { CourseProposalSchema } from "../src/agent/research_course/schema";
 import { layoutFromGolfCourseApi, layoutGaps } from "../src/agent/research_course/layout";
-import { GolfCourseApiError, searchGolfCourses } from "../src/golfcourseapi/client";
+import { GolfCourseApiError, searchGolfCoursesUpstream } from "../src/golfcourseapi/client";
+import { getStoredGolfCourses, searchStoredGolfCourses } from "../src/golfcourseapi/store";
 import type { JobErrorSchema, JobReportSchema } from "../src/jobs/common";
 import { submit } from "../src/jobs/client";
 import { requireAdmin, requireAuth } from "./shared";
@@ -72,8 +73,13 @@ export const courseRoutes = new Hono<Env>()
   })
   // Look up a course's LAYOUT in GolfCourseAPI — the primary source of pars,
   // yardages, and stroke indexes for the create-course flow (see
-  // src/golfcourseapi). Admin-only, and one upstream request per distinct query
-  // (edge-cached for a month) because the free tier allows only 50/day.
+  // src/golfcourseapi). Admin-only.
+  //
+  // MIRROR FIRST: the `gcapi_course` table holds every course any past search
+  // returned, and searching it is free. Upstream is only touched when the mirror
+  // has nothing (or `?refresh=1` forces it), because the free tier allows just 50
+  // requests/day. A hit is reported as `source: "mirror"` so the UI can say where
+  // the answer came from.
   //
   // Results are grouped by CLUB, because that's the unit the flow works in: a
   // multi-nine club comes back from GolfCourseAPI as one 18-hole entry per rated
@@ -83,14 +89,21 @@ export const courseRoutes = new Hono<Env>()
   // still needed.
   .get("/courses/golfcourseapi", requireAuth, requireAdmin, async (c) => {
     const query = c.req.query("q")?.trim() ?? "";
-    if (query.length < 3) return c.json({ clubs: [] });
+    if (query.length < 3) return c.json({ clubs: [], source: "mirror" as const });
+    const refresh = c.req.query("refresh") === "1";
 
-    let courses;
-    try {
-      courses = await searchGolfCourses(c.env, query);
-    } catch (error) {
-      if (error instanceof GolfCourseApiError) return c.json({ error: error.message }, 502);
-      throw error;
+    const db = getDb(c.env.DB);
+    let courses = refresh ? [] : await searchStoredGolfCourses(db, query);
+    let source: "mirror" | "upstream" = "mirror";
+
+    if (courses.length === 0) {
+      source = "upstream";
+      try {
+        courses = await searchGolfCoursesUpstream(c.env, query);
+      } catch (error) {
+        if (error instanceof GolfCourseApiError) return c.json({ error: error.message }, 502);
+        throw error;
+      }
     }
 
     const byClub = new Map<string, typeof courses>();
@@ -101,6 +114,7 @@ export const courseRoutes = new Hono<Env>()
     }
 
     return c.json({
+      source,
       clubs: [...byClub.entries()].map(([clubName, group]) => {
         const layout = layoutFromGolfCourseApi(group);
         const place = group[0]?.location;
@@ -120,18 +134,24 @@ export const courseRoutes = new Hono<Env>()
       }),
     });
   })
-  // Kick off the course-ingest (research_course) job for a facility, from a
-  // GolfCourseAPI club and/or a captured scorecard whose metadata extraction has
-  // completed. Returns the job id — poll GET /courses/research/:jobId.
+  // Kick off the course-ingest (research_course) job for a facility, from a set
+  // of mirrored GolfCourseAPI courses and/or a captured scorecard whose metadata
+  // extraction has completed. Returns the job id — poll
+  // GET /courses/research/:jobId.
+  //
+  // The layout is addressed by GolfCourseAPI course id, and the job reads those
+  // rows out of the mirror — no text search to re-run, nothing to hope is still
+  // cached. Ids are validated here so a typo fails the request rather than the
+  // job.
   .put("/courses/research", requireAuth, requireAdmin, async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = z
       .object({
         facilityId: z.number().int(),
-        golfCourseApi: z
-          .object({ query: z.string().min(1), courseIds: z.array(z.number().int()).min(1) })
+        gcapiCourseIds: z
+          .array(z.number().int())
           .nullish()
-          .transform((value) => value ?? null),
+          .transform((value) => value ?? []),
         scorecardId: z
           .string()
           .min(1)
@@ -142,8 +162,8 @@ export const courseRoutes = new Hono<Env>()
     if (!parsed.success) {
       return c.json({ error: "facilityId and at least one layout source are required" }, 400);
     }
-    const { facilityId, golfCourseApi, scorecardId } = parsed.data;
-    if (golfCourseApi === null && scorecardId === null) {
+    const { facilityId, gcapiCourseIds, scorecardId } = parsed.data;
+    if (gcapiCourseIds.length === 0 && scorecardId === null) {
       return c.json({ error: "Pick a GolfCourseAPI club or upload a scorecard" }, 400);
     }
 
@@ -152,11 +172,17 @@ export const courseRoutes = new Hono<Env>()
       const row = await db.query.scorecard.findFirst({ where: eq(scorecard.id, scorecardId) });
       if (!row) return c.json({ error: "Scorecard not found" }, 404);
     }
+    if (gcapiCourseIds.length > 0) {
+      const known = await getStoredGolfCourses(db, gcapiCourseIds);
+      if (known.length !== gcapiCourseIds.length) {
+        return c.json({ error: "Some of those GolfCourseAPI courses aren't mirrored" }, 400);
+      }
+    }
 
     const handle = await submit(c.env, {
       _job: "research_course",
       facilityId,
-      golfCourseApi,
+      gcapiCourseIds,
       scorecardId,
     });
     // Record the link on the card for provenance (polling is by job id, not

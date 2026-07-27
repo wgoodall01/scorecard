@@ -159,6 +159,8 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
     enabled: step === "layout" && golfQuery.length >= 3,
   });
   const clubs: Club[] | null = golfQuery.length < 3 ? null : (clubsQuery.data?.clubs ?? null);
+  // Whether that answer came free from the local mirror or spent upstream quota.
+  const clubsSource = clubsQuery.data?.source ?? null;
   // Derived, not stored: the admin's explicit pick wins, else the obvious match.
   const club = clubChoice ?? bestClubMatch(clubs ?? [], facility?.name);
   const gaps = club?.gaps ?? [];
@@ -206,7 +208,6 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
       "research",
       "start",
       facility?.facilityId,
-      golfQuery,
       club?.courseIds.join(","),
       scorecardId,
     ],
@@ -214,7 +215,9 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
       const response = await api.courses.research.$put.call({
         json: {
           facilityId: facility!.facilityId,
-          golfCourseApi: club === null ? null : { query: golfQuery, courseIds: club.courseIds },
+          // Addressed by GolfCourseAPI course id — the job reads them out of the
+          // local mirror, so there's no search to re-run.
+          gcapiCourseIds: club?.courseIds ?? [],
           scorecardId,
         },
       });
@@ -413,6 +416,7 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
             onQuery={setGolfSearch}
             searching={clubsQuery.isFetching}
             clubs={clubs}
+            source={clubsSource}
             error={clubsError}
             club={club}
             onSelectClub={setClubChoice}
@@ -511,8 +515,9 @@ function LayoutStep({
   onQuery,
   searching,
   clubs,
-  error,
+  source,
   club,
+  error,
   onSelectClub,
   gaps,
   blockedOnCard,
@@ -530,6 +535,7 @@ function LayoutStep({
   onQuery: (value: string) => void;
   searching: boolean;
   clubs: Club[] | null;
+  source: "mirror" | "upstream" | null;
   error: string | null;
   club: Club | null;
   onSelectClub: (club: Club) => void;
@@ -570,6 +576,14 @@ function LayoutStep({
           />
         </div>
       </div>
+
+      {source !== null && clubs !== null && clubs.length > 0 && (
+        <span className="-mt-3 text-xs text-muted-foreground">
+          {source === "mirror"
+            ? "From our local copy — no API request needed."
+            : "Fetched from GolfCourseAPI and saved locally for next time."}
+        </span>
+      )}
 
       <div className="rounded-xl border bg-card">
         {error !== null ? (

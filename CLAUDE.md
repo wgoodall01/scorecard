@@ -430,13 +430,21 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   come from → **analyze** (the `research_course` job) → **review** the
   proposal in the editor → save, which merges into the existing course by
   natural key so historical scores keep resolving.
-  - `pkg/api/src/golfcourseapi/`: a client over api.golfcourseapi.com, the
-    PRIMARY layout source. Only `/v1/search` is used — its response embeds each
-    match's full tee/hole tree, so a club costs exactly ONE request and
-    `/v1/courses/{id}` is pointless. The free tier allows 50 req/DAY, so every
-    request is edge-cached for a MONTH via fetch's `cf: { cacheTtl,
-cacheEverything }` (not the Cache API — no bookkeeping, and `wrangler dev`
-    just ignores it) and the UI debounces hard (600ms, 3-char minimum). Verified against our USGA-imported
+  - `pkg/api/src/golfcourseapi/`: `client.ts` (HTTP) + `store.ts` (the local
+    mirror) over api.golfcourseapi.com, the PRIMARY layout source. Only
+    `/v1/search` is used — its response embeds each match's full tee/hole tree,
+    so a club costs exactly ONE request and `/v1/courses/{id}` is pointless.
+    The free tier allows 50 req/DAY, so there are THREE layers of thrift:
+    every response is mirrored into the `gcapi_course` table, the route
+    searches that mirror FIRST and only goes upstream on a miss (or
+    `?refresh=1`), and an upstream request is edge-cached for a MONTH via
+    fetch's `cf: { cacheTtl, cacheEverything }` (not the Cache API — no
+    bookkeeping, and `wrangler dev` just ignores it). The UI also debounces
+    hard (600ms, 3-char minimum) and reports whether an answer came from the
+    mirror or upstream. Because the mirror makes a course ADDRESSABLE,
+    `research_course` takes `gcapiCourseIds` and reads those rows — it never
+    re-runs a text search and hopes the right course comes back.
+    Verified against our USGA-imported
     production rows for Buck Hill Falls: per-hole par, yardage, and stroke
     index are byte-exact across all seven tees INCLUDING combination tees.
     What it does NOT give: the documented front9/back9 rating splits and
@@ -445,7 +453,8 @@ cacheEverything }` (not the Cache API — no bookkeeping, and `wrangler dev`
     color ("White"), never the name printed on the card ("White Oak"). Hence:
     GolfCourseAPI for LAYOUT, the USGA mirror for RATINGS — it can't replace
     the mirror. `testdata/buck-hill-falls-search.json` is a real captured
-    response and the layout adapter's regression fixture.
+    response and the layout adapter's regression fixture (also the
+    `store.test.ts` fixture).
   - `pkg/api/src/agent/research_course/layout.ts`: `CourseLayout`, the
     source-agnostic shape the agent reconciles (nines → tees → per-hole par /
     yardage / stroke index, with the tee's gender when the source knows it).
@@ -470,6 +479,13 @@ cacheEverything }` (not the Cache API — no bookkeeping, and `wrangler dev`
     exactly what differs. Eval fixtures cover all three combinations
     (`bhf-api`, `bhf-card`, `bhf-both`) as `layouts.json` + `usga.json` +
     `proposal.json`.
+  - `gcapi_course` (schema.ts): the mirror table. One row per GolfCourseAPI
+    numeric course_id — the raw course object in a `payload` json column
+    (re-parsed on read, so an older row fails loudly rather than surfacing a
+    surprising shape) plus denormalized club/course/city/state columns purely
+    for searching, and `fetched_at` for when we last saw it upstream. Written
+    on EVERY response, including neighbouring clubs the caller wasn't looking
+    for — a stored row is a search that never costs quota again.
 - `pkg/api/src/model.ts`: all model selection/routing. Models are addressed
   as `ModelSpec` strings of the form `"provider/model@effort"` — reasoning
   effort is part of the model identity, and effort levels are

@@ -10,16 +10,17 @@ import {
   type CourseLayoutSchema,
 } from "../../agent/research_course/layout";
 import { CourseProposal, type UsgaFacilityDataSchema } from "../../agent/research_course/schema";
-import { searchGolfCourses } from "../../golfcourseapi/client";
+import { getStoredGolfCourses } from "../../golfcourseapi/store";
 import { resolveModel } from "../../model";
 import { createJobType } from "../common";
 
 // Reconciles a course's LAYOUT with the USGA NCRDB mirror rows for a facility
 // into a CourseProposal the admin reviews and saves.
 //
-// The layout comes from GolfCourseAPI (authoritative pars/yardages/stroke
-// indexes — see src/golfcourseapi) and/or a scorecard photo read by the
-// extract_metadata job. Normally it's just GolfCourseAPI; the flow only asks
+// The layout comes from the mirrored GolfCourseAPI courses named by id
+// (authoritative pars/yardages/stroke indexes — see src/golfcourseapi) and/or a
+// scorecard photo read by the extract_metadata job. Normally it's just
+// GolfCourseAPI; the flow only asks
 // for a photo when the feed is missing or has gaps (layoutGaps), and then BOTH
 // are passed so the agent can take the printed nine names off the card and
 // everything else from the feed. Ratings always come from the USGA mirror —
@@ -30,31 +31,28 @@ export const researchCourseJob = createJobType({
   name: "research_course",
   args: z.object({
     facilityId: z.number().int(),
-    // GolfCourseAPI: the club name to search and which of its rated layouts to
-    // use (a multi-nine club returns one per nine-combination). Empty = no feed
-    // for this course, in which case a scorecard is required.
-    golfCourseApi: z
-      .object({ query: z.string().min(1), courseIds: z.array(z.number().int()).min(1) })
-      .nullable(),
+    // Which mirrored GolfCourseAPI courses make up this club's layout (a
+    // multi-nine club has one per nine-combination). Empty = no feed for this
+    // course, in which case a scorecard is required.
+    gcapiCourseIds: z.array(z.number().int()),
     // A captured card whose extract_metadata job has completed, or null.
     scorecardId: z.uuid().nullable(),
   }),
   result: CourseProposal,
-  async execute(ctx, { facilityId, golfCourseApi, scorecardId }) {
+  async execute(ctx, { facilityId, gcapiCourseIds, scorecardId }) {
     const { env } = ctx;
     const db = getDb(env.DB);
 
     // Authoritative-first: the structured feed, then the photo reading.
     const layouts: CourseLayoutSchema[] = [];
 
-    if (golfCourseApi !== null) {
+    if (gcapiCourseIds.length > 0) {
       await ctx.report({ message: "Pulling the course layout…" });
-      const wanted = new Set(golfCourseApi.courseIds);
-      const courses = (await searchGolfCourses(env, golfCourseApi.query)).filter((course) =>
-        wanted.has(course.id),
-      );
+      // Straight out of the local mirror — no upstream request, and the exact
+      // courses the admin picked rather than whatever a re-run search returns.
+      const courses = await getStoredGolfCourses(db, gcapiCourseIds);
       if (courses.length === 0) {
-        throw new Error("None of the selected GolfCourseAPI layouts came back from the search");
+        throw new Error("None of the selected GolfCourseAPI courses are mirrored");
       }
       layouts.push(layoutFromGolfCourseApi(courses));
     }

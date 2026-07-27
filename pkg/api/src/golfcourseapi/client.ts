@@ -1,9 +1,12 @@
+import { getDb } from "../../db";
 import type { Env } from "../../env";
 import { GolfCourseApiSearchResponse, type GolfCourseApiCourseSchema } from "./schema";
+import { storeGolfCourses } from "./store";
 
-// A thin client over GolfCourseAPI's search endpoint — our LAYOUT source for
-// the admin course-add flow (per-tee, per-hole par / yardage / stroke index).
-// See ./schema.ts for what the live data does and doesn't carry.
+// The HTTP half of our GolfCourseAPI integration — the LAYOUT source for the
+// admin course-add flow (per-tee, per-hole par / yardage / stroke index). See
+// ./schema.ts for what the live data does and doesn't carry, and ./store.ts for
+// the local mirror every response is written into.
 //
 // Only /v1/search is used: its response embeds each match's FULL tee and hole
 // tree, so a club needs exactly ONE request — there's no reason to follow up
@@ -48,15 +51,19 @@ function describeFailure(status: number): string {
 }
 
 /**
- * Search GolfCourseAPI for a club or course name. Returns every match with its
- * full tee/hole tree — one 18-hole entry per rated nine-combination at a
- * multi-nine club, so a three-nine facility comes back as three courses
- * sharing a `club_name`.
+ * Search GolfCourseAPI upstream for a club or course name, and mirror every
+ * match into `gcapi_course` on the way through. Returns each match with its full
+ * tee/hole tree — one 18-hole entry per rated nine-combination at a multi-nine
+ * club, so a three-nine facility comes back as three courses sharing a
+ * `club_name`.
+ *
+ * This SPENDS QUOTA (50/day). Prefer `searchStoredGolfCourses` and come here
+ * only when the mirror has nothing; see routes/courses.ts.
  *
  * Cached at the edge for a month per query, keyed on the URL alone (the response
  * doesn't vary by caller). Throws GolfCourseApiError on a non-2xx.
  */
-export async function searchGolfCourses(
+export async function searchGolfCoursesUpstream(
   env: Env["Bindings"],
   query: string,
 ): Promise<GolfCourseApiCourseSchema[]> {
@@ -81,5 +88,10 @@ export async function searchGolfCourses(
   if (!parsed.success) {
     throw new GolfCourseApiError(`GolfCourseAPI returned an unexpected shape: ${parsed.error}`);
   }
+
+  // Mirror everything we were given, not just what the caller was looking for —
+  // a response often carries neighbouring clubs, and a stored row is a search
+  // that never costs quota again.
+  await storeGolfCourses(getDb(env.DB), parsed.data.courses);
   return parsed.data.courses;
 }
