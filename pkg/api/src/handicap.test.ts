@@ -6,14 +6,26 @@ import { computeHandicap, handicapFromRounds } from "./handicap";
 // math transparent — an 18-hole differential is exactly AGS − 72 and a
 // 9-hole one AGS − 36, so every expectation below is hand-checkable.
 
-function nine(teeId: string, firstHole: number, strokes: number[]) {
+function nine(
+  teeId: string,
+  firstHole: number,
+  strokes: number[],
+  strokeIndexes?: (number | null)[],
+) {
   return {
     teeId,
     name: teeId,
     par: strokes.length * 4,
     courseRating: strokes.length * 4,
     slopeRating: 113,
-    holes: strokes.map((s, index) => ({ number: firstHole + index, par: 4, strokes: s })),
+    holes: strokes.map((s, index) => ({
+      number: firstHole + index,
+      par: 4,
+      // Default null — most fixtures predate stroke-index capture, which
+      // exercises the par-ranked fallback in strokesReceived.
+      strokeIndex: strokeIndexes?.[index] ?? null,
+      strokes: s,
+    })),
   };
 }
 
@@ -26,12 +38,21 @@ function strokesFor(total: number, holes = 18) {
   });
 }
 
-function round18(outingId: string, date: string, total: number, holeOverrides?: number[]) {
+function round18(
+  outingId: string,
+  date: string,
+  total: number,
+  holeOverrides?: number[],
+  strokeIndexes?: (number | null)[],
+) {
   const strokes = holeOverrides ?? strokesFor(total);
   return {
     outingId,
     date,
-    nines: [nine("front", 1, strokes.slice(0, 9)), nine("back", 10, strokes.slice(9))],
+    nines: [
+      nine("front", 1, strokes.slice(0, 9), strokeIndexes?.slice(0, 9)),
+      nine("back", 10, strokes.slice(9), strokeIndexes?.slice(9)),
+    ],
   };
 }
 
@@ -115,9 +136,41 @@ describe("handicapFromRounds", () => {
     // Round 1: 90 → index 16.0, so round 2 plays off course handicap 16 —
     // hole 1 receives a stroke and caps at 4 + 2 + 1 = 7. A 15 on hole 1
     // plus 17 fives adjusts 100 → 92, differential 20.0 (not 28.0).
+    //
+    // No stroke index on these fixtures, so difficulty ranks by par (all equal
+    // here) then hole number: holes 1–16 get the 16 strokes.
     const result = handicapFromRounds([
       round18("o1", date(0), 90),
       round18("o2", date(1), 100, [15, ...Array.from({ length: 17 }, () => 5)]),
+    ]);
+    expect(result.timeseries[1].differential).toBe(20.0);
+  });
+
+  it("allocates handicap strokes by the printed stroke index when every hole has one", () => {
+    // Same record as above, but the round now carries a printed stroke index
+    // that makes hole 1 the EASIEST hole (index 18) instead of, by the
+    // hole-number fallback, one of the hardest. Off course handicap 16, the 16
+    // strokes go to indexes 1–16, so hole 1 gets none: its cap is 4 + 2 = 6,
+    // not 7. The 15 there adjusts to 6 and the round posts 91 → 19.0.
+    const easiestFirst = [18, ...Array.from({ length: 17 }, (_, index) => index + 1)];
+    const result = handicapFromRounds([
+      round18("o1", date(0), 90),
+      round18("o2", date(1), 100, [15, ...Array.from({ length: 17 }, () => 5)], easiestFirst),
+    ]);
+    expect(result.timeseries[1].differential).toBe(19.0);
+  });
+
+  it("falls back to par ranking when any hole in the round lacks a stroke index", () => {
+    // A partially-indexed round must not mix scales: hole 1 has no index, so
+    // the whole round ranks by par/hole number again and hole 1 is back to a
+    // cap of 7 — the 20.0 of the fallback case, not 19.0.
+    const partial: (number | null)[] = [
+      null,
+      ...Array.from({ length: 17 }, (_, index) => index + 1),
+    ];
+    const result = handicapFromRounds([
+      round18("o1", date(0), 90),
+      round18("o2", date(1), 100, [15, ...Array.from({ length: 17 }, () => 5)], partial),
     ]);
     expect(result.timeseries[1].differential).toBe(20.0);
   });

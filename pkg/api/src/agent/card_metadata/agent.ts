@@ -9,7 +9,7 @@ import {
 } from "../../model";
 import { CardMetadata } from "./schema";
 
-const METADATA_PROMPT = `You are extracting a golf course's printed LAYOUT from a photo of a scorecard. This is NOT about the handwritten scores — ignore any pencil marks. You are reading the pre-printed rating table: the nine names, the tee positions, and each tee's per-hole par and yardage.
+const METADATA_PROMPT = `You are extracting a golf course's printed LAYOUT from a photo of a scorecard. This is NOT about the handwritten scores — ignore any pencil marks. You are reading the pre-printed rating table: the nine names, the tee positions, and each tee's per-hole par, yardage, and stroke index.
 
 A scorecard usually prints one, two, or three "nines" (named nine-hole loops). Each nine has its own name — often printed as a header or watermarked across the card (e.g. "White Oak", "Blue Spruce", "Red Maple"). Use that as the nine's name. Do NOT confuse a nine name with the course's own name, with hole names (some courses print a unique name above every hole column), or with section labels ("Initials", "Handicap", "Scorer").
 
@@ -21,7 +21,9 @@ Some cards print a COMBINATION tee as a thin marker strip between two full yarda
 
 Many cards print the men's and women's ratings as two separate blocks stacked on the page, repeating the SAME tee positions with the same yardages but different ratings and sometimes a different par. These are not extra tees: emit each tee position ONCE per nine.
 
-For each tee, list its holes in printed order. For each hole record: its printed hole number, its par, and its yardage from that tee. Par is printed in a "Par" row that is usually shared by all tees — repeat it onto every tee's holes. Occasionally a hole's par differs by tee, printed as a split like "4/5". In that case rank the tees by THAT HOLE's yardage and give the LONGEST-yardage tees the HIGHER par and the shortest/most-forward tees the lower par — a hole doesn't get easier from further back. (This is about tee LENGTH, not about which nine the hole is on; it has nothing to do with the "Front"/"Back" nine names above.) Use null for a yardage that isn't printed or isn't legible; par should always be a single number.
+For each tee, list its holes in printed order. For each hole record: its printed hole number, its par, its yardage from that tee, and its stroke index. Par is printed in a "Par" row that is usually shared by all tees — repeat it onto every tee's holes. Occasionally a hole's par differs by tee, printed as a split like "4/5". In that case rank the tees by THAT HOLE's yardage and give the LONGEST-yardage tees the HIGHER par and the shortest/most-forward tees the lower par — a hole doesn't get easier from further back. (This is about tee LENGTH, not about which nine the hole is on; it has nothing to do with the "Front"/"Back" nine names above.) Use null for a yardage that isn't printed or isn't legible; par should always be a single number.
+
+The STROKE INDEX is the row labeled "Handicap", "Hcp", "HDCP", "Index", or "Stroke": a RANKING of the holes by difficulty that decides the order in which a player receives handicap strokes (1 = hardest). Across a full 18 the values are 1–18 with no repeats, so a single nine carries nine of them — very often all-odd on one nine and all-even on the other. Do not confuse this row with par, with a yardage, or with the hole number; a mid-single-digit value in a "Handicap" row is an index, not a par. Like par it is shared by every tee, so repeat the same value onto each tee's holes for that nine. Some cards print a separate women's handicap row — when both are printed, use the men's. If the card doesn't print the row, or you can't read it, use null for every hole rather than guessing a ranking from the pars.
 
 Do not invent tees, holes, or nines that aren't printed. Only include the "9 Tot" / "18 Tot" columns' data as nothing — those are totals, not holes.
 

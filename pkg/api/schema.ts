@@ -255,6 +255,13 @@ export const hole = sqliteTable(
     // Printed yardage from this tee, if known (null = not recorded). Like par,
     // yardage legitimately differs between tee positions on the same nine.
     yardage: integer("yardage"),
+    // The printed STROKE INDEX: this hole's difficulty rank, deciding the order
+    // in which a player receives handicap strokes (1 = first). Over a full 18
+    // the ranks run 1–18, so a nine carries nine of them (often all-odd or
+    // all-even). Null = not recorded, in which case src/handicap.ts falls back
+    // to ranking by par. Per-TEE like par and yardage, because courses print
+    // separate men's and women's rankings.
+    strokeIndex: integer("stroke_index"),
     ...timestamps,
   },
   (table) => [uniqueIndex("hole_number_unique").on(table.courseSetTeeId, table.number)],

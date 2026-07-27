@@ -27,6 +27,10 @@ export type Env = {
     // separate from JWT_SECRET, so session tokens and challenge tokens can't
     // be cross-forged.
     AUTHN_CHALLENGE_SIGNING_SECRET: string;
+    // api.golfcourseapi.com key — the course-layout source for the admin
+    // course-add flow (see src/golfcourseapi). The free tier allows 50
+    // requests/day, which is why searches are cached for a day.
+    GOLFCOURSE_API_KEY: string;
   };
   Variables: {
     // The signed-in user's id (the session JWT's `sub`).

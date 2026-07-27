@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { TEES } from "../../../schema";
 
-// The research_course agent reconciles two inputs — a card_metadata reading and
-// the USGA NCRDB mirror rows for a facility — into a CourseProposal that maps
-// 1:1 onto the app's course / course_set / course_set_tee / hole tables. It's a
-// one-shot generateObject call (default openai/gpt-5.4-mini): everything fits
-// in context and the mapping is pure reasoning, no search.
+// The research_course agent reconciles two inputs — one or more CourseLayouts
+// (see ./layout.ts: a GolfCourseAPI feed and/or a card_metadata photo reading)
+// and the USGA NCRDB mirror rows for a facility — into a CourseProposal that
+// maps 1:1 onto the app's course / course_set / course_set_tee / hole tables.
+// It's a one-shot generateObject call (default openai/gpt-5.4-mini): everything
+// fits in context and the mapping is pure reasoning, no search. Text-only —
+// the vision work, when a photo is needed at all, happens upstream in
+// extract_metadata.
 //
 // Structured-output note: this schema targets OpenAI (fixed key sets,
 // additionalProperties:false, enums OK), so it uses z.enum freely — unlike the
@@ -58,6 +61,14 @@ export const ProposalHole = z.object({
   number: z.number().int().min(1).max(18),
   par: z.number().int(),
   yardage: z.number().int().nullable(),
+  strokeIndex: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      "The printed stroke index — the hole's difficulty rank deciding the order handicap " +
+        "strokes are given (1 = first). Copied from the layout; null if it didn't have one.",
+    ),
 });
 export type ProposalHoleSchema = z.infer<typeof ProposalHole>;
 

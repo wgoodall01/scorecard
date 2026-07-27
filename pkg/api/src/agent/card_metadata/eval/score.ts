@@ -4,15 +4,18 @@ import type { CardMetadataSchema, MetadataNineSchema, MetadataTeeSchema } from "
 // raw error counts by category:
 //   - yardages: per-tee per-hole yardage cells (the bulk of the layout)
 //   - pars:     per-tee per-hole par cells
+//   - indexes:  per-hole stroke index (the printed handicap row). Weighted like
+//               par: it decides where handicap strokes fall, and it's a row the
+//               model has to not confuse with par or yardage.
 //   - names:    nine names and tee names
-// Yardage and par cells are weighted over names — getting the numbers right is
-// the point; nine/tee spelling is transcription convention.
+// Number cells are weighted over names — getting the numbers right is the
+// point; nine/tee spelling is transcription convention.
 export type ScoreResult = {
   overall: number;
-  errors: { yardages: number; pars: number; names: number };
+  errors: { yardages: number; pars: number; indexes: number; names: number };
 };
 
-const WEIGHTS = { yardages: 2, pars: 2, names: 1 } as const;
+const WEIGHTS = { yardages: 2, pars: 2, indexes: 2, names: 1 } as const;
 type Category = keyof typeof WEIGHTS;
 
 function caseFolded(value: string | null | undefined): string | null | undefined {
@@ -50,6 +53,7 @@ function matchTee(
 export function score(got: CardMetadataSchema, expected: CardMetadataSchema): ScoreResult {
   const tallies: Record<Category, { errors: number; total: number }> = {
     yardages: { errors: 0, total: 0 },
+    indexes: { errors: 0, total: 0 },
     pars: { errors: 0, total: 0 },
     names: { errors: 0, total: 0 },
   };
@@ -71,6 +75,11 @@ export function score(got: CardMetadataSchema, expected: CardMetadataSchema): Sc
         const gotHole = gotTee?.holes.find((hole) => hole.number === expectedHole.number);
         tally("pars", gotHole?.par, expectedHole.par);
         tally("yardages", gotHole ? (gotHole.yardage ?? null) : undefined, expectedHole.yardage);
+        tally(
+          "indexes",
+          gotHole ? (gotHole.strokeIndex ?? null) : undefined,
+          expectedHole.strokeIndex,
+        );
       }
     }
   });
@@ -87,6 +96,7 @@ export function score(got: CardMetadataSchema, expected: CardMetadataSchema): Sc
       weightedTotal === 0 ? 1 : Math.round((1 - weightedErrors / weightedTotal) * 1000) / 1000,
     errors: {
       yardages: tallies.yardages.errors,
+      indexes: tallies.indexes.errors,
       pars: tallies.pars.errors,
       names: tallies.names.errors,
     },

@@ -1,0 +1,1 @@
+ALTER TABLE `hole` ADD `stroke_index` integer;

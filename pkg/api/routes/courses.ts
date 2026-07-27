@@ -15,6 +15,8 @@ import {
 } from "../schema";
 import { CourseProposal } from "../src/agent/research_course/schema";
 import type { CourseProposalSchema } from "../src/agent/research_course/schema";
+import { layoutFromGolfCourseApi, layoutGaps } from "../src/agent/research_course/layout";
+import { GolfCourseApiError, searchGolfCourses } from "../src/golfcourseapi/client";
 import type { JobErrorSchema, JobReportSchema } from "../src/jobs/common";
 import { submit } from "../src/jobs/client";
 import { requireAdmin, requireAuth } from "./shared";
@@ -68,28 +70,103 @@ export const courseRoutes = new Hono<Env>()
       })),
     });
   })
-  // Kick off the course-ingest (research_course) job for a scorecard +
-  // facility, once the metadata extraction has completed and the admin has
-  // picked the facility. Returns the job id — poll GET /courses/research/:jobId.
+  // Look up a course's LAYOUT in GolfCourseAPI — the primary source of pars,
+  // yardages, and stroke indexes for the create-course flow (see
+  // src/golfcourseapi). Admin-only, and one upstream request per distinct query
+  // (cached for a day) because the free tier allows only 50/day.
+  //
+  // Results are grouped by CLUB, because that's the unit the flow works in: a
+  // multi-nine club comes back from GolfCourseAPI as one 18-hole entry per rated
+  // nine-combination, and the layout adapter folds a club's whole set of them
+  // into one nine per physical nine. Each group carries the folded nines and
+  // any gaps, so the UI can show what it'd get and whether a scorecard photo is
+  // still needed.
+  .get("/courses/golfcourseapi", requireAuth, requireAdmin, async (c) => {
+    const query = c.req.query("q")?.trim() ?? "";
+    if (query.length < 3) return c.json({ clubs: [] });
+
+    let courses;
+    try {
+      courses = await searchGolfCourses(c.env, query);
+    } catch (error) {
+      if (error instanceof GolfCourseApiError) return c.json({ error: error.message }, 502);
+      throw error;
+    }
+
+    const byClub = new Map<string, typeof courses>();
+    for (const course of courses) {
+      const group = byClub.get(course.club_name);
+      if (group) group.push(course);
+      else byClub.set(course.club_name, [course]);
+    }
+
+    return c.json({
+      clubs: [...byClub.entries()].map(([clubName, group]) => {
+        const layout = layoutFromGolfCourseApi(group);
+        const place = group[0]?.location;
+        return {
+          clubName,
+          // "Buck Hill Falls, PA" — the city/state pair, when they're there.
+          location: [place?.city, place?.state].filter((part) => part != null).join(", ") || null,
+          courseIds: group.map((course) => course.id),
+          ratedLayouts: group.map((course) => course.course_name),
+          nines: layout.nines.map((nine) => ({
+            name: nine.name,
+            tees: nine.tees.length,
+            holes: nine.tees[0]?.holes.length ?? 0,
+          })),
+          gaps: layoutGaps(layout),
+        };
+      }),
+    });
+  })
+  // Kick off the course-ingest (research_course) job for a facility, from a
+  // GolfCourseAPI club and/or a captured scorecard whose metadata extraction has
+  // completed. Returns the job id — poll GET /courses/research/:jobId.
   .put("/courses/research", requireAuth, requireAdmin, async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = z
-      .object({ scorecardId: z.string().min(1), facilityId: z.number().int() })
+      .object({
+        facilityId: z.number().int(),
+        golfCourseApi: z
+          .object({ query: z.string().min(1), courseIds: z.array(z.number().int()).min(1) })
+          .nullish()
+          .transform((value) => value ?? null),
+        scorecardId: z
+          .string()
+          .min(1)
+          .nullish()
+          .transform((value) => value ?? null),
+      })
       .safeParse(body);
-    if (!parsed.success) return c.json({ error: "scorecardId and facilityId are required" }, 400);
-    const { scorecardId, facilityId } = parsed.data;
+    if (!parsed.success) {
+      return c.json({ error: "facilityId and at least one layout source are required" }, 400);
+    }
+    const { facilityId, golfCourseApi, scorecardId } = parsed.data;
+    if (golfCourseApi === null && scorecardId === null) {
+      return c.json({ error: "Pick a GolfCourseAPI club or upload a scorecard" }, 400);
+    }
 
     const db = getDb(c.env.DB);
-    const row = await db.query.scorecard.findFirst({ where: eq(scorecard.id, scorecardId) });
-    if (!row) return c.json({ error: "Scorecard not found" }, 404);
+    if (scorecardId !== null) {
+      const row = await db.query.scorecard.findFirst({ where: eq(scorecard.id, scorecardId) });
+      if (!row) return c.json({ error: "Scorecard not found" }, 404);
+    }
 
-    const handle = await submit(c.env, { _job: "research_course", scorecardId, facilityId });
+    const handle = await submit(c.env, {
+      _job: "research_course",
+      facilityId,
+      golfCourseApi,
+      scorecardId,
+    });
     // Record the link on the card for provenance (polling is by job id, not
     // via the card).
-    await db
-      .update(scorecard)
-      .set({ researchCourseJobId: handle.id })
-      .where(eq(scorecard.id, scorecardId));
+    if (scorecardId !== null) {
+      await db
+        .update(scorecard)
+        .set({ researchCourseJobId: handle.id })
+        .where(eq(scorecard.id, scorecardId));
+    }
 
     return c.json({ jobId: handle.id }, 202);
   })
@@ -273,7 +350,11 @@ export const courseRoutes = new Hono<Env>()
             batch.push(
               db
                 .update(hole)
-                .set({ par: holeProposal.par, yardage: holeProposal.yardage })
+                .set({
+                  par: holeProposal.par,
+                  yardage: holeProposal.yardage,
+                  strokeIndex: holeProposal.strokeIndex,
+                })
                 .where(eq(hole.id, existingHole.id)),
             );
           } else {
@@ -283,6 +364,7 @@ export const courseRoutes = new Hono<Env>()
                 number: holeProposal.number,
                 par: holeProposal.par,
                 yardage: holeProposal.yardage,
+                strokeIndex: holeProposal.strokeIndex,
               }),
             );
           }

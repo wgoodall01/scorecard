@@ -5,7 +5,8 @@ import type { CourseProposalSchema, ProposalSetSchema, ProposalTeeSchema } from 
 //   - mapping: the reconciliation — usgaCourseId, usgaCourseNine, usgaTeeId
 //              (matching a nine/tee to the right USGA record is the whole job)
 //   - ratings: per-tee 9-hole courseRating / slopeRating
-//   - layout:  per-hole par / yardage (copied from metadata, should be exact)
+//   - layout:  per-hole par / yardage / stroke index (copied from the layout
+//              input, so these should be exact)
 //   - attrs:   names, gender, type
 export type ScoreResult = {
   overall: number;
@@ -83,6 +84,11 @@ export function score(got: CourseProposalSchema, expected: CourseProposalSchema)
         const gotHole = gotTee?.holes.find((hole) => hole.number === expectedHole.number);
         tally("layout", gotHole?.par, expectedHole.par);
         tally("layout", gotHole ? (gotHole.yardage ?? null) : undefined, expectedHole.yardage);
+        tally(
+          "layout",
+          gotHole ? (gotHole.strokeIndex ?? null) : undefined,
+          expectedHole.strokeIndex,
+        );
       }
     }
   });
