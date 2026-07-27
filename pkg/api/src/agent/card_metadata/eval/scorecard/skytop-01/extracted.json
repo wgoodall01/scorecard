@@ -11,47 +11,56 @@
             {
               "number": 1,
               "par": 4,
-              "yardage": 424
+              "yardage": 424,
+              "strokeIndex": 3
             },
             {
               "number": 2,
               "par": 4,
-              "yardage": 375
+              "yardage": 375,
+              "strokeIndex": 13
             },
             {
               "number": 3,
               "par": 3,
-              "yardage": 248
+              "yardage": 248,
+              "strokeIndex": 9
             },
             {
               "number": 4,
               "par": 4,
-              "yardage": 377
+              "yardage": 377,
+              "strokeIndex": 15
             },
             {
               "number": 5,
               "par": 4,
-              "yardage": 410
+              "yardage": 410,
+              "strokeIndex": 5
             },
             {
               "number": 6,
               "par": 3,
-              "yardage": 182
+              "yardage": 182,
+              "strokeIndex": 11
             },
             {
               "number": 7,
               "par": 5,
-              "yardage": 530
+              "yardage": 530,
+              "strokeIndex": 1
             },
             {
               "number": 8,
               "par": 4,
-              "yardage": 455
+              "yardage": 455,
+              "strokeIndex": 7
             },
             {
               "number": 9,
               "par": 5,
-              "yardage": 484
+              "yardage": 484,
+              "strokeIndex": 17
             }
           ]
         },
@@ -61,47 +70,56 @@
             {
               "number": 1,
               "par": 4,
-              "yardage": 414
+              "yardage": 414,
+              "strokeIndex": 3
             },
             {
               "number": 2,
               "par": 4,
-              "yardage": 375
+              "yardage": 375,
+              "strokeIndex": 13
             },
             {
               "number": 3,
               "par": 3,
-              "yardage": 198
+              "yardage": 198,
+              "strokeIndex": 9
             },
             {
               "number": 4,
               "par": 4,
-              "yardage": 377
+              "yardage": 377,
+              "strokeIndex": 15
             },
             {
               "number": 5,
               "par": 4,
-              "yardage": 410
+              "yardage": 410,
+              "strokeIndex": 5
             },
             {
               "number": 6,
               "par": 3,
-              "yardage": 182
+              "yardage": 182,
+              "strokeIndex": 11
             },
             {
               "number": 7,
               "par": 5,
-              "yardage": 530
+              "yardage": 530,
+              "strokeIndex": 1
             },
             {
               "number": 8,
               "par": 4,
-              "yardage": 426
+              "yardage": 426,
+              "strokeIndex": 7
             },
             {
               "number": 9,
               "par": 5,
-              "yardage": 484
+              "yardage": 484,
+              "strokeIndex": 17
             }
           ]
         },
@@ -111,47 +129,56 @@
             {
               "number": 1,
               "par": 4,
-              "yardage": 414
+              "yardage": 414,
+              "strokeIndex": 3
             },
             {
               "number": 2,
               "par": 4,
-              "yardage": 367
+              "yardage": 367,
+              "strokeIndex": 13
             },
             {
               "number": 3,
               "par": 3,
-              "yardage": 198
+              "yardage": 198,
+              "strokeIndex": 9
             },
             {
               "number": 4,
               "par": 4,
-              "yardage": 370
+              "yardage": 370,
+              "strokeIndex": 15
             },
             {
               "number": 5,
               "par": 4,
-              "yardage": 408
+              "yardage": 408,
+              "strokeIndex": 5
             },
             {
               "number": 6,
               "par": 3,
-              "yardage": 176
+              "yardage": 176,
+              "strokeIndex": 11
             },
             {
               "number": 7,
               "par": 5,
-              "yardage": 515
+              "yardage": 515,
+              "strokeIndex": 1
             },
             {
               "number": 8,
               "par": 4,
-              "yardage": 426
+              "yardage": 426,
+              "strokeIndex": 7
             },
             {
               "number": 9,
               "par": 5,
-              "yardage": 480
+              "yardage": 480,
+              "strokeIndex": 17
             }
           ]
         },
@@ -161,47 +188,56 @@
             {
               "number": 1,
               "par": 4,
-              "yardage": 414
+              "yardage": 414,
+              "strokeIndex": 3
             },
             {
               "number": 2,
               "par": 4,
-              "yardage": 367
+              "yardage": 367,
+              "strokeIndex": 13
             },
             {
               "number": 3,
               "par": 3,
-              "yardage": 188
+              "yardage": 188,
+              "strokeIndex": 9
             },
             {
               "number": 4,
               "par": 4,
-              "yardage": 361
+              "yardage": 361,
+              "strokeIndex": 15
             },
             {
               "number": 5,
               "par": 4,
-              "yardage": 332
+              "yardage": 332,
+              "strokeIndex": 5
             },
             {
               "number": 6,
               "par": 3,
-              "yardage": 176
+              "yardage": 176,
+              "strokeIndex": 11
             },
             {
               "number": 7,
               "par": 5,
-              "yardage": 515
+              "yardage": 515,
+              "strokeIndex": 1
             },
             {
               "number": 8,
               "par": 4,
-              "yardage": 373
+              "yardage": 373,
+              "strokeIndex": 7
             },
             {
               "number": 9,
               "par": 5,
-              "yardage": 480
+              "yardage": 480,
+              "strokeIndex": 17
             }
           ]
         },
@@ -211,47 +247,56 @@
             {
               "number": 1,
               "par": 4,
-              "yardage": 415
+              "yardage": 415,
+              "strokeIndex": 3
             },
             {
               "number": 2,
               "par": 4,
-              "yardage": 315
+              "yardage": 315,
+              "strokeIndex": 13
             },
             {
               "number": 3,
               "par": 3,
-              "yardage": 188
+              "yardage": 188,
+              "strokeIndex": 9
             },
             {
               "number": 4,
               "par": 4,
-              "yardage": 361
+              "yardage": 361,
+              "strokeIndex": 15
             },
             {
               "number": 5,
               "par": 4,
-              "yardage": 332
+              "yardage": 332,
+              "strokeIndex": 5
             },
             {
               "number": 6,
               "par": 3,
-              "yardage": 136
+              "yardage": 136,
+              "strokeIndex": 11
             },
             {
               "number": 7,
               "par": 5,
-              "yardage": 476
+              "yardage": 476,
+              "strokeIndex": 1
             },
             {
               "number": 8,
               "par": 4,
-              "yardage": 373
+              "yardage": 373,
+              "strokeIndex": 7
             },
             {
               "number": 9,
               "par": 5,
-              "yardage": 431
+              "yardage": 431,
+              "strokeIndex": 17
             }
           ]
         }
@@ -266,47 +311,56 @@
             {
               "number": 10,
               "par": 4,
-              "yardage": 288
+              "yardage": 288,
+              "strokeIndex": 16
             },
             {
               "number": 11,
               "par": 5,
-              "yardage": 469
+              "yardage": 469,
+              "strokeIndex": 18
             },
             {
               "number": 12,
               "par": 3,
-              "yardage": 210
+              "yardage": 210,
+              "strokeIndex": 6
             },
             {
               "number": 13,
               "par": 4,
-              "yardage": 339
+              "yardage": 339,
+              "strokeIndex": 14
             },
             {
               "number": 14,
               "par": 4,
-              "yardage": 329
+              "yardage": 329,
+              "strokeIndex": 10
             },
             {
               "number": 15,
               "par": 5,
-              "yardage": 551
+              "yardage": 551,
+              "strokeIndex": 2
             },
             {
               "number": 16,
               "par": 3,
-              "yardage": 189
+              "yardage": 189,
+              "strokeIndex": 12
             },
             {
               "number": 17,
               "par": 4,
-              "yardage": 435
+              "yardage": 435,
+              "strokeIndex": 4
             },
             {
               "number": 18,
               "par": 4,
-              "yardage": 364
+              "yardage": 364,
+              "strokeIndex": 8
             }
           ]
         },
@@ -316,47 +370,56 @@
             {
               "number": 10,
               "par": 4,
-              "yardage": 276
+              "yardage": 276,
+              "strokeIndex": 16
             },
             {
               "number": 11,
               "par": 5,
-              "yardage": 469
+              "yardage": 469,
+              "strokeIndex": 18
             },
             {
               "number": 12,
               "par": 3,
-              "yardage": 188
+              "yardage": 188,
+              "strokeIndex": 6
             },
             {
               "number": 13,
               "par": 4,
-              "yardage": 339
+              "yardage": 339,
+              "strokeIndex": 14
             },
             {
               "number": 14,
               "par": 4,
-              "yardage": 329
+              "yardage": 329,
+              "strokeIndex": 10
             },
             {
               "number": 15,
               "par": 5,
-              "yardage": 551
+              "yardage": 551,
+              "strokeIndex": 2
             },
             {
               "number": 16,
               "par": 3,
-              "yardage": 189
+              "yardage": 189,
+              "strokeIndex": 12
             },
             {
               "number": 17,
               "par": 4,
-              "yardage": 428
+              "yardage": 428,
+              "strokeIndex": 4
             },
             {
               "number": 18,
               "par": 4,
-              "yardage": 364
+              "yardage": 364,
+              "strokeIndex": 8
             }
           ]
         },
@@ -366,47 +429,56 @@
             {
               "number": 10,
               "par": 4,
-              "yardage": 276
+              "yardage": 276,
+              "strokeIndex": 16
             },
             {
               "number": 11,
               "par": 5,
-              "yardage": 461
+              "yardage": 461,
+              "strokeIndex": 18
             },
             {
               "number": 12,
               "par": 3,
-              "yardage": 188
+              "yardage": 188,
+              "strokeIndex": 6
             },
             {
               "number": 13,
               "par": 4,
-              "yardage": 333
+              "yardage": 333,
+              "strokeIndex": 14
             },
             {
               "number": 14,
               "par": 4,
-              "yardage": 322
+              "yardage": 322,
+              "strokeIndex": 10
             },
             {
               "number": 15,
               "par": 5,
-              "yardage": 492
+              "yardage": 492,
+              "strokeIndex": 2
             },
             {
               "number": 16,
               "par": 3,
-              "yardage": 180
+              "yardage": 180,
+              "strokeIndex": 12
             },
             {
               "number": 17,
               "par": 4,
-              "yardage": 428
+              "yardage": 428,
+              "strokeIndex": 4
             },
             {
               "number": 18,
               "par": 4,
-              "yardage": 352
+              "yardage": 352,
+              "strokeIndex": 8
             }
           ]
         },
@@ -416,47 +488,56 @@
             {
               "number": 10,
               "par": 4,
-              "yardage": 276
+              "yardage": 276,
+              "strokeIndex": 16
             },
             {
               "number": 11,
               "par": 5,
-              "yardage": 461
+              "yardage": 461,
+              "strokeIndex": 18
             },
             {
               "number": 12,
               "par": 3,
-              "yardage": 124
+              "yardage": 124,
+              "strokeIndex": 6
             },
             {
               "number": 13,
               "par": 4,
-              "yardage": 326
+              "yardage": 326,
+              "strokeIndex": 14
             },
             {
               "number": 14,
               "par": 4,
-              "yardage": 290
+              "yardage": 290,
+              "strokeIndex": 10
             },
             {
               "number": 15,
               "par": 5,
-              "yardage": 492
+              "yardage": 492,
+              "strokeIndex": 2
             },
             {
               "number": 16,
               "par": 3,
-              "yardage": 168
+              "yardage": 168,
+              "strokeIndex": 12
             },
             {
               "number": 17,
               "par": 4,
-              "yardage": 400
+              "yardage": 400,
+              "strokeIndex": 4
             },
             {
               "number": 18,
               "par": 4,
-              "yardage": 352
+              "yardage": 352,
+              "strokeIndex": 8
             }
           ]
         },
@@ -466,47 +547,56 @@
             {
               "number": 10,
               "par": 4,
-              "yardage": 235
+              "yardage": 235,
+              "strokeIndex": 16
             },
             {
               "number": 11,
               "par": 5,
-              "yardage": 419
+              "yardage": 419,
+              "strokeIndex": 18
             },
             {
               "number": 12,
               "par": 3,
-              "yardage": 124
+              "yardage": 124,
+              "strokeIndex": 6
             },
             {
               "number": 13,
               "par": 4,
-              "yardage": 326
+              "yardage": 326,
+              "strokeIndex": 14
             },
             {
               "number": 14,
               "par": 4,
-              "yardage": 290
+              "yardage": 290,
+              "strokeIndex": 10
             },
             {
               "number": 15,
               "par": 5,
-              "yardage": 423
+              "yardage": 423,
+              "strokeIndex": 2
             },
             {
               "number": 16,
               "par": 3,
-              "yardage": 168
+              "yardage": 168,
+              "strokeIndex": 12
             },
             {
               "number": 17,
               "par": 4,
-              "yardage": 400
+              "yardage": 400,
+              "strokeIndex": 4
             },
             {
               "number": 18,
               "par": 4,
-              "yardage": 301
+              "yardage": 301,
+              "strokeIndex": 8
             }
           ]
         }

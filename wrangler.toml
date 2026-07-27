@@ -92,7 +92,7 @@ WEBAUTHN_ALLOWED_ORIGINS = "https://scorecard.wg.gay"
 # AI_GATEWAY_TOKEN also lives in .env.local but is eval-only (see
 # pkg/api/src/model_provider.ts's evalModel), not a Worker secret.
 [secrets]
-required = ["JWT_SECRET", "AUTHN_CHALLENGE_SIGNING_SECRET"]
+required = ["JWT_SECRET", "AUTHN_CHALLENGE_SIGNING_SECRET", "GOLFCOURSE_API_KEY"]
 
 [observability]
 traces = { enabled = true }

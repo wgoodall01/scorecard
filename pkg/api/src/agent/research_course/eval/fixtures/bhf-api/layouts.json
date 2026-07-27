@@ -1,0 +1,2183 @@
+[
+  {
+    "source": "golfcourseapi",
+    "origin": "GolfCourseAPI, club \"Buck Hill Falls Golf Club\" (rated layouts: Blue/Red, White/Blue, Red/White)",
+    "nines": [
+      {
+        "name": "Blue",
+        "tees": [
+          {
+            "name": "Blue",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 340,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 292,
+                "strokeIndex": 16
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 488,
+                "strokeIndex": 8
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 558,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 168,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 354,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 182,
+                "strokeIndex": 14
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 440,
+                "strokeIndex": 4
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 356,
+                "strokeIndex": 12
+              }
+            ]
+          },
+          {
+            "name": "White",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 335,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 282,
+                "strokeIndex": 16
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 458,
+                "strokeIndex": 8
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 548,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 144,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 345,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 172,
+                "strokeIndex": 14
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 400,
+                "strokeIndex": 4
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 326,
+                "strokeIndex": 12
+              }
+            ]
+          },
+          {
+            "name": "Gold",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 304,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 243,
+                "strokeIndex": 16
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 395,
+                "strokeIndex": 8
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 446,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 129,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 327,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 165,
+                "strokeIndex": 14
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 335,
+                "strokeIndex": 4
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 326,
+                "strokeIndex": 12
+              }
+            ]
+          },
+          {
+            "name": "Red",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 295,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 224,
+                "strokeIndex": 16
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 366,
+                "strokeIndex": 8
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 440,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 120,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 290,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 160,
+                "strokeIndex": 14
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 330,
+                "strokeIndex": 4
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 271,
+                "strokeIndex": 12
+              }
+            ]
+          },
+          {
+            "name": "Green",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 223,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 201,
+                "strokeIndex": 16
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 290,
+                "strokeIndex": 8
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 390,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 89,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 225,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 75,
+                "strokeIndex": 14
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 238,
+                "strokeIndex": 4
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 239,
+                "strokeIndex": 12
+              }
+            ]
+          },
+          {
+            "name": "Blue",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 340,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 292,
+                "strokeIndex": 14
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 488,
+                "strokeIndex": 4
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 558,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 168,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 354,
+                "strokeIndex": 8
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 182,
+                "strokeIndex": 16
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 440,
+                "strokeIndex": 12
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 356,
+                "strokeIndex": 10
+              }
+            ]
+          },
+          {
+            "name": "White",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 335,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 282,
+                "strokeIndex": 14
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 458,
+                "strokeIndex": 4
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 548,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 144,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 345,
+                "strokeIndex": 8
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 172,
+                "strokeIndex": 16
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 400,
+                "strokeIndex": 12
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 326,
+                "strokeIndex": 10
+              }
+            ]
+          },
+          {
+            "name": "Gold",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 304,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 243,
+                "strokeIndex": 14
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 395,
+                "strokeIndex": 4
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 446,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 129,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 327,
+                "strokeIndex": 8
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 165,
+                "strokeIndex": 16
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 335,
+                "strokeIndex": 12
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 326,
+                "strokeIndex": 10
+              }
+            ]
+          },
+          {
+            "name": "Red",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 295,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 224,
+                "strokeIndex": 14
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 366,
+                "strokeIndex": 4
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 440,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 120,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 290,
+                "strokeIndex": 8
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 160,
+                "strokeIndex": 16
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 330,
+                "strokeIndex": 12
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 271,
+                "strokeIndex": 10
+              }
+            ]
+          },
+          {
+            "name": "Green",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 223,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 201,
+                "strokeIndex": 14
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 290,
+                "strokeIndex": 4
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 390,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 89,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 225,
+                "strokeIndex": 8
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 75,
+                "strokeIndex": 16
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 238,
+                "strokeIndex": 12
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 239,
+                "strokeIndex": 10
+              }
+            ]
+          },
+          {
+            "name": "Blue/White",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 340,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 292,
+                "strokeIndex": 16
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 488,
+                "strokeIndex": 8
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 548,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 144,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 345,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 182,
+                "strokeIndex": 14
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 400,
+                "strokeIndex": 4
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 356,
+                "strokeIndex": 12
+              }
+            ]
+          },
+          {
+            "name": "White/Gold",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 304,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 282,
+                "strokeIndex": 16
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 395,
+                "strokeIndex": 8
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 446,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 144,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 345,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 172,
+                "strokeIndex": 14
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 335,
+                "strokeIndex": 4
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 326,
+                "strokeIndex": 12
+              }
+            ]
+          },
+          {
+            "name": "Green/Red",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 223,
+                "strokeIndex": 6
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 224,
+                "strokeIndex": 14
+              },
+              {
+                "number": 3,
+                "par": 5,
+                "yardage": 366,
+                "strokeIndex": 4
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 390,
+                "strokeIndex": 2
+              },
+              {
+                "number": 5,
+                "par": 3,
+                "yardage": 120,
+                "strokeIndex": 18
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 290,
+                "strokeIndex": 8
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 160,
+                "strokeIndex": 16
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 238,
+                "strokeIndex": 12
+              },
+              {
+                "number": 9,
+                "par": 4,
+                "yardage": 271,
+                "strokeIndex": 10
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Red",
+        "tees": [
+          {
+            "name": "Blue",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 154,
+                "strokeIndex": 18
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 398,
+                "strokeIndex": 4
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 156,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 348,
+                "strokeIndex": 12
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 419,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 436,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 354,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 405,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 169,
+                "strokeIndex": 16
+              }
+            ]
+          },
+          {
+            "name": "White",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 143,
+                "strokeIndex": 18
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 388,
+                "strokeIndex": 4
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 150,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 342,
+                "strokeIndex": 12
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 414,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 434,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 342,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 399,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 164,
+                "strokeIndex": 16
+              }
+            ]
+          },
+          {
+            "name": "Gold",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 138,
+                "strokeIndex": 18
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 259,
+                "strokeIndex": 4
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 146,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 12
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 400,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 431,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 274,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 397,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 131,
+                "strokeIndex": 16
+              }
+            ]
+          },
+          {
+            "name": "Red",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 138,
+                "strokeIndex": 18
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 244,
+                "strokeIndex": 4
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 146,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 12
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 335,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 431,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 274,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 397,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 94,
+                "strokeIndex": 16
+              }
+            ]
+          },
+          {
+            "name": "Green",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 105,
+                "strokeIndex": 18
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 244,
+                "strokeIndex": 4
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 114,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 255,
+                "strokeIndex": 12
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 304,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 338,
+                "strokeIndex": 10
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 193,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 387,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 94,
+                "strokeIndex": 16
+              }
+            ]
+          },
+          {
+            "name": "Blue",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 154,
+                "strokeIndex": 16
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 398,
+                "strokeIndex": 12
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 156,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 348,
+                "strokeIndex": 10
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 419,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 436,
+                "strokeIndex": 4
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 354,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 405,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 169,
+                "strokeIndex": 18
+              }
+            ]
+          },
+          {
+            "name": "White",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 143,
+                "strokeIndex": 16
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 388,
+                "strokeIndex": 12
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 150,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 342,
+                "strokeIndex": 10
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 414,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 434,
+                "strokeIndex": 4
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 342,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 399,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 164,
+                "strokeIndex": 18
+              }
+            ]
+          },
+          {
+            "name": "Gold",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 138,
+                "strokeIndex": 16
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 259,
+                "strokeIndex": 12
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 146,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 10
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 400,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 431,
+                "strokeIndex": 4
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 274,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 397,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 131,
+                "strokeIndex": 18
+              }
+            ]
+          },
+          {
+            "name": "Red",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 138,
+                "strokeIndex": 16
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 244,
+                "strokeIndex": 12
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 146,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 10
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 335,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 431,
+                "strokeIndex": 4
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 274,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 397,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 94,
+                "strokeIndex": 18
+              }
+            ]
+          },
+          {
+            "name": "Green",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 3,
+                "yardage": 105,
+                "strokeIndex": 16
+              },
+              {
+                "number": 2,
+                "par": 4,
+                "yardage": 244,
+                "strokeIndex": 12
+              },
+              {
+                "number": 3,
+                "par": 3,
+                "yardage": 114,
+                "strokeIndex": 14
+              },
+              {
+                "number": 4,
+                "par": 4,
+                "yardage": 255,
+                "strokeIndex": 10
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 304,
+                "strokeIndex": 2
+              },
+              {
+                "number": 6,
+                "par": 5,
+                "yardage": 338,
+                "strokeIndex": 4
+              },
+              {
+                "number": 7,
+                "par": 4,
+                "yardage": 193,
+                "strokeIndex": 8
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 387,
+                "strokeIndex": 6
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 94,
+                "strokeIndex": 18
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "White",
+        "tees": [
+          {
+            "name": "Blue",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 343,
+                "strokeIndex": 13
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 510,
+                "strokeIndex": 5
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 11
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 563,
+                "strokeIndex": 1
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 387,
+                "strokeIndex": 7
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 392,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 161,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 432,
+                "strokeIndex": 3
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 207,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "Blue/White",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 343,
+                "strokeIndex": 13
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 475,
+                "strokeIndex": 5
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 11
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 563,
+                "strokeIndex": 1
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 361,
+                "strokeIndex": 7
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 382,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 149,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 410,
+                "strokeIndex": 3
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 207,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "White",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 13
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 475,
+                "strokeIndex": 5
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 322,
+                "strokeIndex": 11
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 554,
+                "strokeIndex": 1
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 361,
+                "strokeIndex": 7
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 382,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 149,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 410,
+                "strokeIndex": 3
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 199,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "White/Gold",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 13
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 475,
+                "strokeIndex": 5
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 278,
+                "strokeIndex": 11
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 489,
+                "strokeIndex": 1
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 310,
+                "strokeIndex": 7
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 382,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 149,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 340,
+                "strokeIndex": 3
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 166,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "Gold",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 318,
+                "strokeIndex": 13
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 440,
+                "strokeIndex": 5
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 278,
+                "strokeIndex": 11
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 489,
+                "strokeIndex": 1
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 310,
+                "strokeIndex": 7
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 314,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 139,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 340,
+                "strokeIndex": 3
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 166,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "Red",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 263,
+                "strokeIndex": 13
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 430,
+                "strokeIndex": 5
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 267,
+                "strokeIndex": 11
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 480,
+                "strokeIndex": 1
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 297,
+                "strokeIndex": 7
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 298,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 129,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 310,
+                "strokeIndex": 3
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 156,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "Green",
+            "gender": "m",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 196,
+                "strokeIndex": 13
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 372,
+                "strokeIndex": 5
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 215,
+                "strokeIndex": 11
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 392,
+                "strokeIndex": 1
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 227,
+                "strokeIndex": 7
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 240,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 105,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 275,
+                "strokeIndex": 3
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 115,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "Blue",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 343,
+                "strokeIndex": 11
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 510,
+                "strokeIndex": 1
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 13
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 563,
+                "strokeIndex": 3
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 387,
+                "strokeIndex": 5
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 392,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 161,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 432,
+                "strokeIndex": 7
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 207,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "White",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 336,
+                "strokeIndex": 11
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 475,
+                "strokeIndex": 1
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 322,
+                "strokeIndex": 13
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 554,
+                "strokeIndex": 3
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 361,
+                "strokeIndex": 5
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 382,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 149,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 410,
+                "strokeIndex": 7
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 199,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "Gold",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 318,
+                "strokeIndex": 11
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 440,
+                "strokeIndex": 1
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 278,
+                "strokeIndex": 13
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 489,
+                "strokeIndex": 3
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 310,
+                "strokeIndex": 5
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 314,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 139,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 340,
+                "strokeIndex": 7
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 166,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "Red",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 263,
+                "strokeIndex": 11
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 430,
+                "strokeIndex": 1
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 267,
+                "strokeIndex": 13
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 480,
+                "strokeIndex": 3
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 297,
+                "strokeIndex": 5
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 298,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 129,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 310,
+                "strokeIndex": 7
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 156,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "Green/Red",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 263,
+                "strokeIndex": 11
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 430,
+                "strokeIndex": 1
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 267,
+                "strokeIndex": 13
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 392,
+                "strokeIndex": 3
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 227,
+                "strokeIndex": 5
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 298,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 129,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 275,
+                "strokeIndex": 7
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 156,
+                "strokeIndex": 15
+              }
+            ]
+          },
+          {
+            "name": "Green",
+            "gender": "f",
+            "holes": [
+              {
+                "number": 1,
+                "par": 4,
+                "yardage": 196,
+                "strokeIndex": 11
+              },
+              {
+                "number": 2,
+                "par": 5,
+                "yardage": 372,
+                "strokeIndex": 1
+              },
+              {
+                "number": 3,
+                "par": 4,
+                "yardage": 215,
+                "strokeIndex": 13
+              },
+              {
+                "number": 4,
+                "par": 5,
+                "yardage": 392,
+                "strokeIndex": 3
+              },
+              {
+                "number": 5,
+                "par": 4,
+                "yardage": 227,
+                "strokeIndex": 5
+              },
+              {
+                "number": 6,
+                "par": 4,
+                "yardage": 240,
+                "strokeIndex": 9
+              },
+              {
+                "number": 7,
+                "par": 3,
+                "yardage": 105,
+                "strokeIndex": 17
+              },
+              {
+                "number": 8,
+                "par": 4,
+                "yardage": 275,
+                "strokeIndex": 7
+              },
+              {
+                "number": 9,
+                "par": 3,
+                "yardage": 115,
+                "strokeIndex": 15
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

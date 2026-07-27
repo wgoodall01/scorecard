@@ -49,9 +49,10 @@
 // A brand-new player with no handicap yet gets a flat cap of par + 5.
 // The capped total is the round's Adjusted Gross Score (AGS).
 //
-// (Real courses print a "stroke index" on the card ranking holes by
-// difficulty to decide WHICH holes get the extra strokes. We don't capture
-// that, so we rank holes by par, highest first — see strokesReceived.)
+// (WHICH holes get the extra strokes is decided by the "stroke index"
+// courses print on the card, ranking holes by difficulty. We capture it
+// per hole when the course import supplies one; a round whose holes lack
+// it falls back to ranking by par, highest first — see strokesReceived.)
 //
 // --- Step 3: grade the round (the Score Differential, RoH 5.1) -----------
 //
@@ -141,10 +142,12 @@
 //   differential method (there's no index to expect from), so we bootstrap
 //   by doubling the 9-hole differential — assume the missing nine went the
 //   same way.
-// - No stroke-index data (step 2 above): extra handicap strokes go to the
-//   highest-par holes first. Plus-handicap give-back holes are ignored
-//   (their cap is just par + 2) — it can shift a cap by at most a stroke
-//   on one hole, for players who rarely hit the cap at all.
+// - Missing stroke-index data (step 2 above): a round with a printed index
+//   on every hole allocates by it, as the Rules intend; one with any hole
+//   missing it sends extra strokes to the highest-par holes instead.
+//   Plus-handicap give-back holes are ignored (their cap is just par + 2) —
+//   it can shift a cap by at most a stroke on one hole, for players who
+//   rarely hit the cap at all.
 // - PCC is always 0 (it needs whole-field daily data only associations
 //   have).
 // - Exceptional Score Reductions apply only once the index is established
@@ -252,7 +255,14 @@ function expectedNineDifferential(index: number) {
   return 0.52 * index + 1.2;
 }
 
-type RatedHole = { number: number; par: number; strokes: number };
+type RatedHole = {
+  number: number;
+  par: number;
+  // The printed stroke index (1 = the hole that gets a handicap stroke first),
+  // or null for a nine imported before we captured it. See strokesReceived.
+  strokeIndex: number | null;
+  strokes: number;
+};
 
 type RatedNine = {
   // The course_set_tee the nine was played from — one player's nine on one
@@ -271,11 +281,19 @@ type Round = { outingId: string; date: string; nines: RatedNine[] };
 // net-double-bogey cap. A COURSE HANDICAP of, say, 13 means 13 strokes
 // spread over the round: every hole gets floor(13 / 18) = 0 baseline
 // strokes and the 13 "hardest" holes get one extra (a 40-handicap on 18
-// holes gets 2 everywhere and a third on the 4 hardest). Real scorecards
-// rank hole difficulty with a printed stroke index; we don't have one, so
-// holes rank by par descending, then hole number. The map is keyed by hole
-// identity, not number — a Red/White-style combination pairs two front
-// nines whose hole NUMBERS collide.
+// holes gets 2 everywhere and a third on the 4 hardest).
+//
+// Difficulty order comes from the printed STROKE INDEX when we have it for
+// every hole in the round — that's what the Rules of Handicapping actually
+// allocate by. A round with any hole missing an index (a nine imported before
+// we captured them) falls back wholesale to ranking by par descending, then
+// hole number: mixing a real index with a par proxy inside one round would
+// rank the two halves on incomparable scales, which is worse than using the
+// proxy throughout.
+//
+// The map is keyed by hole identity, not number — a Red/White-style
+// combination pairs two front nines whose hole NUMBERS collide, and two nines
+// can likewise print the same stroke index.
 function strokesReceived(courseHandicap: number, holes: RatedHole[]): Map<RatedHole, number> {
   const received = new Map<RatedHole, number>();
   if (courseHandicap <= 0) {
@@ -284,7 +302,12 @@ function strokesReceived(courseHandicap: number, holes: RatedHole[]): Map<RatedH
   }
   const base = Math.floor(courseHandicap / holes.length);
   const extras = courseHandicap % holes.length;
-  const byDifficulty = [...holes].sort((a, b) => b.par - a.par || a.number - b.number);
+  const indexed = holes.every((hole) => hole.strokeIndex !== null);
+  const byDifficulty = [...holes].sort((a, b) =>
+    indexed
+      ? (a.strokeIndex as number) - (b.strokeIndex as number) || a.number - b.number
+      : b.par - a.par || a.number - b.number,
+  );
   byDifficulty.forEach((hole, rank) => {
     received.set(hole, base + (rank < extras ? 1 : 0));
   });
@@ -515,6 +538,7 @@ SELECT
   cs.name  AS set_name,
   h.number AS hole_number,
   h.par    AS par,
+  h.stroke_index AS stroke_index,
   s.score  AS strokes,
   t.course_rating AS course_rating,
   t.slope_rating  AS slope_rating
@@ -535,6 +559,7 @@ type RoundRow = {
   set_name: string;
   hole_number: number;
   par: number;
+  stroke_index: number | null;
   strokes: number;
   course_rating: number | null;
   slope_rating: number | null;
@@ -570,7 +595,12 @@ export async function computeHandicap(db: D1Database, playerId: string): Promise
       round.nines.push(nine);
     }
     nine.par += row.par;
-    nine.holes.push({ number: row.hole_number, par: row.par, strokes: row.strokes });
+    nine.holes.push({
+      number: row.hole_number,
+      par: row.par,
+      strokeIndex: row.stroke_index,
+      strokes: row.strokes,
+    });
   }
 
   // Only complete (all 9 holes scored), rated nines can post differentials.

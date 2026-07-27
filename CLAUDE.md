@@ -46,9 +46,9 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   golfers' FULL names, not the written scrawl; two written names MAY map to
   one golfer — cards sometimes alias a person per nine — but not within a
   single nine) — each nine is assigned to an
-  EXISTING course set only (there is NO course create/edit surface anywhere,
-  API or UI; course data is imported directly into the database — seed
-  script, ratings scraper — and the Courses tab is a read-only registry)
+  EXISTING course set only (courses are added through the admin course-add
+  flow — `pkg/web/src/pages/course-create.tsx`, see the GolfCourseAPI bullet
+  below — or seeded; the capture flow never creates course data)
   with a
   per-golfer TEE picker over the set's `course_set_tee` rows (auto-defaulted
   from a merge candidate's recorded tee, else the golfer's `preferredTee`
@@ -84,6 +84,8 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   Auth needs no KV (challenges are stateless signed tokens); the `[vars]`
   `WEBAUTHN_RP_NAME`/`WEBAUTHN_ALLOWED_ORIGINS` and the `[secrets]`
   `AUTHN_CHALLENGE_SIGNING_SECRET` (alongside `JWT_SECRET`) configure WebAuthn.
+  `[secrets]` also requires `GOLFCOURSE_API_KEY` (api.golfcourseapi.com — the
+  course-add flow's layout source).
   `WEBAUTHN_ALLOWED_ORIGINS` in `[vars]` is the PRODUCTION list only
   (`https://scorecard.wg.gay`) — never add localhost or a tunnel origin there,
   since the allowlist is what derives rpID/expectedOrigin and prod would then
@@ -115,7 +117,10 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   matching profile preferences — untyped tees are still playable — and
   nullable 9-hole `course_rating`/`slope_rating`, null = unrated; unique per
   (set, lower(name), coalesce(gender, ''))), `hole` (belongs to a TEE, not
-  the set — par can differ by tee; number unique per tee), `outing` (naive
+  the set — par, `yardage`, and `stroke_index` can all differ by tee, and
+  courses print separate men's/women's stroke-index rows; number unique per
+  tee; nullable `stroke_index` = the printed hole-difficulty rank, null =
+  not captured, which makes `handicap.ts` fall back to par-desc), `outing` (naive
   `date` "YYYY-MM-DD" + course_id), `score_set` (the root of scores: one row
   per (outing, player, course_set_tee), so a day can mix tees nine-by-nine
   and every score commits to a tee), `job` (the generic job queue's rows — see
@@ -217,8 +222,10 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   `handicapFromRounds` (pure, unit-tested) replays the record
   chronologically — differentials (18-hole = two nines' ratings summed,
   slopes averaged; 9-hole via the expected-differential formula
-  `0.52·HI + 1.2`), net double bogey (stroke allocation proxied by par-desc
-  since holes carry no stroke index), best-8-of-20 / fewer-scores table, ESR,
+  `0.52·HI + 1.2`), net double bogey (stroke allocation by each hole's
+  printed `stroke_index` when the whole round has one, else proxied by
+  par-desc — a round is never allocated on a MIX of the two scales),
+  best-8-of-20 / fewer-scores table, ESR,
   and soft/hard caps vs the 365-day Low Index. House rules: the table
   extends down to 1–2 differentials flagged `provisional` (UI copy: "not
   enough scores for a traditional handicap, provisional shown instead"), a
@@ -416,6 +423,69 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   are JSON files under each agent's `eval/fixtures/` (a roster or course list
   plus labeled cases; player cases may carry optional per-name `guesses`);
   `bun eval:players` / `bun eval:courses` run them.
+- COURSE-ADD PIPELINE (admin only; `pkg/web/src/pages/course-create.tsx`,
+  `pkg/api/routes/courses.ts`). Steps: **find** the course in the local
+  `usga_*` NCRDB mirror (free, instant — which is why the flow starts here and
+  not at GolfCourseAPI) → **layout**, where its pars/yardages/stroke indexes
+  come from → **analyze** (the `research_course` job) → **review** the
+  proposal in the editor → save, which merges into the existing course by
+  natural key so historical scores keep resolving.
+  - `pkg/api/src/golfcourseapi/`: `client.ts` (HTTP) + `store.ts` (the local
+    mirror) over api.golfcourseapi.com, the PRIMARY layout source. Only
+    `/v1/search` is used — its response embeds each match's full tee/hole tree,
+    so a club costs exactly ONE request and `/v1/courses/{id}` is pointless.
+    The free tier allows 50 req/DAY, so there are THREE layers of thrift:
+    every response is mirrored into the `gcapi_course` table, the route
+    searches that mirror FIRST and only goes upstream on a miss (or
+    `?refresh=1`), and an upstream request is edge-cached for a MONTH via
+    fetch's `cf: { cacheTtl, cacheEverything }` (not the Cache API — no
+    bookkeeping, and `wrangler dev` just ignores it). The UI also debounces
+    hard (600ms, 3-char minimum) and reports whether an answer came from the
+    mirror or upstream. Because the mirror makes a course ADDRESSABLE,
+    `research_course` takes `gcapiCourseIds` and reads those rows — it never
+    re-runs a text search and hopes the right course comes back.
+    Verified against our USGA-imported
+    production rows for Buck Hill Falls: per-hole par, yardage, and stroke
+    index are byte-exact across all seven tees INCLUDING combination tees.
+    What it does NOT give: the documented front9/back9 rating splits and
+    `bogey_rating` are never populated (0 of 60+ tees across three
+    facilities), there are no NCRDB ids, and a nine is named after its tee
+    color ("White"), never the name printed on the card ("White Oak"). Hence:
+    GolfCourseAPI for LAYOUT, the USGA mirror for RATINGS — it can't replace
+    the mirror. `testdata/buck-hill-falls-search.json` is a real captured
+    response and the layout adapter's regression fixture (also the
+    `store.test.ts` fixture).
+  - `pkg/api/src/agent/research_course/layout.ts`: `CourseLayout`, the
+    source-agnostic shape the agent reconciles (nines → tees → per-hole par /
+    yardage / stroke index, with the tee's gender when the source knows it).
+    `layoutFromGolfCourseApi` is the deterministic, non-obvious part:
+    GolfCourseAPI models every rated layout as an 18, so a multi-nine club
+    arrives as one entry per nine-COMBINATION ("White/Blue") and each physical
+    nine appears in several. It folds them to one nine per name, keeping the
+    FRONT occurrence's 1–9 numbering (matching the USGA records, where every
+    rated nine fronts a combination) and UNIONING tees across occurrences,
+    renumbered — without that union a nine loses the combination tees rated
+    only on the layouts it isn't fronting. An unnamed 18 splits to
+    "Front"/"Back". `layoutGaps` returns blocking vs advisory gaps: blocking
+    means a scorecard photo is REQUIRED, advisory means it'd merely help (the
+    tee-color nine names are advisory — the review editor can rename).
+  - The scorecard photo is now a GAP-FILLER, not the default path: the
+    `extract_metadata` / `card_metadata` vision agent still exists and now
+    also reads the printed stroke-index row, and `research_course` takes an
+    ARRAY of layouts so a card and the feed can be passed together. The prompt
+    makes GolfCourseAPI authoritative for numbers and tee genders, and the card
+    authoritative for the printed nine names; when both are present the nines
+    are matched by (hole, par) sequence, NOT by name, since the names are
+    exactly what differs. Eval fixtures cover all three combinations
+    (`bhf-api`, `bhf-card`, `bhf-both`) as `layouts.json` + `usga.json` +
+    `proposal.json`.
+  - `gcapi_course` (schema.ts): the mirror table. One row per GolfCourseAPI
+    numeric course_id — the raw course object in a `payload` json column
+    (re-parsed on read, so an older row fails loudly rather than surfacing a
+    surprising shape) plus denormalized club/course/city/state columns purely
+    for searching, and `fetched_at` for when we last saw it upstream. Written
+    on EVERY response, including neighbouring clubs the caller wasn't looking
+    for — a stored row is a search that never costs quota again.
 - `pkg/api/src/model.ts`: all model selection/routing. Models are addressed
   as `ModelSpec` strings of the form `"provider/model@effort"` — reasoning
   effort is part of the model identity, and effort levels are
@@ -605,9 +675,10 @@ script/update_seed.nu --local`).
   raw D1 queries unless there is a concrete reason.
 - Never commit Cloudflare credentials or generated `.wrangler` state.
 - The repo-root `.env.local` is the ONLY env file — no `.dev.vars`, no other
-  `.env*` anywhere. It holds local secrets (`JWT_SECRET` and
-  `AUTHN_CHALLENGE_SIGNING_SECRET` for `wrangler dev`,
-  `AI_GATEWAY_TOKEN` for `bun eval`) plus the two local-only `[vars]` overrides
+  `.env*` anywhere. It holds local secrets (`JWT_SECRET`,
+  `AUTHN_CHALLENGE_SIGNING_SECRET`, and `GOLFCOURSE_API_KEY` for
+  `wrangler dev`, `AI_GATEWAY_TOKEN` for `bun eval`) plus the two local-only
+  `[vars]` overrides
   (`NODE_ENV=development`, and `WEBAUTHN_ALLOWED_ORIGINS` with the localhost +
   current tunnel origins); wrangler dev reads it directly since no
   `.dev.vars` exists. Required Worker secrets are declared in `wrangler.toml`'s

@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
-// Eval CLI for the research_course agent — real model calls that reconcile a
-// card_metadata reading with the USGA mirror into a CourseProposal, graded
-// against reviewed labels. Fixtures live in ./fixtures/<label>/{metadata.json,
-// usga.json,proposal.json}. Runs in plain Bun/Node (no wrangler/workerd):
+// Eval CLI for the research_course agent — real model calls that reconcile one
+// or more course layouts (a GolfCourseAPI feed and/or a card_metadata photo
+// reading) with the USGA mirror into a CourseProposal, graded against reviewed
+// labels. Fixtures live in ./fixtures/<label>/{layouts.json,usga.json,
+// proposal.json}. Runs in plain Bun/Node (no wrangler/workerd):
 // models resolve via evalModel (AI Gateway REST + AI_GATEWAY_TOKEN from the
 // repo-root .env.local).
 //
@@ -187,7 +188,7 @@ const runCommand = command({
 
         try {
           const data = await researchCourse({
-            metadata: fixture.metadata,
+            layouts: fixture.layouts,
             usga: fixture.usga,
             resolver: evalModel,
             model: spec,

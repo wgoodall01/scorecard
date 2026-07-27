@@ -27,6 +27,19 @@ export const MetadataHole = z.object({
     .int()
     .nullable()
     .describe("This hole's printed yardage from this tee, or null if not printed/legible."),
+  strokeIndex: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      'This hole\'s printed STROKE INDEX — the row labeled "Handicap", "Hcp", "HDCP", ' +
+        '"Index", or "Stroke" that ranks the holes by difficulty (1 = hardest, where a ' +
+        "handicap stroke is given first). It is a RANKING, not a par or a yardage: over a full " +
+        "18 the values are 1–18 with no repeats, so a single nine carries nine of them (often " +
+        "all-odd or all-even). Unlike yardage this row is shared by every tee, so repeat the " +
+        "same value on each tee of the nine. Null if the card doesn't print it or it's " +
+        "illegible — never guess a ranking from the pars.",
+    ),
 });
 export type MetadataHoleSchema = z.infer<typeof MetadataHole>;
 

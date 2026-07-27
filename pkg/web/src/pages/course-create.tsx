@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   Flag,
   ImageUp,
+  LibraryBig,
   RefreshCcw,
   ScanText,
   Search,
@@ -42,7 +43,13 @@ import { courseResearchQuery, isPending, scorecardMetadataQuery } from "@/lib/qu
 import { TEE_LABELS, TEES } from "@/lib/tees";
 import { cn } from "@/lib/utils";
 
-type FlowStep = "capture" | "find" | "analyze" | "review" | "done";
+// The flow: pick the course, pull its layout, reconcile, review, save.
+//
+// "layout" is where the course's pars/yardages/stroke indexes come from. The
+// default source is GolfCourseAPI, searched automatically from the facility
+// name; a scorecard photo is only asked for when that feed can't stand on its
+// own (see layoutGaps in the API), though it can always be added on purpose.
+type FlowStep = "find" | "layout" | "analyze" | "review" | "done";
 
 type Facility = {
   facilityId: number;
@@ -52,9 +59,34 @@ type Facility = {
   existingCourseId: string | null;
 };
 
-// How long the two background jobs get before the wait is called a failure.
+// A GolfCourseAPI club: every rated layout it publishes, folded by the API into
+// one entry per physical nine, plus whatever that leaves missing.
+type Club = {
+  clubName: string;
+  location: string | null;
+  courseIds: number[];
+  ratedLayouts: (string | null)[];
+  nines: { name: string | null; tees: number; holes: number }[];
+  gaps: { severity: "blocking" | "advisory"; message: string }[];
+};
+
+// How long the background jobs get before the wait is called a failure.
 const JOB_TIMEOUT_MS = 90_000;
 const SEARCH_DEBOUNCE_MS = 250;
+// The GolfCourseAPI search is debounced harder than the local USGA typeahead:
+// every distinct query is an upstream request against a 50/day quota (the API
+// edge-caches each for a month, but a fresh query still spends one).
+const GOLF_SEARCH_DEBOUNCE_MS = 600;
+
+// Which club a facility most likely is. Picks an exact name match, else the
+// only result — never a guess between several, since that would silently import
+// the wrong course's pars.
+function bestClubMatch(clubs: Club[], facilityName: string | undefined): Club | null {
+  if (clubs.length === 0) return null;
+  const folded = facilityName?.trim().toLowerCase();
+  const exact = clubs.find((club) => club.clubName.trim().toLowerCase() === folded);
+  return exact ?? (clubs.length === 1 ? clubs[0] : null);
+}
 
 export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number | null }) {
   const { token } = useAuth();
@@ -63,7 +95,7 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
   // Edit mode: load an existing course straight into the editor, skipping the
   // capture/find/analyze steps.
   const editMode = editFacilityId != null;
-  const [step, setStep] = useState<FlowStep>(editFacilityId != null ? "review" : "capture");
+  const [step, setStep] = useState<FlowStep>(editFacilityId != null ? "review" : "find");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -72,6 +104,13 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [facility, setFacility] = useState<Facility | null>(null);
+
+  // Layout step. `golfSearch` seeds from the picked facility's name and is
+  // debounced into `golfQuery`; `clubChoice` is set only when the admin picks a
+  // club explicitly (otherwise the match is derived — see bestClubMatch).
+  const [golfSearch, setGolfSearch] = useState<string | null>(null);
+  const [golfQuery, setGolfQuery] = useState("");
+  const [clubChoice, setClubChoice] = useState<Club | null>(null);
 
   // Review step. `edited` holds the admin's in-progress edits; until they touch
   // anything, the proposal from the server (or the existing course, in edit
@@ -94,8 +133,42 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  // 1. Upload the photo (multipart, so it's a hand-written fetch) and kick off
-  // the layout extraction; the admin searches for the facility while it runs.
+  // The GolfCourseAPI search box defaults to the picked facility's name.
+  const golfSearchValue = golfSearch ?? facility?.name ?? "";
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setGolfQuery(golfSearchValue.trim()),
+      GOLF_SEARCH_DEBOUNCE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [golfSearchValue]);
+
+  // 1. The facility typeahead over the USGA mirror — local, so it's free and
+  // instant, which is why the flow starts here rather than at GolfCourseAPI.
+  const facilitiesQuery = useQuery({
+    ...apiQuery(api.courses.facilities.$get, { query: { q: query } }),
+    enabled: step === "find" && query.length >= 2,
+  });
+  const facilities: Facility[] | null =
+    query.length < 2 ? null : (facilitiesQuery.data?.facilities ?? null);
+
+  // 2. The course's layout from GolfCourseAPI. One upstream request per distinct
+  // query, so it only runs on the Layout step.
+  const clubsQuery = useQuery({
+    ...apiQuery(api.courses.golfcourseapi.$get, { query: { q: golfQuery } }),
+    enabled: step === "layout" && golfQuery.length >= 3,
+  });
+  const clubs: Club[] | null = golfQuery.length < 3 ? null : (clubsQuery.data?.clubs ?? null);
+  // Whether that answer came free from the local mirror or spent upstream quota.
+  const clubsSource = clubsQuery.data?.source ?? null;
+  // Derived, not stored: the admin's explicit pick wins, else the obvious match.
+  const club = clubChoice ?? bestClubMatch(clubs ?? [], facility?.name);
+  const gaps = club?.gaps ?? [];
+  const blockedOnCard =
+    clubs !== null && (club === null || gaps.some((g) => g.severity === "blocking"));
+
+  // 3. The optional scorecard photo (multipart, so it's a hand-written fetch),
+  // which kicks off the vision layout extraction.
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const form = new FormData();
@@ -110,42 +183,52 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
       if (!response.ok || !body.id) throw new Error(body.error ?? "Unable to upload.");
       return body.id;
     },
-    onSuccess: () => setStep("find"),
   });
   const scorecardId = uploadMutation.data ?? null;
-  const error = uploadMutation.error?.message ?? null;
+  const uploadError = uploadMutation.error?.message ?? null;
 
-  // The facility typeahead over the USGA mirror.
-  const facilitiesQuery = useQuery({
-    ...apiQuery(api.courses.facilities.$get, { query: { q: query } }),
-    enabled: step === "find" && query.length >= 2,
-  });
-  const facilities: Facility[] | null =
-    query.length < 2 ? null : (facilitiesQuery.data?.facilities ?? null);
-
-  // 2. The layout extraction, polled from upload onward — the Analyze step is
-  // mostly waiting for this to land.
+  // The extraction poll. With no photo there's nothing to wait for.
   const metadataQuery = useQuery(scorecardMetadataQuery(scorecardId, deadlineRef.current));
-  const metadataReady = metadataQuery.data !== undefined && !isPending(metadataQuery.data);
+  const metadataReady =
+    scorecardId === null || (metadataQuery.data !== undefined && !isPending(metadataQuery.data));
   const metadataError =
-    metadataQuery.error?.message ??
-    (isPending(metadataQuery.data) && Date.now() >= deadlineRef.current
-      ? "Reading the scorecard took too long."
-      : null);
+    scorecardId === null
+      ? null
+      : (metadataQuery.error?.message ??
+        (isPending(metadataQuery.data) && Date.now() >= deadlineRef.current
+          ? "Reading the scorecard took too long."
+          : null));
 
-  // 3. Once the layout is read, start the USGA reconciliation. This is a PUT
-  // behind a query so it fires exactly once its inputs are ready (and once
-  // only: cached forever under its key) with no effect to sequence it.
+  // 4. Reconcile the layout(s) against the USGA ratings. This is a PUT behind a
+  // query so it fires exactly once its inputs are ready (and once only: cached
+  // forever under its key) with no effect to sequence it.
   const researchStartQuery = useQuery({
-    queryKey: ["courses", "research", "start", scorecardId, facility?.facilityId],
+    queryKey: [
+      "courses",
+      "research",
+      "start",
+      facility?.facilityId,
+      club?.courseIds.join(","),
+      scorecardId,
+    ],
     queryFn: async () => {
       const response = await api.courses.research.$put.call({
-        json: { scorecardId: scorecardId!, facilityId: facility!.facilityId },
+        json: {
+          facilityId: facility!.facilityId,
+          // Addressed by GolfCourseAPI course id — the job reads them out of the
+          // local mirror, so there's no search to re-run.
+          gcapiCourseIds: club?.courseIds ?? [],
+          scorecardId,
+        },
       });
       if (!response.ok) throw new Error("Unable to start course matching.");
       return (await response.json()).jobId;
     },
-    enabled: step === "analyze" && metadataReady && scorecardId !== null && facility !== null,
+    enabled:
+      step === "analyze" &&
+      metadataReady &&
+      facility !== null &&
+      (club !== null || scorecardId !== null),
     staleTime: Infinity,
     gcTime: Infinity,
     retry: false,
@@ -174,6 +257,7 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
   const analyzeStatus = metadataReady
     ? "Matching against USGA ratings…"
     : "Reading the scorecard layout…";
+  const clubsError = clubsQuery.error?.message ?? null;
   const analyzeError =
     metadataError ??
     researchStartQuery.error?.message ??
@@ -210,11 +294,14 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
       : step;
 
   function reset() {
-    setStep("capture");
+    setStep("find");
     setPreviewUrl(null);
     setSearch("");
     setQuery("");
     setFacility(null);
+    setGolfSearch(null);
+    setGolfQuery("");
+    setClubChoice(null);
     setEdited(null);
     setShowExisting(false);
     uploadMutation.reset();
@@ -276,8 +363,8 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
               current={effectiveStep}
               busy={busy}
               steps={[
-                { key: "capture", label: "Capture", icon: Camera },
                 { key: "find", label: "Find", icon: Search },
+                { key: "layout", label: "Layout", icon: LibraryBig },
                 { key: "analyze", label: "Analyze", icon: ScanText },
                 { key: "review", label: "Review", icon: ClipboardCheck },
                 { key: "done", label: "Done", icon: Check },
@@ -311,16 +398,6 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
           </Empty>
         )}
 
-        {effectiveStep === "capture" && (
-          <CaptureStep
-            hasCamera={hasCamera}
-            error={error}
-            onFile={startCapture}
-            onCamera={() => setCameraOpen(true)}
-            onRetry={reset}
-          />
-        )}
-
         {effectiveStep === "find" && (
           <FindStep
             query={search}
@@ -328,8 +405,34 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
             facilities={facilities}
             selected={facility}
             onSelect={setFacility}
-            onContinue={() => facility && setStep("analyze")}
+            onContinue={() => facility && setStep("layout")}
+          />
+        )}
+
+        {effectiveStep === "layout" && (
+          <LayoutStep
+            facility={facility}
+            query={golfSearchValue}
+            onQuery={setGolfSearch}
+            searching={clubsQuery.isFetching}
+            clubs={clubs}
+            source={clubsSource}
+            error={clubsError}
+            club={club}
+            onSelectClub={setClubChoice}
+            gaps={gaps}
+            blockedOnCard={blockedOnCard}
+            hasCamera={hasCamera}
             previewUrl={previewUrl}
+            uploading={uploadMutation.isPending}
+            uploadError={uploadError}
+            onFile={startCapture}
+            onCamera={() => setCameraOpen(true)}
+            onBack={() => setStep("find")}
+            onContinue={() => {
+              deadlineRef.current = Date.now() + JOB_TIMEOUT_MS;
+              setStep("analyze");
+            }}
           />
         )}
 
@@ -406,63 +509,203 @@ export function CourseCreatePage({ editFacilityId }: { editFacilityId?: number |
 // Steps
 // ---------------------------------------------------------------------------
 
-function CaptureStep({
-  hasCamera,
+function LayoutStep({
+  facility,
+  query,
+  onQuery,
+  searching,
+  clubs,
+  source,
+  club,
   error,
+  onSelectClub,
+  gaps,
+  blockedOnCard,
+  hasCamera,
+  previewUrl,
+  uploading,
+  uploadError,
   onFile,
   onCamera,
-  onRetry,
+  onBack,
+  onContinue,
 }: {
-  hasCamera: boolean;
+  facility: Facility | null;
+  query: string;
+  onQuery: (value: string) => void;
+  searching: boolean;
+  clubs: Club[] | null;
+  source: "mirror" | "upstream" | null;
   error: string | null;
+  club: Club | null;
+  onSelectClub: (club: Club) => void;
+  gaps: { severity: "blocking" | "advisory"; message: string }[];
+  blockedOnCard: boolean;
+  hasCamera: boolean;
+  previewUrl: string | null;
+  uploading: boolean;
+  uploadError: string | null;
   onFile: (file: File) => void;
   onCamera: () => void;
-  onRetry: () => void;
+  onBack: () => void;
+  onContinue: () => void;
 }) {
+  const hasCard = previewUrl !== null;
+  // A photo satisfies a blocking gap; otherwise it's optional extra detail.
+  const canContinue = (club !== null || hasCard) && (!blockedOnCard || hasCard);
+
   return (
-    <Empty className="min-h-64 border bg-muted/30">
-      <EmptyHeader>
-        <EmptyMedia
-          variant="icon"
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="club-search">Course layout</Label>
+        <p className="text-sm text-muted-foreground">
+          We look up {facility?.name ?? "the course"}&rsquo;s pars, yardages, and stroke indexes in
+          the GolfCourseAPI database. Its ratings come from the USGA records either way.
+        </p>
+        <div className="relative mt-1.5">
+          <Search
+            aria-hidden="true"
+            className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            id="club-search"
+            className="pl-9"
+            placeholder="Search by club name…"
+            value={query}
+            onChange={(event) => onQuery(event.target.value)}
+          />
+        </div>
+      </div>
+
+      {source !== null && clubs !== null && clubs.length > 0 && (
+        <span className="-mt-3 text-xs text-muted-foreground">
+          {source === "mirror"
+            ? "From our local copy — no API request needed."
+            : "Fetched from GolfCourseAPI and saved locally for next time."}
+        </span>
+      )}
+
+      <div className="rounded-xl border bg-card">
+        {error !== null ? (
+          <p className="flex items-start gap-2 p-5 text-sm text-destructive">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" />
+            {error}
+          </p>
+        ) : query.trim().length < 3 ? (
+          <p className="p-5 text-sm text-muted-foreground">
+            Type at least three letters to search.
+          </p>
+        ) : clubs === null || searching ? (
+          <p className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
+            <Spinner className="size-4" />
+            Looking up the layout…
+          </p>
+        ) : clubs.length === 0 ? (
+          <p className="p-5 text-sm text-muted-foreground">
+            No match in GolfCourseAPI — photograph the scorecard below instead.
+          </p>
+        ) : (
+          <ul>
+            {clubs.map((entry) => {
+              const isSelected = club?.clubName === entry.clubName;
+              return (
+                <li key={entry.clubName} className="border-b last:border-b-0">
+                  <button
+                    type="button"
+                    onClick={() => onSelectClub(entry)}
+                    className={cn(
+                      "flex w-full items-start justify-between gap-3 p-4 text-left transition-colors hover:bg-muted/50",
+                      isSelected && "bg-primary/5",
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{entry.clubName}</span>
+                      <span className="block truncate text-sm text-muted-foreground">
+                        {entry.location ?? "—"}
+                      </span>
+                      <span className="mt-1 flex flex-wrap gap-1.5">
+                        {entry.nines.map((nine, index) => (
+                          <Badge key={index} variant="secondary" className="font-normal">
+                            {nine.name ?? "Unnamed"} · {nine.holes} holes · {nine.tees} tees
+                          </Badge>
+                        ))}
+                      </span>
+                    </span>
+                    {isSelected && <Check className="mt-1 size-4 shrink-0 text-primary" />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {gaps.length > 0 && (
+        <div
           className={cn(
-            "rounded-full",
-            error ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary",
+            "flex flex-col gap-2 rounded-xl border p-4 text-sm",
+            blockedOnCard ? "border-destructive/40 bg-destructive/5" : "bg-muted/30",
           )}
         >
-          {error ? <CircleAlert /> : <Camera />}
-        </EmptyMedia>
-        <EmptyTitle>{error ? "Upload failed" : "Photograph the scorecard"}</EmptyTitle>
-        <EmptyDescription>
-          {error ??
-            "Capture the printed rating table (nine names, tees, pars, and yardages). We’ll read the layout while you find the course."}
-        </EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
-        {error ? (
-          <Button onClick={onRetry}>
-            <RefreshCcw data-icon="inline-start" />
-            Start over
-          </Button>
+          <span className="flex items-center gap-2 font-medium">
+            <CircleAlert className="size-4" />
+            {blockedOnCard ? "A scorecard photo is needed" : "What the database doesn’t cover"}
+          </span>
+          <ul className="list-disc pl-5 text-muted-foreground">
+            {gaps.map((gap, index) => (
+              <li key={index}>{gap.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* The photo: required when the feed can't stand alone, optional
+          otherwise (it's what supplies the nines' printed names). */}
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+        <span className="text-sm font-medium">
+          Scorecard photo
+          <span className="ml-1.5 font-normal text-muted-foreground">
+            {blockedOnCard ? "· required" : "· optional"}
+          </span>
+        </span>
+        {uploadError !== null && <p className="text-sm text-destructive">{uploadError}</p>}
+        {hasCard ? (
+          <div className="flex items-center gap-3 text-sm">
+            <ImageExpand
+              src={previewUrl}
+              alt="Uploaded scorecard"
+              className="size-14 rounded-lg border object-cover"
+            />
+            <span className="flex items-center gap-2 text-muted-foreground">
+              {uploading ? (
+                <>
+                  <Spinner className="size-4" />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <CircleCheck className="size-4 text-primary" />
+                  We’ll read the printed nine names off this card.
+                </>
+              )}
+            </span>
+          </div>
         ) : (
-          <div className="flex w-full max-w-60 flex-col gap-3">
+          <div className="flex flex-wrap gap-3">
             {hasCamera && (
-              <Button onClick={onCamera}>
+              <Button variant="outline" onClick={onCamera} disabled={uploading}>
                 <Camera data-icon="inline-start" />
                 Take a photo
               </Button>
             )}
-            <label
-              className={buttonVariants({
-                variant: hasCamera ? "outline" : "default",
-                className: "cursor-pointer",
-              })}
-            >
+            <label className={buttonVariants({ variant: "outline", className: "cursor-pointer" })}>
               <ImageUp data-icon="inline-start" />
               Upload an image
               <input
                 className="sr-only"
                 type="file"
                 accept="image/*"
+                disabled={uploading}
                 onChange={(event) => {
                   const [selected] = event.target.files ?? [];
                   if (selected) onFile(selected);
@@ -472,8 +715,17 @@ function CaptureStep({
             </label>
           </div>
         )}
-      </EmptyContent>
-    </Empty>
+      </div>
+
+      <div className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] -mx-5 flex items-center justify-between gap-3 border-t bg-background/95 px-5 py-3 backdrop-blur md:bottom-0 md:-mx-10 md:px-10">
+        <Button variant="ghost" onClick={onBack}>
+          Back
+        </Button>
+        <Button onClick={onContinue} disabled={!canContinue || uploading}>
+          Continue
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -484,7 +736,6 @@ function FindStep({
   selected,
   onSelect,
   onContinue,
-  previewUrl,
 }: {
   query: string;
   onQuery: (value: string) => void;
@@ -492,23 +743,9 @@ function FindStep({
   selected: Facility | null;
   onSelect: (facility: Facility) => void;
   onContinue: () => void;
-  previewUrl: string | null;
 }) {
   return (
     <div className="flex flex-col gap-4">
-      {previewUrl && (
-        <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-3 text-sm">
-          <ImageExpand
-            src={previewUrl}
-            alt="Uploaded scorecard"
-            className="size-14 rounded-lg border object-cover"
-          />
-          <span className="text-muted-foreground">
-            Which course is this? We’ll match its ratings next.
-          </span>
-        </div>
-      )}
-
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="facility-search">Find the course</Label>
         <div className="relative">
@@ -766,7 +1003,7 @@ function CourseEditor({
     si: number,
     ti: number,
     hi: number,
-    patch: { par?: number; yardage?: number | null },
+    patch: { par?: number; yardage?: number | null; strokeIndex?: number | null },
   ) {
     patchTee(si, ti, {
       holes: value.sets[si].tees[ti].holes.map((hole, index) =>
@@ -940,7 +1177,11 @@ function TeeGroup({
   existingTees: ProposalTee[] | null;
   readOnly: boolean;
   patchTee: (ti: number, patch: Partial<ProposalTee>) => void;
-  patchHole: (ti: number, hi: number, patch: { par?: number; yardage?: number | null }) => void;
+  patchHole: (
+    ti: number,
+    hi: number,
+    patch: { par?: number; yardage?: number | null; strokeIndex?: number | null },
+  ) => void;
 }) {
   const [active, setActive] = useState(0);
   const variant = group.variants[Math.min(active, group.variants.length - 1)];
@@ -1088,6 +1329,21 @@ function TeeGroup({
                   </td>
                 ))}
               </tr>
+              <tr>
+                {/* The printed stroke index — the hole-difficulty ranking that
+                    decides where handicap strokes fall. */}
+                <td className="p-1.5 pr-3 font-medium whitespace-nowrap">Hcp</td>
+                {tee.holes.map((hole, hi) => (
+                  <td key={hole.number} className="p-1">
+                    <CellInput
+                      value={hole.strokeIndex}
+                      readOnly={readOnly}
+                      allowEmpty
+                      onChange={(next) => patchHole(ti, hi, { strokeIndex: next })}
+                    />
+                  </td>
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>
@@ -1176,7 +1432,7 @@ function toProposal(course: {
       courseRating: number | null;
       slopeRating: number | null;
       usgaTeeId: number | null;
-      holes: { number: number; par: number; yardage: number | null }[];
+      holes: { number: number; par: number; yardage: number | null; strokeIndex: number | null }[];
     }[];
   }[];
 }): CourseProposalSchema {
@@ -1198,7 +1454,12 @@ function toProposal(course: {
         holes: tee.holes
           .slice()
           .sort((a, b) => a.number - b.number)
-          .map((hole) => ({ number: hole.number, par: hole.par, yardage: hole.yardage })),
+          .map((hole) => ({
+            number: hole.number,
+            par: hole.par,
+            yardage: hole.yardage,
+            strokeIndex: hole.strokeIndex,
+          })),
       })),
     })),
   };
