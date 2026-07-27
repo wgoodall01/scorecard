@@ -13,24 +13,24 @@ import { GolfCourseApiSearchResponse, type GolfCourseApiCourseSchema } from "./s
 const SEARCH_URL = "https://api.golfcourseapi.com/v1/search";
 
 // The free tier allows 50 requests/day, so a naive typeahead would exhaust the
-// budget in one sitting. Searches are cached in the Workers cache for a day —
-// course layouts effectively never change, and the admin flow re-searches the
-// same club name repeatedly while a proposal is reviewed and retried (the
+// budget in one sitting. Every request is cached at the Cloudflare edge for a
+// MONTH: course layouts effectively never change, and the admin flow re-searches
+// the same club name repeatedly while a proposal is reviewed and retried (the
 // research_course job deliberately re-runs the route's search rather than
 // carrying the whole payload through the job spec, so it's a cache hit).
-//
-// NOTE: `wrangler dev`'s cache is a no-op, so local development spends a real
-// request per distinct query. Be sparing when testing against the free tier.
-const CACHE_TTL_SECONDS = 86_400;
+const CACHE_TTL_SECONDS = 2_592_000;
 
-// `caches.default` is a Workers global that the web's tsconfig doesn't know
-// about — and it type-checks the API sources it pulls in through the RPC
-// AppType graph, which includes this module. Reach it through a narrow cast so
-// the same file compiles under both configs.
-function workerCache(): Cache | null {
-  const store = caches as unknown as { default?: Cache };
-  return store.default ?? null;
-}
+// Caching is done through fetch's `cf` options rather than the Cache API: it
+// needs no read/write bookkeeping, the cache key is the URL (which carries no
+// credentials — the key rides in a header), and `wrangler dev` simply ignores
+// the option, so local development just talks to the upstream.
+//
+// `cf` isn't in the DOM's RequestInit, and the web's tsconfig type-checks the API
+// sources it pulls in through the RPC AppType graph — including this module — so
+// the init is typed locally and cast at the call site to compile under both.
+type CacheableInit = RequestInit & {
+  cf: { cacheTtl: number; cacheEverything: boolean };
+};
 
 export class GolfCourseApiError extends Error {
   readonly status: number | null;
@@ -53,8 +53,8 @@ function describeFailure(status: number): string {
  * multi-nine club, so a three-nine facility comes back as three courses
  * sharing a `club_name`.
  *
- * Cached for a day per query, keyed on the query alone (the response doesn't
- * vary by caller). Throws GolfCourseApiError on a non-2xx.
+ * Cached at the edge for a month per query, keyed on the URL alone (the response
+ * doesn't vary by caller). Throws GolfCourseApiError on a non-2xx.
  */
 export async function searchGolfCourses(
   env: Env["Bindings"],
@@ -64,44 +64,22 @@ export async function searchGolfCourses(
   if (trimmed.length === 0) return [];
 
   const url = `${SEARCH_URL}?search_query=${encodeURIComponent(trimmed)}`;
-  // The cache is keyed by URL, so the key can be the upstream URL itself —
-  // it carries no credentials.
-  const cacheKey = new Request(url, { method: "GET" });
-  const cache = workerCache();
-
-  const cached = await cache?.match(cacheKey);
-  if (cached) {
-    return GolfCourseApiSearchResponse.parse(await cached.json()).courses;
-  }
-
   const response = await fetch(url, {
     headers: {
       // The spec's preferred scheme; the legacy `Key <token>` form still works.
       Authorization: `Bearer ${env.GOLFCOURSE_API_KEY}`,
       Accept: "application/json",
     },
-  });
+    // cacheEverything, because a JSON API response isn't cached by default.
+    cf: { cacheTtl: CACHE_TTL_SECONDS, cacheEverything: true },
+  } as CacheableInit);
   if (!response.ok) {
     throw new GolfCourseApiError(describeFailure(response.status), response.status);
   }
 
-  const body = await response.json();
-  const parsed = GolfCourseApiSearchResponse.safeParse(body);
+  const parsed = GolfCourseApiSearchResponse.safeParse(await response.json());
   if (!parsed.success) {
     throw new GolfCourseApiError(`GolfCourseAPI returned an unexpected shape: ${parsed.error}`);
   }
-
-  // Cache the RAW body (not the parsed shape) so a later schema change reads
-  // the original payload rather than a lossily-normalized one.
-  await cache?.put(
-    cacheKey,
-    new Response(JSON.stringify(body), {
-      headers: {
-        "content-type": "application/json",
-        "cache-control": `max-age=${CACHE_TTL_SECONDS}`,
-      },
-    }),
-  );
-
   return parsed.data.courses;
 }

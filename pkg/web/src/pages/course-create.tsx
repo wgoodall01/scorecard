@@ -75,7 +75,7 @@ const JOB_TIMEOUT_MS = 90_000;
 const SEARCH_DEBOUNCE_MS = 250;
 // The GolfCourseAPI search is debounced harder than the local USGA typeahead:
 // every distinct query is an upstream request against a 50/day quota (the API
-// caches each for a day, but a fresh query still spends one).
+// edge-caches each for a month, but a fresh query still spends one).
 const GOLF_SEARCH_DEBOUNCE_MS = 600;
 
 // Which club a facility most likely is. Picks an exact name match, else the

@@ -433,9 +433,10 @@ scores that the app browses and will use for golf metrics, prizes, and awards.
   - `pkg/api/src/golfcourseapi/`: a client over api.golfcourseapi.com, the
     PRIMARY layout source. Only `/v1/search` is used — its response embeds each
     match's full tee/hole tree, so a club costs exactly ONE request and
-    `/v1/courses/{id}` is pointless. The free tier allows 50 req/DAY, so
-    searches are cached in `caches.default` for a day and the UI debounces
-    hard (600ms, 3-char minimum). Verified against our USGA-imported
+    `/v1/courses/{id}` is pointless. The free tier allows 50 req/DAY, so every
+    request is edge-cached for a MONTH via fetch's `cf: { cacheTtl,
+cacheEverything }` (not the Cache API — no bookkeeping, and `wrangler dev`
+    just ignores it) and the UI debounces hard (600ms, 3-char minimum). Verified against our USGA-imported
     production rows for Buck Hill Falls: per-hole par, yardage, and stroke
     index are byte-exact across all seven tees INCLUDING combination tees.
     What it does NOT give: the documented front9/back9 rating splits and

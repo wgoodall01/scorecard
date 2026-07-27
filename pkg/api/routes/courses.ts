@@ -73,7 +73,7 @@ export const courseRoutes = new Hono<Env>()
   // Look up a course's LAYOUT in GolfCourseAPI — the primary source of pars,
   // yardages, and stroke indexes for the create-course flow (see
   // src/golfcourseapi). Admin-only, and one upstream request per distinct query
-  // (cached for a day) because the free tier allows only 50/day.
+  // (edge-cached for a month) because the free tier allows only 50/day.
   //
   // Results are grouped by CLUB, because that's the unit the flow works in: a
   // multi-nine club comes back from GolfCourseAPI as one 18-hole entry per rated
